@@ -35,6 +35,8 @@ public sealed class WorkspaceFileSystem : IWorkspaceFileSystem
             || normalized.Contains("/obj/", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("/obj_codex/", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("/.vs/", StringComparison.OrdinalIgnoreCase)
-            || normalized.Contains("/TestResults/", StringComparison.OrdinalIgnoreCase);
+            || normalized.Contains("/TestResults/", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("/publish/", StringComparison.OrdinalIgnoreCase)
+            || Path.GetFileName(normalized).Contains("_wpftmp.csproj", StringComparison.OrdinalIgnoreCase);
     }
 }

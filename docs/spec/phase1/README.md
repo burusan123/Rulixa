@@ -14,6 +14,8 @@ Phase 1 は、その上位方針を `Windows` 上の `WPF + .NET 8` という具
 - `entry=file` と `entry=symbol` の両対応
 - `AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` を主対象にした Pack 生成
 - `SelectedItem` / `CurrentPage` の binding と、ViewModel 側更新点の抽出
+- `file:.../ShellView.xaml` から `ShellViewModel`、`MainWindow`、起動経路、DI 登録を辿る Pack 生成
+- `scan` 時に `publish/*` と `*_wpftmp.csproj` を除外
 
 ## 読む順番
 

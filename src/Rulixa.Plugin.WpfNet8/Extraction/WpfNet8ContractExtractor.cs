@@ -47,14 +47,15 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             fileCandidates.Add(new FileSelectionCandidate(resolvedEntry.ResolvedPath, "entry", 0, true));
         }
 
-        var relevantBindings = FindRelevantBindings(scanResult, resolvedEntry);
+        var relevantViewModelSymbols = FindRelevantViewModelSymbols(scanResult, resolvedEntry);
+        var relevantBindings = FindRelevantBindings(scanResult, resolvedEntry, relevantViewModelSymbols);
         var primaryBindings = relevantBindings
             .Where(static binding => binding.BindingKind is ViewModelBindingKind.RootDataContext or ViewModelBindingKind.ViewDataContext)
             .ToArray();
         var secondaryBindings = relevantBindings
             .Where(static binding => binding.BindingKind == ViewModelBindingKind.DataTemplate)
             .ToArray();
-        var relevantTransitions = FindRelevantTransitions(scanResult, resolvedEntry, relevantBindings);
+        var relevantTransitions = FindRelevantTransitions(scanResult, resolvedEntry, relevantViewModelSymbols, relevantBindings);
 
         AddStartupContracts(scanResult, contracts, fileCandidates);
         AddDependencyInjectionContracts(scanResult, contracts, fileCandidates);
@@ -102,14 +103,47 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             Unknowns: unknowns);
     }
 
-    private static IReadOnlyList<ViewModelBinding> FindRelevantBindings(
+    private static IReadOnlySet<string> FindRelevantViewModelSymbols(
         WorkspaceScanResult scanResult,
         ResolvedEntry resolvedEntry)
+    {
+        var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(resolvedEntry.Symbol))
+        {
+            symbols.Add(resolvedEntry.Symbol);
+        }
+
+        if (string.IsNullOrWhiteSpace(resolvedEntry.ResolvedPath))
+        {
+            return symbols;
+        }
+
+        foreach (var command in scanResult.Commands)
+        {
+            if (command.BoundViews.Any(view => string.Equals(view, resolvedEntry.ResolvedPath, StringComparison.OrdinalIgnoreCase)))
+            {
+                symbols.Add(command.ViewModelSymbol);
+            }
+        }
+
+        var conventionalViewModel = FindConventionalViewModelSymbol(scanResult, resolvedEntry.ResolvedPath);
+        if (!string.IsNullOrWhiteSpace(conventionalViewModel))
+        {
+            symbols.Add(conventionalViewModel);
+        }
+
+        return symbols;
+    }
+
+    private static IReadOnlyList<ViewModelBinding> FindRelevantBindings(
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry,
+        IReadOnlySet<string> relevantViewModelSymbols)
     {
         return scanResult.ViewModelBindings
             .Where(binding =>
                 string.Equals(binding.ViewPath, resolvedEntry.ResolvedPath, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(binding.ViewModelSymbol, resolvedEntry.Symbol, StringComparison.OrdinalIgnoreCase))
+                || relevantViewModelSymbols.Contains(binding.ViewModelSymbol))
             .OrderBy(static binding => binding.BindingKind)
             .ThenBy(static binding => binding.ViewPath, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -118,14 +152,10 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
     private static IReadOnlyList<NavigationTransition> FindRelevantTransitions(
         WorkspaceScanResult scanResult,
         ResolvedEntry resolvedEntry,
+        IReadOnlySet<string> relevantViewModelSymbols,
         IReadOnlyList<ViewModelBinding> relevantBindings)
     {
-        var relevantSymbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (!string.IsNullOrWhiteSpace(resolvedEntry.Symbol))
-        {
-            relevantSymbols.Add(resolvedEntry.Symbol);
-        }
-
+        var relevantSymbols = new HashSet<string>(relevantViewModelSymbols, StringComparer.OrdinalIgnoreCase);
         foreach (var binding in relevantBindings)
         {
             if (!string.IsNullOrWhiteSpace(binding.ViewModelSymbol))
@@ -310,6 +340,27 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         return displayName.EndsWith("ViewModel", StringComparison.Ordinal)
             ? $"{displayName[..^"ViewModel".Length]}View"
             : null;
+    }
+
+    private static string? FindConventionalViewModelSymbol(WorkspaceScanResult scanResult, string resolvedPath)
+    {
+        if (!resolvedPath.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var fileName = Path.GetFileNameWithoutExtension(resolvedPath);
+        if (!fileName.EndsWith("View", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var viewModelName = $"{fileName[..^"View".Length]}ViewModel";
+        return scanResult.Symbols
+            .FirstOrDefault(symbol =>
+                symbol.Kind == SymbolKind.Class
+                && string.Equals(symbol.DisplayName, viewModelName, StringComparison.OrdinalIgnoreCase))
+            ?.QualifiedName;
     }
 
     private static void AddCodeBehindIfPresent(

@@ -48,6 +48,7 @@ Phase 1 は、巨大コードベース全体を理解することではなく、
 - DI 抽出
 - Markdown 出力
 - `SelectedItem` / `CurrentPage` の更新点抽出
+- `publish/*` と `*_wpftmp.csproj` の走査除外
 
 ### Frontend
 
@@ -86,6 +87,24 @@ goal=Shell 画面に新しいページを追加したい
 - `SelectedItem = match`
 - `Select(...) -> CurrentPage = item.PageViewModel`
 
+`file` 起点でも、`ShellView.xaml` から少なくとも次を Pack に含めます。
+
+- `ShellView.xaml`
+- `ShellView.xaml.cs`
+- `ShellViewModel.cs`
+- `MainWindow.xaml`
+- `MainWindow.xaml.cs`
+- `App.xaml.cs`
+- `ServiceRegistration.cs`
+- `DelegateCommand.cs`
+
+また、`file` 起点でも少なくとも次を出力に含めます。
+
+- `MainWindow.xaml.cs -> ShellViewModel`
+- `Items=Items, SelectedItem=SelectedItem, Content=CurrentPage`
+- `SelectedItem = match`
+- `Select(...) -> CurrentPage = item.PageViewModel`
+
 ## scan pipeline
 
 1. ワークスペース列挙
@@ -116,6 +135,7 @@ goal=Shell 画面に新しいページを追加したい
 - `AssessMeister` 風 fixture に対する走査
 - `SelectedItem` / `CurrentPage` 更新点の抽出
 - Markdown 出力
+- 生成物ディレクトリと WPF 一時 project の除外
 
 ## 改善バックログ
 
@@ -123,6 +143,7 @@ goal=Shell 画面に新しいページを追加したい
 
 - `DataContext` の由来を `root / view / code-behind` でさらに明示化する
 - `SelectedItem` と `CurrentPage` の因果関係を、Pack の契約としてより短く強く表現する
+- `file` 起点で `DataTemplate` 二次文脈を本文に出し過ぎないよう圧縮する
 
 ### P2
 

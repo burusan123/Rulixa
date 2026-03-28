@@ -67,6 +67,7 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs", selectedPaths);
+        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/App.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
@@ -141,5 +142,54 @@ public sealed class WpfNet8WorkspaceScannerTests
             && index.Lines.Any(line =>
                 line.Contains("SelectedItem = match", StringComparison.Ordinal)
                 && line.Contains("line:", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task ScanAsync_IgnoresGeneratedPublishAndWpfTempFiles()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-scan-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(workspaceRoot);
+
+        try
+        {
+            var projectDirectory = Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf");
+            var viewsDirectory = Path.Combine(projectDirectory, "Views");
+            Directory.CreateDirectory(viewsDirectory);
+            Directory.CreateDirectory(Path.Combine(workspaceRoot, "publish"));
+
+            await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "Sample.sln"), string.Empty);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectDirectory, "Sample.Presentation.Wpf.csproj"),
+                """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net8.0-windows</TargetFramework>
+                    <UseWPF>true</UseWPF>
+                  </PropertyGroup>
+                </Project>
+                """);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectDirectory, "Sample.Presentation.Wpf_abcd_wpftmp.csproj"),
+                "<Project />");
+            await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "publish", "Generated.cs"), "public class Generated {}");
+            await File.WriteAllTextAsync(Path.Combine(projectDirectory, "App.xaml"), "<Application />");
+            await File.WriteAllTextAsync(
+                Path.Combine(viewsDirectory, "MainWindow.xaml"),
+                "<Window x:Class=\"Sample.Presentation.Wpf.Views.MainWindow\" xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\" />");
+
+            var scanner = new WpfNet8WorkspaceScanner(new WorkspaceFileSystem());
+
+            var result = await scanner.ScanAsync(workspaceRoot);
+
+            Assert.DoesNotContain(result.Files, file => file.Path.StartsWith("publish/", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(result.ProjectSummary.ProjectFiles, path => path.Contains("_wpftmp.csproj", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
     }
 }

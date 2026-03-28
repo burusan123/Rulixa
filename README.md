@@ -16,8 +16,10 @@
 - `entry=file` と `entry=symbol` の両方で Context Pack を生成できます。
 - 主対象は `AssessMeister` の Shell 導線です。
 - `symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` から、Shell 導線の必須ファイルを既定 budget 内で選定できます。
+- `file:src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml` からでも、`ShellViewModel`、`MainWindow`、起動経路、DI 登録まで辿って Pack を組み立てられます。
 - `Pages/*` の `DataTemplate` 由来 ViewModel は、`symbol` 起点の既定 Pack では二次文脈として落とします。
 - `SelectedItem` と `CurrentPage` の binding だけでなく、`CurrentPage = item.PageViewModel` や `SelectedItem = match` のような ViewModel 側更新点も Pack に含めます。
+- `scan` は `publish/*` や `*_wpftmp.csproj` のような生成物を除外し、決定性を崩すノイズを抑えます。
 
 ## プロジェクト構成
 
