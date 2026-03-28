@@ -15,7 +15,9 @@ Phase 1 は、その上位方針を `Windows` 上の `WPF + .NET 8` という具
 - `AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` を主対象にした Pack 生成
 - `SelectedItem` / `CurrentPage` の binding と、ViewModel 側更新点の抽出
 - `file:.../ShellView.xaml` から `ShellViewModel`、`MainWindow`、起動経路、DI 登録を辿る Pack 生成
+- `ShellViewModel` とその直接依存に対する DI ライフタイム要約
 - `scan` 時に `publish/*` と `*_wpftmp.csproj` を除外
+- `Rulixa.Plugin.WpfNet8` 内で `Extraction/Context`・`Extraction/Sections`・`Scanning/Context`・`Scanning/Sections` に責務分割
 
 ## 読む順番
 

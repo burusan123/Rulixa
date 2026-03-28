@@ -46,9 +46,12 @@ Phase 1 は、巨大コードベース全体を理解することではなく、
 - Command 抽出
 - Dialog 抽出
 - DI 抽出
+- DI ライフタイムの Pack 表示
 - Markdown 出力
 - `SelectedItem` / `CurrentPage` の更新点抽出
 - `publish/*` と `*_wpftmp.csproj` の走査除外
+- `Extraction/Context` / `Extraction/Sections` への責務分割
+- `Scanning/Context` / `Scanning/Sections` への責務分割
 
 ### Frontend
 
@@ -86,6 +89,8 @@ goal=Shell 画面に新しいページを追加したい
 - `Items=Items, SelectedItem=SelectedItem, Content=CurrentPage`
 - `SelectedItem = match`
 - `Select(...) -> CurrentPage = item.PageViewModel`
+- `ShellViewModel (Singleton)` のような主要 ViewModel の DI ライフタイム
+- 直接依存のライフタイム要約
 
 `file` 起点でも、`ShellView.xaml` から少なくとも次を Pack に含めます。
 
@@ -104,6 +109,8 @@ goal=Shell 画面に新しいページを追加したい
 - `Items=Items, SelectedItem=SelectedItem, Content=CurrentPage`
 - `SelectedItem = match`
 - `Select(...) -> CurrentPage = item.PageViewModel`
+- `ShellViewModel (Singleton)` のような主要 ViewModel の DI ライフタイム
+- 直接依存のライフタイム要約
 
 ## scan pipeline
 
@@ -147,7 +154,6 @@ goal=Shell 画面に新しいページを追加したい
 
 ### P2
 
-- DI ライフタイムを Pack に表示する
 - コマンドの影響対象を 1 段深く出す
 - 選定ファイル理由の粒度をさらに上げる
 
@@ -162,3 +168,9 @@ goal=Shell 画面に新しいページを追加したい
 - Pack だけ見て、次に開くべきファイルと行が分かる
 - 直接確認が必要な範囲を 3〜5 箇所まで狭められる
 - `symbol` 起点の Pack が既定 budget で安定して同じ結果を返す
+
+## 補足メモ
+
+- `WpfNet8ContractExtractor` は調停役に縮小し、各 Pack セクションは `Extraction/Sections` に分離した
+- `WpfNet8WorkspaceScanner` も同様に調停役に縮小し、列挙・Symbol 抽出・Summary 構築は `Scanning/Sections` に分離した
+- 巨大クラス化を避けるため、Phase 1 では「変更理由ごとに分割する」を Plugin 内でも適用する
