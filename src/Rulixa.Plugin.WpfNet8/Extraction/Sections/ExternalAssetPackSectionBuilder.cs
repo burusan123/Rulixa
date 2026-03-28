@@ -1,4 +1,5 @@
 using Rulixa.Application.Ports;
+using Rulixa.Domain.Diagnostics;
 using Rulixa.Domain.Packs;
 using Rulixa.Domain.Scanning;
 
@@ -20,26 +21,41 @@ internal sealed class ExternalAssetPackSectionBuilder
         ICollection<Contract> contracts,
         ICollection<IndexSection> indexes,
         ICollection<FileSelectionCandidate> fileCandidates,
+        ICollection<PackDecisionTrace> decisionTraces,
+        ICollection<Diagnostic> unknowns,
         CancellationToken cancellationToken)
     {
-        var assets = await DiscoverAssetsAsync(workspaceRoot, scanResult, relevantContext, cancellationToken).ConfigureAwait(false);
-        if (assets.Count == 0)
+        var usages = await DiscoverAssetsAsync(workspaceRoot, scanResult, relevantContext, cancellationToken).ConfigureAwait(false);
+        var analyses = AnalyzeAssets(scanResult, relevantContext, usages);
+        AddDecisionTraces(analyses, decisionTraces);
+
+        var selected = analyses
+            .Where(static analysis => analysis.Evaluation.IsSelectable)
+            .ToArray();
+        if (selected.Length == 0)
         {
+            AddUnknowns(relevantContext, analyses, unknowns, decisionTraces);
             return;
         }
 
-        indexes.Add(new IndexSection("External Assets", assets.Select(static asset => asset.ToIndexLine()).ToArray()));
+        indexes.Add(new IndexSection("External Assets", selected.Select(static analysis => analysis.ToIndexLine()).ToArray()));
         contracts.Add(new Contract(
             ContractKind.DependencyInjection,
             "External Assets",
-            BuildSummary(assets),
-            assets.Select(static asset => asset.FilePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            assets.Select(static asset => asset.OwnerSymbol).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()));
+            BuildSummary(selected),
+            selected.Select(static analysis => analysis.Usage.FilePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            selected.Select(static analysis => analysis.Usage.OwnerSymbol).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()));
 
-        foreach (var filePath in assets.Select(static asset => asset.FilePath).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var analysis in selected)
         {
-            fileCandidates.Add(new FileSelectionCandidate(filePath, "external-asset", 30, false));
+            fileCandidates.Add(new FileSelectionCandidate(
+                analysis.Usage.FilePath,
+                "external-asset",
+                analysis.Evaluation.ToPriority(30),
+                false));
         }
+
+        AddUnknowns(relevantContext, analyses, unknowns, decisionTraces);
     }
 
     private async Task<IReadOnlyList<ExternalAssetUsage>> DiscoverAssetsAsync(
@@ -98,7 +114,11 @@ internal sealed class ExternalAssetPackSectionBuilder
                     continue;
                 }
 
-                usages.Add(new ExternalAssetUsage(symbol, filePath, descriptors));
+                usages.Add(new ExternalAssetUsage(
+                    symbol,
+                    filePath,
+                    descriptors,
+                    descriptors.Any(static descriptor => descriptor is "File.Exists" or "Path.Combine")));
             }
         }
 
@@ -107,6 +127,116 @@ internal sealed class ExternalAssetPackSectionBuilder
             .OrderBy(static usage => usage.OwnerDisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(static usage => usage.FilePath, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private IReadOnlyList<ExternalAssetAnalysis> AnalyzeAssets(
+        WorkspaceScanResult scanResult,
+        RelevantPackContext relevantContext,
+        IReadOnlyList<ExternalAssetUsage> usages)
+    {
+        var analyses = usages
+            .Select(usage => new ExternalAssetAnalysis(
+                usage,
+                HighSignalSelectionSupport.Evaluate(
+                    relevantContext.GoalProfile,
+                    BuildTextEvidence(usage),
+                    BuildEvidence(scanResult, relevantContext, usage))))
+            .OrderByDescending(static analysis => analysis.Evaluation.Score)
+            .ThenBy(static analysis => analysis.Usage.OwnerDisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        for (var index = 0; index < analyses.Length; index++)
+        {
+            analyses[index] = analyses[index] with { Rank = index + 1, CandidateCount = analyses.Length };
+        }
+
+        return analyses;
+    }
+
+    private static IReadOnlyList<SectionTextEvidence> BuildTextEvidence(ExternalAssetUsage usage) =>
+    [
+        new("owner-symbol", [usage.OwnerSymbol]),
+        new("asset-descriptor", usage.Descriptors)
+    ];
+
+    private static SectionSignalEvidence BuildEvidence(
+        WorkspaceScanResult scanResult,
+        RelevantPackContext relevantContext,
+        ExternalAssetUsage usage)
+    {
+        var goalCategoryMatches = 0;
+        if (relevantContext.GoalProfile.HasCategory("system") || relevantContext.GoalProfile.HasCategory("project"))
+        {
+            goalCategoryMatches++;
+        }
+
+        if (relevantContext.GoalProfile.HasCategory("drafting")
+            && usage.Descriptors.Any(static descriptor => descriptor.Contains(".onnx", StringComparison.OrdinalIgnoreCase)))
+        {
+            goalCategoryMatches++;
+        }
+
+        return new SectionSignalEvidence(
+            ServiceRegistrationMatches: PackAnalysisHelpers.CountServiceRegistrationMatches(scanResult, [usage.OwnerSymbol]),
+            FileKindMatches: PackAnalysisHelpers.CountFileKindMatches(scanResult, [usage.FilePath], ScanFileKind.Service, ScanFileKind.Config, ScanFileKind.CSharp),
+            GoalCategoryMatches: goalCategoryMatches,
+            SemanticSignalCount: usage.Descriptors.Count,
+            DownstreamCount: usage.HasResolutionCode ? 1 : 0,
+            HasOnlyFilePathEvidence: !usage.HasResolutionCode);
+    }
+
+    private static void AddDecisionTraces(
+        IReadOnlyList<ExternalAssetAnalysis> analyses,
+        ICollection<PackDecisionTrace> decisionTraces)
+    {
+        foreach (var analysis in analyses)
+        {
+            var decisionKind = analysis.Evaluation.IsSelectable
+                ? "selected"
+                : "omitted-low-score";
+            decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+                "external-asset-selection",
+                analysis.Usage.Key,
+                decisionKind,
+                $"{analysis.Evaluation.ConfidenceLabel}: {analysis.Usage.OwnerDisplayName} -> {string.Join(" / ", analysis.Usage.Descriptors)}",
+                analysis.Evaluation,
+                analysis.Rank,
+                analysis.CandidateCount));
+        }
+    }
+
+    private static void AddUnknowns(
+        RelevantPackContext relevantContext,
+        IReadOnlyList<ExternalAssetAnalysis> analyses,
+        ICollection<Diagnostic> unknowns,
+        ICollection<PackDecisionTrace> decisionTraces)
+    {
+        if (analyses.Any(static analysis => analysis.Evaluation.IsSelectable))
+        {
+            return;
+        }
+
+        var candidates = analyses.Select(static analysis => analysis.Usage.OwnerSymbol).ToArray();
+        if (candidates.Length == 0)
+        {
+            return;
+        }
+
+        var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
+            "external-asset.unresolved-source",
+            "External asset-like paths were found, but no high-confidence resolution code was detected.",
+            null,
+            DiagnosticSeverity.Info,
+            candidates);
+        unknowns.Add(diagnostic);
+        decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+            "external-asset-selection",
+            "external-asset.unresolved-source",
+            "unknown-raised",
+            diagnostic.Message,
+            new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence(HasOnlyFilePathEvidence: true)),
+            0,
+            analyses.Count));
     }
 
     private static IReadOnlyList<string> ExtractAssetDescriptors(string source)
@@ -130,11 +260,8 @@ internal sealed class ExternalAssetPackSectionBuilder
         }
     }
 
-    private static string BuildSummary(IReadOnlyList<ExternalAssetUsage> assets)
-    {
-        var samples = assets.Take(3).Select(static asset => asset.ToIndexLine()).ToArray();
-        return $"Discovered {assets.Count} external asset access points. Examples: {string.Join(" / ", samples)}";
-    }
+    private static string BuildSummary(IReadOnlyList<ExternalAssetAnalysis> analyses) =>
+        $"Selected {analyses.Count} external asset access points. {string.Join(" / ", analyses.Take(3).Select(static analysis => analysis.ToIndexLine()))}";
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,
@@ -148,12 +275,23 @@ internal sealed class ExternalAssetPackSectionBuilder
     private sealed record ExternalAssetUsage(
         string OwnerSymbol,
         string FilePath,
-        IReadOnlyList<string> Descriptors)
+        IReadOnlyList<string> Descriptors,
+        bool HasResolutionCode)
     {
         internal string Key => $"{OwnerSymbol}|{FilePath}|{string.Join("|", Descriptors)}";
 
         internal string OwnerDisplayName => PackExtractionConventions.GetSimpleTypeName(OwnerSymbol);
+    }
 
-        internal string ToIndexLine() => $"{OwnerDisplayName} -> {string.Join(" / ", Descriptors)}";
+    private sealed record ExternalAssetAnalysis(
+        ExternalAssetUsage Usage,
+        SectionSelectionEvaluation Evaluation)
+    {
+        internal int Rank { get; init; }
+
+        internal int CandidateCount { get; init; }
+
+        internal string ToIndexLine() =>
+            $"{Evaluation.ConfidenceLabel}: {Usage.OwnerDisplayName} -> {string.Join(" / ", Usage.Descriptors)}";
     }
 }

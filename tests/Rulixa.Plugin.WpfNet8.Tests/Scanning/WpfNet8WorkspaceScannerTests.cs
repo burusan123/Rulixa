@@ -343,19 +343,22 @@ public sealed class WpfNet8WorkspaceScannerTests
             snippet.Anchor.Contains("OpenSettingsCore(...)", StringComparison.Ordinal));
         Assert.Contains(ingredients.SnippetCandidates, snippet =>
             snippet.Anchor.Contains("Show(...)", StringComparison.Ordinal));
-        Assert.Equal(7, ingredients.DecisionTraces.Count);
-        Assert.Contains(ingredients.DecisionTraces, trace =>
+        var commandDecisionTraces = ingredients.DecisionTraces
+            .Where(static trace => trace.Category == "command-selection")
+            .ToArray();
+        Assert.Equal(7, commandDecisionTraces.Length);
+        Assert.Contains(commandDecisionTraces, trace =>
             trace.Category == "command-selection"
             && trace.ItemKey == "OpenSettingsCommand"
             && trace.DecisionKind == "selected-by-goal"
             && trace.GoalTerms.Contains("setting", StringComparer.Ordinal)
             && trace.MatchedTerms.Contains("setting", StringComparer.Ordinal));
-        Assert.Contains(ingredients.DecisionTraces, trace =>
+        Assert.Contains(commandDecisionTraces, trace =>
             trace.Category == "command-selection"
             && trace.DecisionKind == "omitted-low-score"
             && trace.ItemKey == "SampleCommand1");
         Assert.All(
-            ingredients.DecisionTraces,
+            commandDecisionTraces,
             trace => Assert.Equal(7, trace.CandidateCount));
     }
 
@@ -400,7 +403,7 @@ public sealed class WpfNet8WorkspaceScannerTests
             Budget.Default,
             goal: "ライセンス通知を確認したい");
 
-        var trace = Assert.Single(ingredients.DecisionTraces);
+        var trace = Assert.Single(ingredients.DecisionTraces, static decisionTrace => decisionTrace.Category == "command-selection");
         Assert.Equal("command-selection", trace.Category);
         Assert.Equal("OpenSettingsCommand", trace.ItemKey);
         Assert.Equal("selected-all", trace.DecisionKind);
@@ -452,9 +455,12 @@ public sealed class WpfNet8WorkspaceScannerTests
             && line.Contains("ISettingWindowService.Show(...)", StringComparison.Ordinal));
         Assert.DoesNotContain(ingredients.SnippetCandidates, snippet =>
             snippet.Anchor.Contains("OpenSettings(...)", StringComparison.Ordinal));
-        Assert.Equal(7, ingredients.DecisionTraces.Count);
+        var commandDecisionTraces = ingredients.DecisionTraces
+            .Where(static trace => trace.Category == "command-selection")
+            .ToArray();
+        Assert.Equal(7, commandDecisionTraces.Length);
         Assert.All(
-            ingredients.DecisionTraces,
+            commandDecisionTraces,
             trace =>
             {
                 Assert.Equal("command-selection", trace.Category);
@@ -1279,6 +1285,246 @@ public sealed class WpfNet8WorkspaceScannerTests
     }
 
     [Fact]
+    public async Task ExtractAsync_WhenPersistenceTargetIsAmbiguous_RaisesPersistenceUnknown()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase2-persistence-{Guid.NewGuid():N}");
+
+        try
+        {
+            await CreateSampleWorkspaceAsync(
+                workspaceRoot,
+                """
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf.ViewModels;
+
+                public sealed class ShellViewModel
+                {
+                    private readonly ProjectWorkspaceFlowService flowService;
+
+                    public ShellViewModel(ProjectWorkspaceFlowService flowService)
+                    {
+                        this.flowService = flowService;
+                    }
+                }
+                """,
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                        services.AddScoped<ProjectWorkspaceFlowService>();
+                    }
+                }
+                """,
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/ProjectWorkspaceFlowService.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public sealed class ProjectWorkspaceFlowService
+                    {
+                        private readonly ProjectRepository projectRepository;
+
+                        public ProjectWorkspaceFlowService(ProjectRepository projectRepository)
+                        {
+                            this.projectRepository = projectRepository;
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/A/ProjectRepository.cs",
+                    "namespace Sample.Presentation.Wpf.Services.A; public sealed class ProjectRepository { }"),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/B/ProjectRepository.cs",
+                    "namespace Sample.Presentation.Wpf.Services.B; public sealed class ProjectRepository { }"));
+
+            var ingredients = await BuildPackFromWorkspaceAsync(
+                workspaceRoot,
+                new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel"),
+                "project workspace");
+
+            Assert.Contains(ingredients.Unknowns, diagnostic =>
+                diagnostic.Code == "persistence.missing-owner"
+                && diagnostic.Candidates.Any(candidate => candidate.EndsWith(".ProjectRepository", StringComparison.Ordinal)));
+            Assert.Contains(ingredients.DecisionTraces, trace =>
+                trace.Category == "persistence-selection"
+                && trace.DecisionKind == "unknown-raised");
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ExtractAsync_WhenHubObjectSignalsAreWeak_RaisesWeakSignalUnknown()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase2-hub-{Guid.NewGuid():N}");
+
+        try
+        {
+            await CreateSampleWorkspaceAsync(
+                workspaceRoot,
+                """
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf.ViewModels;
+
+                public sealed class ShellViewModel
+                {
+                    private readonly WorkflowService workflowService;
+
+                    public ShellViewModel(WorkflowService workflowService)
+                    {
+                        this.workflowService = workflowService;
+                    }
+                }
+                """,
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                        services.AddScoped<WorkflowService>();
+                    }
+                }
+                """,
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/WorkflowService.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public sealed class WorkflowService
+                    {
+                        private readonly WorkspaceContext workspaceContext;
+
+                        public WorkflowService(WorkspaceContext workspaceContext)
+                        {
+                            this.workspaceContext = workspaceContext;
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Models/WorkspaceContext.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Models;
+
+                    public sealed class WorkspaceContext
+                    {
+                        public string Name { get; } = "context";
+                    }
+                    """));
+
+            var ingredients = await BuildPackFromWorkspaceAsync(
+                workspaceRoot,
+                new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel"),
+                "system explain");
+
+            Assert.Contains(ingredients.Unknowns, diagnostic => diagnostic.Code == "hub-object.weak-signal");
+            Assert.Contains(ingredients.DecisionTraces, trace =>
+                trace.Category == "hub-object-selection"
+                && trace.DecisionKind == "unknown-raised");
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ExtractAsync_WhenExternalAssetIsPathOnly_OmitsIndexAndRaisesUnknown()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase2-asset-{Guid.NewGuid():N}");
+
+        try
+        {
+            await CreateSampleWorkspaceAsync(
+                workspaceRoot,
+                """
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf.ViewModels;
+
+                public sealed class ShellViewModel
+                {
+                    private readonly ReportTemplateService reportTemplateService;
+
+                    public ShellViewModel(ReportTemplateService reportTemplateService)
+                    {
+                        this.reportTemplateService = reportTemplateService;
+                    }
+                }
+                """,
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                        services.AddScoped<ReportTemplateService>();
+                    }
+                }
+                """,
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/ReportTemplateService.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public sealed class ReportTemplateService
+                    {
+                        private const string TemplatePath = "report.xlsx";
+
+                        public string GetTemplatePath() => TemplatePath;
+                    }
+                    """));
+
+            var ingredients = await BuildPackFromWorkspaceAsync(
+                workspaceRoot,
+                new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel"),
+                "project export");
+
+            Assert.DoesNotContain(ingredients.Indexes, index => index.Title == "External Assets");
+            Assert.Contains(ingredients.Unknowns, diagnostic => diagnostic.Code == "external-asset.unresolved-source");
+            Assert.Contains(ingredients.DecisionTraces, trace =>
+                trace.Category == "external-asset-selection"
+                && trace.DecisionKind == "omitted-low-score");
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task ExtractAsync_ForShellViewModelSymbol_IsDeterministic()
     {
         var first = await BuildPackAsync(
@@ -1324,6 +1570,83 @@ public sealed class WpfNet8WorkspaceScannerTests
         return (scanResult, ingredients, pack);
     }
 
+    private static async Task<PackIngredients> BuildPackFromWorkspaceAsync(
+        string workspaceRoot,
+        Entry entry,
+        string goal)
+    {
+        var fileSystem = new WorkspaceFileSystem();
+        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+        var resolver = new ScanBackedEntryResolver();
+        var extractor = new WpfNet8ContractExtractor(fileSystem);
+
+        var scanResult = await scanner.ScanAsync(workspaceRoot);
+        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
+        return await extractor.ExtractAsync(workspaceRoot, scanResult, resolvedEntry, goal);
+    }
+
+    private static async Task CreateSampleWorkspaceAsync(
+        string workspaceRoot,
+        string shellViewModelSource,
+        string serviceRegistrationSource,
+        params WorkspaceFileDefinition[] extraFiles)
+    {
+        var files = new List<WorkspaceFileDefinition>
+        {
+            new("Sample.sln", string.Empty),
+            new(
+                "src/Sample.Presentation.Wpf/Sample.Presentation.Wpf.csproj",
+                """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net8.0-windows</TargetFramework>
+                    <UseWPF>true</UseWPF>
+                  </PropertyGroup>
+                </Project>
+                """),
+            new("src/Sample.Presentation.Wpf/App.xaml", "<Application />"),
+            new(
+                "src/Sample.Presentation.Wpf/Views/ShellView.xaml",
+                """
+                <Window
+                    x:Class="Sample.Presentation.Wpf.Views.ShellView"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                </Window>
+                """),
+            new(
+                "src/Sample.Presentation.Wpf/Views/ShellView.xaml.cs",
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+
+                namespace Sample.Presentation.Wpf.Views;
+
+                public partial class ShellView
+                {
+                    public ShellView(ShellViewModel shellViewModel)
+                    {
+                        DataContext = shellViewModel;
+                    }
+                }
+                """),
+            new("src/Sample.Presentation.Wpf/ViewModels/ShellViewModel.cs", shellViewModelSource),
+            new(
+                "src/Sample.Presentation.Wpf/ServiceRegistration.cs",
+                $$"""
+                using Microsoft.Extensions.DependencyInjection;
+                {{serviceRegistrationSource}}
+                """)
+        };
+        files.AddRange(extraFiles);
+
+        foreach (var file in files)
+        {
+            var absolutePath = Path.Combine(workspaceRoot, file.Path.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
+            await File.WriteAllTextAsync(absolutePath, file.Content);
+        }
+    }
+
     private static WorkspaceScanResult PromoteShellViewModelToLargeFile(WorkspaceScanResult scanResult) =>
         scanResult with
         {
@@ -1333,4 +1656,8 @@ public sealed class WpfNet8WorkspaceScannerTests
                     : file)
                 .ToArray()
         };
+
+    private sealed record WorkspaceFileDefinition(
+        string Path,
+        string Content);
 }

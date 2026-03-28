@@ -96,6 +96,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 indexes,
                 snippetCandidates,
                 fileCandidates,
+                decisionTraces,
                 unknowns,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -108,6 +109,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 indexes,
                 snippetCandidates,
                 fileCandidates,
+                decisionTraces,
                 unknowns,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -120,6 +122,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 indexes,
                 snippetCandidates,
                 fileCandidates,
+                decisionTraces,
                 unknowns,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -131,6 +134,8 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 contracts,
                 indexes,
                 fileCandidates,
+                decisionTraces,
+                unknowns,
                 cancellationToken)
             .ConfigureAwait(false);
         await CommandPackSectionBuilder.AddContractsAsync(
@@ -157,6 +162,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 contracts,
                 indexes,
                 fileCandidates,
+                decisionTraces,
                 unknowns,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -177,7 +183,11 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             SnippetCandidates: OrderSnippetCandidates(snippetCandidates),
             FileCandidates: OrderFileCandidates(fileCandidates),
             DecisionTraces: decisionTraces,
-            Unknowns: unknowns);
+            Unknowns: unknowns
+                .Distinct()
+                .OrderBy(static diagnostic => diagnostic.Code, StringComparer.Ordinal)
+                .ThenBy(static diagnostic => diagnostic.FilePath, StringComparer.OrdinalIgnoreCase)
+                .ToArray());
     }
 
     private static Diagnostic BuildUnresolvedDiagnostic(ResolvedEntry resolvedEntry) =>

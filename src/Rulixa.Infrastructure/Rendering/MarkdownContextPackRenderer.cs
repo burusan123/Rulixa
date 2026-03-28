@@ -88,7 +88,10 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         {
             foreach (var unknown in contextPack.Unknowns)
             {
-                builder.AppendLine($"- [{ToDisplayText(unknown.Severity)}] {unknown.Code}: {unknown.Message}");
+                var candidates = unknown.Candidates.Count == 0
+                    ? string.Empty
+                    : $" 候補: {string.Join(", ", unknown.Candidates.Select(NormalizePath))}";
+                builder.AppendLine($"- [{ToDisplayText(unknown.Severity)}] {ToDiagnosticLabel(unknown.Code)}: {unknown.Message}{candidates}");
             }
         }
 
@@ -161,6 +164,18 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         _ => reason
     };
 
+    private static string ToDiagnosticLabel(string code) => code switch
+    {
+        "entry.unresolved" => "入口の解決失敗",
+        "workflow.missing-downstream" => "Workflow の downstream 不足",
+        "workflow.ambiguous-target" => "Workflow の候補競合",
+        "persistence.missing-owner" => "Persistence の owner 未確定",
+        "hub-object.weak-signal" => "Hub Object の signal 不足",
+        "external-asset.unresolved-source" => "外部資産の解決コード不足",
+        "architecture-tests.not-found" => "Architecture Test 未検出",
+        _ => code
+    };
+
     private static int GetContractPriority(Contract contract) => contract.Kind switch
     {
         ContractKind.ViewModelBinding when !contract.Title.Contains("DataTemplate", StringComparison.Ordinal) => 0,
@@ -170,7 +185,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         ContractKind.DependencyInjection when contract.Title == "Hub Objects" => 26,
         ContractKind.DependencyInjection when contract.Title == "External Assets" => 27,
         ContractKind.DependencyInjection when contract.Title == "Architecture Tests" => 28,
-        ContractKind.DependencyInjection when contract.Title == "主対象 ViewModel の登録" => 20,
+        ContractKind.DependencyInjection when contract.Title == "主要 ViewModel の登録" => 20,
         ContractKind.DependencyInjection when contract.Title == "直接依存のライフタイム" => 21,
         ContractKind.DependencyInjection => 22,
         ContractKind.Navigation when contract.Title == "選択から表示への反映" => 25,
@@ -185,8 +200,8 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
     private static int GetIndexPriority(IndexSection index) => index.Title switch
     {
         "ナビゲーション" => 0,
-        "選択から表示への反映" => 10,
-        "ナビゲーション更新式" => 20,
+        "選択から表示への因果" => 10,
+        "ナビゲーション更新点" => 20,
         "View-ViewModel" => 30,
         "起動経路" => 40,
         "DI" => 45,

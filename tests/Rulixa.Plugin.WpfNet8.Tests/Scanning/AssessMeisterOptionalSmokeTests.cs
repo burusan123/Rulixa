@@ -14,6 +14,7 @@ public sealed class AssessMeisterOptionalSmokeTests
     internal const string WorkspaceRoot = @"D:\C#\AssessMeister";
     internal const string EnableEnvironmentVariableName = "RULIXA_RUN_ASSESSMEISTER_SMOKE";
     private const string ShellViewModelSymbol = "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel";
+    private const string DraftingWindowViewModelSymbol = "AssessMeister.Presentation.Wpf.ViewModels.Drafting.DraftingWindowViewModel";
 
     [OptionalAssessMeisterFact]
     public async Task BuildPack_ForAssessMeisterShellViewModel_ContainsPhase1Signals()
@@ -63,6 +64,31 @@ public sealed class AssessMeisterOptionalSmokeTests
         Assert.Contains("SelectedItem", markdown, StringComparison.Ordinal);
         Assert.Contains("CurrentPage", markdown, StringComparison.Ordinal);
         Assert.Contains("project", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [OptionalAssessMeisterFact]
+    public async Task BuildPack_ForAssessMeisterDraftingViewModel_ContainsWorkflowOrUnknownSignals()
+    {
+        var fileSystem = new WorkspaceFileSystem();
+        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+        var resolver = new ScanBackedEntryResolver();
+        var extractor = new WpfNet8ContractExtractor(fileSystem);
+
+        var scanResult = await scanner.ScanAsync(WorkspaceRoot);
+        var resolvedEntry = await resolver.ResolveAsync(new Entry(EntryKind.Symbol, DraftingWindowViewModelSymbol), scanResult);
+        var ingredients = await extractor.ExtractAsync(
+            WorkspaceRoot,
+            scanResult,
+            resolvedEntry,
+            "drafting ai analyze");
+
+        Assert.Equal(ResolvedEntryKind.Symbol, resolvedEntry.ResolvedKind);
+        Assert.True(
+            ingredients.Indexes.Any(index => index.Title == "Workflow")
+            || ingredients.Unknowns.Any(unknown => unknown.Code.StartsWith("workflow.", StringComparison.Ordinal))
+            || ingredients.Indexes.SelectMany(static index => index.Lines).Any(line =>
+                line.Contains("WallAlgorithm", StringComparison.Ordinal)
+                || line.Contains("Algorithm", StringComparison.Ordinal)));
     }
 }
 

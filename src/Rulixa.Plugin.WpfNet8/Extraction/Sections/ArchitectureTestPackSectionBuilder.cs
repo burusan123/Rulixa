@@ -21,36 +21,56 @@ internal sealed class ArchitectureTestPackSectionBuilder
         ICollection<Contract> contracts,
         ICollection<IndexSection> indexes,
         ICollection<FileSelectionCandidate> fileCandidates,
+        ICollection<PackDecisionTrace> decisionTraces,
         ICollection<Diagnostic> unknowns,
         CancellationToken cancellationToken)
     {
         var tests = await DiscoverTestsAsync(workspaceRoot, scanResult, cancellationToken).ConfigureAwait(false);
-        if (tests.Count == 0)
+        var analyses = AnalyzeTests(scanResult, relevantContext, tests);
+        AddDecisionTraces(analyses, decisionTraces);
+
+        var selected = analyses
+            .Where(static analysis => analysis.Evaluation.IsSelectable)
+            .ToArray();
+        if (selected.Length == 0)
         {
-            if (relevantContext.GoalProfile.HasCategory("architecture"))
+            if (relevantContext.GoalProfile.HasCategory("architecture") || relevantContext.GoalProfile.HasCategory("system"))
             {
-                unknowns.Add(new Diagnostic(
-                    "architecture-tests.unresolved",
-                    "No architecture or regression-style tests were detected from the scanned workspace.",
+                var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
+                    "architecture-tests.not-found",
+                    "No architecture, golden, or regression-style tests were detected from the scanned workspace.",
                     null,
                     DiagnosticSeverity.Info,
-                    []));
+                    []);
+                unknowns.Add(diagnostic);
+                decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+                    "architecture-test-selection",
+                    "architecture-tests.not-found",
+                    "unknown-raised",
+                    diagnostic.Message,
+                    new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence()),
+                    0,
+                    0));
             }
 
             return;
         }
 
-        indexes.Add(new IndexSection("Architecture Tests", tests.Select(static test => test.ToIndexLine()).ToArray()));
+        indexes.Add(new IndexSection("Architecture Tests", selected.Select(static analysis => analysis.ToIndexLine()).ToArray()));
         contracts.Add(new Contract(
             ContractKind.DependencyInjection,
             "Architecture Tests",
-            BuildSummary(tests),
-            tests.Select(static test => test.FilePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            BuildSummary(selected),
+            selected.Select(static analysis => analysis.Signal.FilePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             []));
 
-        foreach (var filePath in tests.Select(static test => test.FilePath).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var analysis in selected)
         {
-            fileCandidates.Add(new FileSelectionCandidate(filePath, "architecture-test", 32, false));
+            fileCandidates.Add(new FileSelectionCandidate(
+                analysis.Signal.FilePath,
+                "architecture-test",
+                analysis.Evaluation.ToPriority(32),
+                false));
         }
     }
 
@@ -83,6 +103,73 @@ internal sealed class ArchitectureTestPackSectionBuilder
         return signals;
     }
 
+    private IReadOnlyList<ArchitectureTestAnalysis> AnalyzeTests(
+        WorkspaceScanResult scanResult,
+        RelevantPackContext relevantContext,
+        IReadOnlyList<ArchitectureTestSignal> signals)
+    {
+        var analyses = signals
+            .Select(signal => new ArchitectureTestAnalysis(
+                signal,
+                HighSignalSelectionSupport.Evaluate(
+                    relevantContext.GoalProfile,
+                    BuildTextEvidence(signal),
+                    BuildEvidence(scanResult, relevantContext, signal))))
+            .OrderByDescending(static analysis => analysis.Evaluation.Score)
+            .ThenBy(static analysis => analysis.Signal.FilePath, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        for (var index = 0; index < analyses.Length; index++)
+        {
+            analyses[index] = analyses[index] with { Rank = index + 1, CandidateCount = analyses.Length };
+        }
+
+        return analyses;
+    }
+
+    private static IReadOnlyList<SectionTextEvidence> BuildTextEvidence(ArchitectureTestSignal signal) =>
+    [
+        new("test-file", [signal.FilePath]),
+        new("test-descriptor", signal.Descriptors)
+    ];
+
+    private static SectionSignalEvidence BuildEvidence(
+        WorkspaceScanResult scanResult,
+        RelevantPackContext relevantContext,
+        ArchitectureTestSignal signal)
+    {
+        var goalCategoryMatches =
+            relevantContext.GoalProfile.HasCategory("architecture") || relevantContext.GoalProfile.HasCategory("system")
+                ? 1
+                : 0;
+
+        return new SectionSignalEvidence(
+            FileKindMatches: PackAnalysisHelpers.CountFileKindMatches(scanResult, [signal.FilePath], ScanFileKind.CSharp),
+            GoalCategoryMatches: goalCategoryMatches,
+            SemanticSignalCount: signal.Descriptors.Count,
+            DownstreamCount: 1);
+    }
+
+    private static void AddDecisionTraces(
+        IReadOnlyList<ArchitectureTestAnalysis> analyses,
+        ICollection<PackDecisionTrace> decisionTraces)
+    {
+        foreach (var analysis in analyses)
+        {
+            var decisionKind = analysis.Evaluation.IsSelectable
+                ? "selected"
+                : "omitted-low-score";
+            decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+                "architecture-test-selection",
+                analysis.Signal.FilePath,
+                decisionKind,
+                $"{analysis.Evaluation.ConfidenceLabel}: {Path.GetFileName(analysis.Signal.FilePath)}",
+                analysis.Evaluation,
+                analysis.Rank,
+                analysis.CandidateCount));
+        }
+    }
+
     private static IReadOnlyList<string> ExtractDescriptors(string path, string source)
     {
         var descriptors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -104,11 +191,8 @@ internal sealed class ArchitectureTestPackSectionBuilder
         }
     }
 
-    private static string BuildSummary(IReadOnlyList<ArchitectureTestSignal> tests)
-    {
-        var samples = tests.Take(3).Select(static test => test.ToIndexLine()).ToArray();
-        return $"Discovered {tests.Count} architecture or regression test files. Examples: {string.Join(" / ", samples)}";
-    }
+    private static string BuildSummary(IReadOnlyList<ArchitectureTestAnalysis> analyses) =>
+        $"Selected {analyses.Count} architecture test signals. {string.Join(" / ", analyses.Take(3).Select(static analysis => analysis.ToIndexLine()))}";
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,
@@ -121,8 +205,17 @@ internal sealed class ArchitectureTestPackSectionBuilder
 
     private sealed record ArchitectureTestSignal(
         string FilePath,
-        IReadOnlyList<string> Descriptors)
+        IReadOnlyList<string> Descriptors);
+
+    private sealed record ArchitectureTestAnalysis(
+        ArchitectureTestSignal Signal,
+        SectionSelectionEvaluation Evaluation)
     {
-        internal string ToIndexLine() => $"{Path.GetFileName(FilePath)} -> {string.Join(" / ", Descriptors)}";
+        internal int Rank { get; init; }
+
+        internal int CandidateCount { get; init; }
+
+        internal string ToIndexLine() =>
+            $"{Evaluation.ConfidenceLabel}: {Path.GetFileName(Signal.FilePath)} -> {string.Join(" / ", Signal.Descriptors)}";
     }
 }

@@ -43,9 +43,21 @@ internal static class PackAnalysisHelpers
     internal static IReadOnlyList<string> FindReferencedTypeSymbols(
         WorkspaceScanResult scanResult,
         string source,
+        Func<string, bool> simpleNamePredicate) =>
+        FindReferencedTypeCandidates(scanResult, source, simpleNamePredicate)
+            .Where(static candidate => !string.IsNullOrWhiteSpace(candidate.ResolvedSymbol))
+            .Select(static candidate => candidate.ResolvedSymbol!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    internal static IReadOnlyList<TypeReferenceCandidate> FindReferencedTypeCandidates(
+        WorkspaceScanResult scanResult,
+        string source,
         Func<string, bool> simpleNamePredicate)
     {
-        var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var referenced = new List<TypeReferenceCandidate>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (Match match in IdentifierRegex.Matches(source))
         {
             var token = match.Value;
@@ -55,17 +67,19 @@ internal static class PackAnalysisHelpers
                 continue;
             }
 
-            var symbol = ResolveTypeSymbol(scanResult, token)
+            var candidates = FindTypeSymbolsBySimpleName(scanResult, simpleName);
+            var resolvedSymbol = ResolveTypeSymbol(scanResult, token)
                 ?? ResolveTypeSymbol(scanResult, simpleName);
-            if (!string.IsNullOrWhiteSpace(symbol))
+            var key = $"{token}|{simpleName}|{resolvedSymbol}|{string.Join("|", candidates)}";
+            if (!seen.Add(key))
             {
-                referenced.Add(symbol);
+                continue;
             }
+
+            referenced.Add(new TypeReferenceCandidate(token, simpleName, resolvedSymbol, candidates));
         }
 
-        return referenced
-            .OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        return referenced;
     }
 
     internal static bool IsPersistenceLikeName(string simpleName) =>
@@ -119,6 +133,46 @@ internal static class PackAnalysisHelpers
         RelevantPackContext relevantContext,
         string symbol) =>
         ResolveAggregate(scanResult, relevantContext, symbol)?.FilePaths ?? [];
+
+    internal static IReadOnlyList<string> FindTypeSymbolsBySimpleName(
+        WorkspaceScanResult scanResult,
+        string simpleName) =>
+        scanResult.Symbols
+            .Where(symbol => symbol.Kind is SymbolKind.Class or SymbolKind.Interface or SymbolKind.Window)
+            .Where(symbol => string.Equals(symbol.DisplayName, simpleName, StringComparison.OrdinalIgnoreCase))
+            .Select(static symbol => symbol.QualifiedName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    internal static int CountServiceRegistrationMatches(
+        WorkspaceScanResult scanResult,
+        IEnumerable<string> symbols)
+    {
+        var symbolSet = symbols
+            .Where(static symbol => !string.IsNullOrWhiteSpace(symbol))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (symbolSet.Count == 0)
+        {
+            return 0;
+        }
+
+        return scanResult.ServiceRegistrations.Count(registration =>
+            symbolSet.Contains(registration.ServiceType)
+            || symbolSet.Contains(registration.ImplementationType));
+    }
+
+    internal static int CountFileKindMatches(
+        WorkspaceScanResult scanResult,
+        IEnumerable<string> filePaths,
+        params ScanFileKind[] expectedKinds)
+    {
+        var expected = expectedKinds.ToHashSet();
+        return filePaths
+            .Select(path => scanResult.Files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase)))
+            .Where(static file => file is not null)
+            .Count(file => expected.Contains(file!.Kind));
+    }
 
     private static string? TryExtractConstructorParameterList(string source, string className)
     {
@@ -249,4 +303,13 @@ internal static class PackAnalysisHelpers
 
         return [cleaned];
     }
+}
+
+internal sealed record TypeReferenceCandidate(
+    string Token,
+    string SimpleName,
+    string? ResolvedSymbol,
+    IReadOnlyList<string> CandidateSymbols)
+{
+    internal bool IsAmbiguous => string.IsNullOrWhiteSpace(ResolvedSymbol) && CandidateSymbols.Count > 1;
 }

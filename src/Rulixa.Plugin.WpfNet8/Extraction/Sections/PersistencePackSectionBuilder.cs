@@ -26,172 +26,354 @@ internal sealed class PersistencePackSectionBuilder
         ICollection<IndexSection> indexes,
         ICollection<SnippetSelectionCandidate> snippetCandidates,
         ICollection<FileSelectionCandidate> fileCandidates,
+        ICollection<PackDecisionTrace> decisionTraces,
         ICollection<Diagnostic> unknowns,
         CancellationToken cancellationToken)
     {
-        var links = await DiscoverLinksAsync(workspaceRoot, scanResult, relevantContext, cancellationToken).ConfigureAwait(false);
-        if (links.Count == 0)
-        {
-            if (relevantContext.GoalProfile.HasCategory("system") || relevantContext.GoalProfile.HasCategory("project"))
-            {
-                unknowns.Add(new Diagnostic(
-                    "persistence.unresolved",
-                    "Persistence-related symbols were not resolved within the current expansion budget.",
-                    null,
-                    DiagnosticSeverity.Info,
-                    relevantContext.ViewModelSymbols.ToArray()));
-            }
+        var discovery = await DiscoverLinksAsync(workspaceRoot, scanResult, relevantContext, cancellationToken).ConfigureAwait(false);
+        var analyses = AnalyzeLinks(scanResult, relevantContext, discovery.Links);
+        AddDecisionTraces(analyses, decisionTraces);
 
+        var selected = analyses
+            .Where(static analysis => analysis.Evaluation.IsSelectable)
+            .ToArray();
+        if (selected.Length == 0)
+        {
+            AddUnknowns(relevantContext, discovery, analyses, unknowns, decisionTraces);
             return;
         }
 
-        indexes.Add(new IndexSection("Persistence", links.Select(static link => link.ToIndexLine()).ToArray()));
+        indexes.Add(new IndexSection("Persistence", selected.Select(static analysis => analysis.ToIndexLine()).ToArray()));
         contracts.Add(new Contract(
             ContractKind.DependencyInjection,
             "Persistence",
-            BuildSummary(links),
-            links.SelectMany(static link => link.FilePaths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            links.SelectMany(static link => link.RelatedSymbols).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()));
+            BuildSummary(selected),
+            selected.SelectMany(static analysis => analysis.Link.FilePaths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            selected.SelectMany(static analysis => analysis.Link.RelatedSymbols).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()));
 
-        foreach (var filePath in links.SelectMany(static link => link.FilePaths).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var analysis in selected)
         {
-            fileCandidates.Add(new FileSelectionCandidate(filePath, "persistence", 26, false));
+            foreach (var filePath in analysis.Link.FilePaths)
+            {
+                fileCandidates.Add(new FileSelectionCandidate(filePath, "persistence", analysis.Evaluation.ToPriority(26), false));
+            }
         }
 
-        await AddSnippetsAsync(workspaceRoot, scanResult, relevantContext, links, snippetCandidates, cancellationToken)
+        AddUnknowns(relevantContext, discovery, analyses, unknowns, decisionTraces);
+        await AddSnippetsAsync(workspaceRoot, scanResult, relevantContext, selected, snippetCandidates, cancellationToken)
             .ConfigureAwait(false);
     }
 
-    private async Task<IReadOnlyList<PersistenceLink>> DiscoverLinksAsync(
+    private async Task<PersistenceDiscoveryResult> DiscoverLinksAsync(
         string workspaceRoot,
         WorkspaceScanResult scanResult,
         RelevantPackContext relevantContext,
         CancellationToken cancellationToken)
     {
         var links = new List<PersistenceLink>();
+        var ambiguousCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ownerCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var rootSymbol in relevantContext.ViewModelSymbols.OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase))
         {
-            var firstHopSymbols = await DiscoverFirstHopSymbolsAsync(
+            var owners = await DiscoverOwnerSymbolsAsync(
                     workspaceRoot,
                     scanResult,
                     relevantContext,
                     rootSymbol,
                     cancellationToken)
                 .ConfigureAwait(false);
-            foreach (var firstHopSymbol in firstHopSymbols)
+            ownerCandidates.UnionWith(owners.Symbols);
+            ambiguousCandidates.UnionWith(owners.AmbiguousCandidates);
+
+            foreach (var ownerSymbol in owners.Symbols)
             {
-                var persistenceSymbols = await DiscoverPersistenceSymbolsAsync(
+                var persistenceDiscovery = await DiscoverPersistenceCandidatesAsync(
                         workspaceRoot,
                         scanResult,
                         relevantContext,
-                        firstHopSymbol,
+                        ownerSymbol,
                         cancellationToken)
                     .ConfigureAwait(false);
-                if (persistenceSymbols.Count == 0 && PackAnalysisHelpers.IsPersistenceLikeName(PackExtractionConventions.GetSimpleTypeName(firstHopSymbol)))
+                ambiguousCandidates.UnionWith(persistenceDiscovery.AmbiguousCandidates);
+
+                if (persistenceDiscovery.Candidates.Count == 0
+                    && PackAnalysisHelpers.IsPersistenceLikeName(PackExtractionConventions.GetSimpleTypeName(ownerSymbol))
+                    && !string.Equals(rootSymbol, ownerSymbol, StringComparison.OrdinalIgnoreCase))
                 {
-                    persistenceSymbols = [firstHopSymbol];
+                    persistenceDiscovery = new PersistenceCandidateDiscovery(
+                        [new PersistenceCandidate(ownerSymbol, false)],
+                        persistenceDiscovery.AmbiguousCandidates);
                 }
 
-                foreach (var persistenceSymbol in persistenceSymbols.OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase))
+                foreach (var persistenceCandidate in persistenceDiscovery.Candidates)
                 {
                     var filePaths = PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, rootSymbol)
-                        .Concat(PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, firstHopSymbol))
-                        .Concat(PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, persistenceSymbol))
+                        .Concat(PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, ownerSymbol))
+                        .Concat(PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, persistenceCandidate.Symbol))
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToArray();
-                    links.Add(new PersistenceLink(rootSymbol, firstHopSymbol, persistenceSymbol, filePaths));
+                    links.Add(new PersistenceLink(
+                        rootSymbol,
+                        ownerSymbol,
+                        persistenceCandidate.Symbol,
+                        filePaths,
+                        persistenceCandidate.IsConstructorMatch));
                 }
             }
         }
 
-        return links
-            .DistinctBy(static link => link.Key, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(static link => link.RootDisplayName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(static link => link.PersistenceDisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        return new PersistenceDiscoveryResult(
+            links,
+            ownerCandidates.ToArray(),
+            ambiguousCandidates.ToArray());
     }
 
-    private async Task<HashSet<string>> DiscoverFirstHopSymbolsAsync(
+    private async Task<OwnerDiscovery> DiscoverOwnerSymbolsAsync(
         string workspaceRoot,
         WorkspaceScanResult scanResult,
         RelevantPackContext relevantContext,
-        string symbol,
+        string rootSymbol,
         CancellationToken cancellationToken)
     {
-        var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { symbol };
-        foreach (var filePath in PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, symbol))
+        var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { rootSymbol };
+        var ambiguousCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var filePath in PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, rootSymbol))
         {
             var source = await ReadSourceAsync(workspaceRoot, filePath, cancellationToken).ConfigureAwait(false);
-            foreach (var dependency in PackAnalysisHelpers.ExtractConstructorDependencyTypeNames(source, PackExtractionConventions.GetSimpleTypeName(symbol)))
+            foreach (var dependency in PackAnalysisHelpers.ExtractConstructorDependencyTypeNames(source, PackExtractionConventions.GetSimpleTypeName(rootSymbol)))
             {
-                AddIfResolvable(scanResult, symbols, dependency);
+                var resolved = PackAnalysisHelpers.ResolveTypeSymbol(scanResult, dependency);
+                if (!string.IsNullOrWhiteSpace(resolved))
+                {
+                    symbols.Add(resolved);
+                    continue;
+                }
+
+                foreach (var candidate in PackAnalysisHelpers.FindTypeSymbolsBySimpleName(scanResult, PackExtractionConventions.GetSimpleTypeName(dependency)))
+                {
+                    ambiguousCandidates.Add(candidate);
+                }
             }
 
-            foreach (var referenced in PackAnalysisHelpers.FindReferencedTypeSymbols(
+            foreach (var referenced in PackAnalysisHelpers.FindReferencedTypeCandidates(
                          scanResult,
                          source,
                          static name => PackAnalysisHelpers.IsWorkflowLikeName(name) || PackAnalysisHelpers.IsPersistenceLikeName(name)))
             {
-                symbols.Add(referenced);
-            }
-        }
-
-        return symbols;
-    }
-
-    private async Task<List<string>> DiscoverPersistenceSymbolsAsync(
-        string workspaceRoot,
-        WorkspaceScanResult scanResult,
-        RelevantPackContext relevantContext,
-        string symbol,
-        CancellationToken cancellationToken)
-    {
-        var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var filePath in PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, symbol))
-        {
-            var source = await ReadSourceAsync(workspaceRoot, filePath, cancellationToken).ConfigureAwait(false);
-            foreach (var referenced in PackAnalysisHelpers.FindReferencedTypeSymbols(
-                         scanResult,
-                         source,
-                         static name => PackAnalysisHelpers.IsPersistenceLikeName(name)))
-            {
-                if (!string.Equals(referenced, symbol, StringComparison.OrdinalIgnoreCase))
+                if (referenced.IsAmbiguous)
                 {
-                    symbols.Add(referenced);
+                    foreach (var candidate in referenced.CandidateSymbols)
+                    {
+                        ambiguousCandidates.Add(candidate);
+                    }
+
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(referenced.ResolvedSymbol))
+                {
+                    symbols.Add(referenced.ResolvedSymbol);
                 }
             }
         }
 
-        return symbols.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase).ToList();
+        return new OwnerDiscovery(
+            symbols.OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase).ToArray(),
+            ambiguousCandidates.OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    private async Task<PersistenceCandidateDiscovery> DiscoverPersistenceCandidatesAsync(
+        string workspaceRoot,
+        WorkspaceScanResult scanResult,
+        RelevantPackContext relevantContext,
+        string ownerSymbol,
+        CancellationToken cancellationToken)
+    {
+        var candidates = new Dictionary<string, PersistenceCandidate>(StringComparer.OrdinalIgnoreCase);
+        var ambiguousCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var filePath in PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, ownerSymbol))
+        {
+            var source = await ReadSourceAsync(workspaceRoot, filePath, cancellationToken).ConfigureAwait(false);
+            foreach (var dependency in PackAnalysisHelpers.ExtractConstructorDependencyTypeNames(source, PackExtractionConventions.GetSimpleTypeName(ownerSymbol)))
+            {
+                if (!PackAnalysisHelpers.IsPersistenceLikeName(PackExtractionConventions.GetSimpleTypeName(dependency)))
+                {
+                    continue;
+                }
+
+                var resolved = PackAnalysisHelpers.ResolveTypeSymbol(scanResult, dependency);
+                if (!string.IsNullOrWhiteSpace(resolved))
+                {
+                    candidates[resolved] = new PersistenceCandidate(resolved, true);
+                    continue;
+                }
+
+                foreach (var candidate in PackAnalysisHelpers.FindTypeSymbolsBySimpleName(scanResult, PackExtractionConventions.GetSimpleTypeName(dependency)))
+                {
+                    ambiguousCandidates.Add(candidate);
+                }
+            }
+
+            foreach (var referenced in PackAnalysisHelpers.FindReferencedTypeCandidates(
+                         scanResult,
+                         source,
+                         static name => PackAnalysisHelpers.IsPersistenceLikeName(name)))
+            {
+                if (referenced.IsAmbiguous)
+                {
+                    foreach (var candidate in referenced.CandidateSymbols)
+                    {
+                        ambiguousCandidates.Add(candidate);
+                    }
+
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(referenced.ResolvedSymbol)
+                    && !string.Equals(referenced.ResolvedSymbol, ownerSymbol, StringComparison.OrdinalIgnoreCase))
+                {
+                    candidates.TryAdd(referenced.ResolvedSymbol, new PersistenceCandidate(referenced.ResolvedSymbol, false));
+                }
+            }
+        }
+
+        return new PersistenceCandidateDiscovery(
+            candidates.Values.OrderBy(static candidate => candidate.Symbol, StringComparer.OrdinalIgnoreCase).ToArray(),
+            ambiguousCandidates.OrderBy(static candidate => candidate, StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    private IReadOnlyList<PersistenceAnalysis> AnalyzeLinks(
+        WorkspaceScanResult scanResult,
+        RelevantPackContext relevantContext,
+        IReadOnlyList<PersistenceLink> links)
+    {
+        var analyses = links
+            .Select(link => new PersistenceAnalysis(
+                link,
+                HighSignalSelectionSupport.Evaluate(
+                    relevantContext.GoalProfile,
+                    BuildTextEvidence(link),
+                    BuildEvidence(scanResult, relevantContext, link))))
+            .OrderByDescending(static analysis => analysis.Evaluation.Score)
+            .ThenBy(static analysis => analysis.Link.PersistenceDisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        for (var index = 0; index < analyses.Length; index++)
+        {
+            analyses[index] = analyses[index] with { Rank = index + 1, CandidateCount = analyses.Length };
+        }
+
+        return analyses;
+    }
+
+    private static IReadOnlyList<SectionTextEvidence> BuildTextEvidence(PersistenceLink link) =>
+    [
+        new("root-symbol", [link.RootSymbol]),
+        new("owner-symbol", [link.OwnerSymbol]),
+        new("persistence-symbol", [link.PersistenceSymbol])
+    ];
+
+    private static SectionSignalEvidence BuildEvidence(
+        WorkspaceScanResult scanResult,
+        RelevantPackContext relevantContext,
+        PersistenceLink link)
+    {
+        var involvedSymbols = link.RelatedSymbols;
+        var goalCategoryMatches =
+            relevantContext.GoalProfile.HasCategory("project") || relevantContext.GoalProfile.HasCategory("system")
+                ? 1
+                : 0;
+
+        return new SectionSignalEvidence(
+            ConstructorDependencyMatches: link.IsConstructorMatch ? 1 : 0,
+            ServiceRegistrationMatches: PackAnalysisHelpers.CountServiceRegistrationMatches(scanResult, involvedSymbols),
+            PartialSymbolMatches: involvedSymbols.Count(symbol =>
+                PackAnalysisHelpers.ResolveAggregate(scanResult, relevantContext, symbol)?.FilePaths.Count > 1),
+            FileKindMatches: PackAnalysisHelpers.CountFileKindMatches(scanResult, link.FilePaths, ScanFileKind.Service, ScanFileKind.ViewModel),
+            GoalCategoryMatches: goalCategoryMatches,
+            SemanticSignalCount: 1,
+            DownstreamCount: 1);
+    }
+
+    private static void AddDecisionTraces(
+        IReadOnlyList<PersistenceAnalysis> analyses,
+        ICollection<PackDecisionTrace> decisionTraces)
+    {
+        foreach (var analysis in analyses)
+        {
+            var decisionKind = analysis.Evaluation.IsSelectable
+                ? "selected"
+                : "omitted-low-score";
+            decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+                "persistence-selection",
+                analysis.Link.Key,
+                decisionKind,
+                $"{analysis.Evaluation.ConfidenceLabel}: {analysis.Link.Route}",
+                analysis.Evaluation,
+                analysis.Rank,
+                analysis.CandidateCount));
+        }
+    }
+
+    private static void AddUnknowns(
+        RelevantPackContext relevantContext,
+        PersistenceDiscoveryResult discovery,
+        IReadOnlyList<PersistenceAnalysis> analyses,
+        ICollection<Diagnostic> unknowns,
+        ICollection<PackDecisionTrace> decisionTraces)
+    {
+        if (analyses.Any(static analysis => analysis.Evaluation.IsSelectable))
+        {
+            return;
+        }
+
+        if (discovery.OwnerCandidates.Count > 0 || discovery.AmbiguousCandidates.Count > 0)
+        {
+            var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
+                "persistence.missing-owner",
+                "Persistence-related symbols were seen, but no high-confidence owner-to-persistence chain was resolved.",
+                null,
+                DiagnosticSeverity.Info,
+                discovery.AmbiguousCandidates.Concat(discovery.OwnerCandidates));
+            unknowns.Add(diagnostic);
+            decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+                "persistence-selection",
+                "persistence.missing-owner",
+                "unknown-raised",
+                diagnostic.Message,
+                new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence()),
+                0,
+                analyses.Count));
+        }
     }
 
     private async Task AddSnippetsAsync(
         string workspaceRoot,
         WorkspaceScanResult scanResult,
         RelevantPackContext relevantContext,
-        IReadOnlyList<PersistenceLink> links,
+        IReadOnlyList<PersistenceAnalysis> analyses,
         ICollection<SnippetSelectionCandidate> snippetCandidates,
         CancellationToken cancellationToken)
     {
-        foreach (var symbol in links
-                     .Select(static link => link.PersistenceSymbol)
-                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var analysis in analyses)
         {
-            var filePath = PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, symbol).FirstOrDefault();
+            var filePath = PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, analysis.Link.PersistenceSymbol).FirstOrDefault();
             if (string.IsNullOrWhiteSpace(filePath) || !PackExtractionConventions.ShouldCreateSnippet(scanResult, filePath))
             {
                 continue;
             }
 
-            var className = PackExtractionConventions.GetSimpleTypeName(symbol);
+            var className = PackExtractionConventions.GetSimpleTypeName(analysis.Link.PersistenceSymbol);
             var snippet = await snippetFactory
                 .CreateConstructorSnippetAsync(
                     workspaceRoot,
                     filePath,
                     className,
                     "persistence",
-                    26,
+                    analysis.Evaluation.ToPriority(26),
                     false,
                     $"{className}(...)",
                     cancellationToken)
@@ -203,23 +385,8 @@ internal sealed class PersistencePackSectionBuilder
         }
     }
 
-    private static void AddIfResolvable(
-        WorkspaceScanResult scanResult,
-        ISet<string> symbols,
-        string targetTypeName)
-    {
-        var resolved = PackAnalysisHelpers.ResolveTypeSymbol(scanResult, targetTypeName);
-        if (!string.IsNullOrWhiteSpace(resolved))
-        {
-            symbols.Add(resolved);
-        }
-    }
-
-    private static string BuildSummary(IReadOnlyList<PersistenceLink> links)
-    {
-        var samples = links.Take(3).Select(static link => link.ToIndexLine()).ToArray();
-        return $"Discovered {links.Count} persistence links. Examples: {string.Join(" / ", samples)}";
-    }
+    private static string BuildSummary(IReadOnlyList<PersistenceAnalysis> analyses) =>
+        $"Selected {analyses.Count} persistence chains. {string.Join(" / ", analyses.Take(3).Select(static analysis => analysis.ToIndexLine()))}";
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,
@@ -230,11 +397,29 @@ internal sealed class PersistencePackSectionBuilder
         return await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
     }
 
+    private sealed record OwnerDiscovery(
+        IReadOnlyList<string> Symbols,
+        IReadOnlyList<string> AmbiguousCandidates);
+
+    private sealed record PersistenceCandidate(
+        string Symbol,
+        bool IsConstructorMatch);
+
+    private sealed record PersistenceCandidateDiscovery(
+        IReadOnlyList<PersistenceCandidate> Candidates,
+        IReadOnlyList<string> AmbiguousCandidates);
+
+    private sealed record PersistenceDiscoveryResult(
+        IReadOnlyList<PersistenceLink> Links,
+        IReadOnlyList<string> OwnerCandidates,
+        IReadOnlyList<string> AmbiguousCandidates);
+
     private sealed record PersistenceLink(
         string RootSymbol,
         string OwnerSymbol,
         string PersistenceSymbol,
-        IReadOnlyList<string> FilePaths)
+        IReadOnlyList<string> FilePaths,
+        bool IsConstructorMatch)
     {
         internal string Key => $"{RootSymbol}|{OwnerSymbol}|{PersistenceSymbol}";
 
@@ -246,9 +431,20 @@ internal sealed class PersistencePackSectionBuilder
 
         internal IReadOnlyList<string> RelatedSymbols => [RootSymbol, OwnerSymbol, PersistenceSymbol];
 
-        internal string ToIndexLine() =>
+        internal string Route =>
             string.Equals(RootSymbol, OwnerSymbol, StringComparison.OrdinalIgnoreCase)
                 ? $"{RootDisplayName} -> {PersistenceDisplayName}"
                 : $"{RootDisplayName} -> {OwnerDisplayName} -> {PersistenceDisplayName}";
+    }
+
+    private sealed record PersistenceAnalysis(
+        PersistenceLink Link,
+        SectionSelectionEvaluation Evaluation)
+    {
+        internal int Rank { get; init; }
+
+        internal int CandidateCount { get; init; }
+
+        internal string ToIndexLine() => $"{Evaluation.ConfidenceLabel}: {Link.Route}";
     }
 }

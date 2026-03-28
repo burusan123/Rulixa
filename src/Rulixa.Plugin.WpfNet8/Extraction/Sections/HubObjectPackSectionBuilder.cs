@@ -26,40 +26,42 @@ internal sealed class HubObjectPackSectionBuilder
         ICollection<IndexSection> indexes,
         ICollection<SnippetSelectionCandidate> snippetCandidates,
         ICollection<FileSelectionCandidate> fileCandidates,
+        ICollection<PackDecisionTrace> decisionTraces,
         ICollection<Diagnostic> unknowns,
         CancellationToken cancellationToken)
     {
         var hubObjects = await DiscoverHubObjectsAsync(workspaceRoot, scanResult, relevantContext, cancellationToken)
             .ConfigureAwait(false);
-        if (hubObjects.Count == 0)
-        {
-            if (relevantContext.GoalProfile.HasCategory("system") || relevantContext.GoalProfile.HasCategory("project"))
-            {
-                unknowns.Add(new Diagnostic(
-                    "hub-object.unresolved",
-                    "Shared state holder candidates were not identified from the current entry.",
-                    null,
-                    DiagnosticSeverity.Info,
-                    relevantContext.ViewModelSymbols.ToArray()));
-            }
+        var analyses = AnalyzeHubObjects(scanResult, relevantContext, hubObjects);
+        AddDecisionTraces(analyses, decisionTraces);
 
+        var selected = analyses
+            .Where(static analysis => analysis.Evaluation.IsSelectable)
+            .ToArray();
+        if (selected.Length == 0)
+        {
+            AddUnknowns(relevantContext, analyses, unknowns, decisionTraces);
             return;
         }
 
-        indexes.Add(new IndexSection("Hub Objects", hubObjects.Select(static item => item.ToIndexLine()).ToArray()));
+        indexes.Add(new IndexSection("Hub Objects", selected.Select(static analysis => analysis.ToIndexLine()).ToArray()));
         contracts.Add(new Contract(
             ContractKind.DependencyInjection,
             "Hub Objects",
-            BuildSummary(hubObjects),
-            hubObjects.SelectMany(static item => item.FilePaths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            hubObjects.Select(static item => item.Symbol).ToArray()));
+            BuildSummary(selected),
+            selected.SelectMany(static analysis => analysis.Candidate.FilePaths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            selected.Select(static analysis => analysis.Candidate.Symbol).ToArray()));
 
-        foreach (var filePath in hubObjects.SelectMany(static item => item.FilePaths).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var analysis in selected)
         {
-            fileCandidates.Add(new FileSelectionCandidate(filePath, "hub-object", 28, false));
+            foreach (var filePath in analysis.Candidate.FilePaths)
+            {
+                fileCandidates.Add(new FileSelectionCandidate(filePath, "hub-object", analysis.Evaluation.ToPriority(28), false));
+            }
         }
 
-        await AddSnippetsAsync(workspaceRoot, scanResult, relevantContext, hubObjects, snippetCandidates, cancellationToken)
+        AddUnknowns(relevantContext, analyses, unknowns, decisionTraces);
+        await AddSnippetsAsync(workspaceRoot, scanResult, relevantContext, selected, snippetCandidates, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -104,15 +106,23 @@ internal sealed class HubObjectPackSectionBuilder
                     continue;
                 }
 
-                var firstFile = hubFiles[0];
-                var hubSource = await ReadSourceAsync(workspaceRoot, firstFile, cancellationToken).ConfigureAwait(false);
-                if (!PackAnalysisHelpers.HasHubObjectSignals(hubSource))
+                var allSources = new List<string>();
+                var signals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var hubFile in hubFiles)
                 {
-                    continue;
+                    var hubSource = await ReadSourceAsync(workspaceRoot, hubFile, cancellationToken).ConfigureAwait(false);
+                    allSources.Add(hubSource);
+                    foreach (var signal in ExtractSignals(hubSource))
+                    {
+                        signals.Add(signal);
+                    }
                 }
 
-                var signals = ExtractSignals(hubSource);
-                candidates[referenced] = new HubObjectCandidate(referenced, signals, hubFiles);
+                candidates[referenced] = new HubObjectCandidate(
+                    referenced,
+                    signals.OrderBy(static signal => signal, StringComparer.OrdinalIgnoreCase).ToArray(),
+                    hubFiles,
+                    allSources.Count(source => PackAnalysisHelpers.HasHubObjectSignals(source)));
             }
         }
 
@@ -144,30 +154,135 @@ internal sealed class HubObjectPackSectionBuilder
         return symbols.OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    private IReadOnlyList<HubObjectAnalysis> AnalyzeHubObjects(
+        WorkspaceScanResult scanResult,
+        RelevantPackContext relevantContext,
+        IReadOnlyList<HubObjectCandidate> candidates)
+    {
+        var analyses = candidates
+            .Select(candidate => new HubObjectAnalysis(
+                candidate,
+                HighSignalSelectionSupport.Evaluate(
+                    relevantContext.GoalProfile,
+                    BuildTextEvidence(candidate),
+                    BuildEvidence(scanResult, relevantContext, candidate))))
+            .OrderByDescending(static analysis => analysis.Evaluation.Score)
+            .ThenBy(static analysis => analysis.Candidate.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        for (var index = 0; index < analyses.Length; index++)
+        {
+            analyses[index] = analyses[index] with { Rank = index + 1, CandidateCount = analyses.Length };
+        }
+
+        return analyses;
+    }
+
+    private static IReadOnlyList<SectionTextEvidence> BuildTextEvidence(HubObjectCandidate candidate) =>
+    [
+        new("hub-object", [candidate.Symbol]),
+        new("hub-signals", candidate.Signals)
+    ];
+
+    private static SectionSignalEvidence BuildEvidence(
+        WorkspaceScanResult scanResult,
+        RelevantPackContext relevantContext,
+        HubObjectCandidate candidate)
+    {
+        var goalCategoryMatches =
+            relevantContext.GoalProfile.HasCategory("system") || relevantContext.GoalProfile.HasCategory("project")
+                ? 1
+                : 0;
+
+        return new SectionSignalEvidence(
+            PartialSymbolMatches: PackAnalysisHelpers.ResolveAggregate(scanResult, relevantContext, candidate.Symbol)?.FilePaths.Count > 1 ? 1 : 0,
+            FileKindMatches: PackAnalysisHelpers.CountFileKindMatches(scanResult, candidate.FilePaths, ScanFileKind.CSharp, ScanFileKind.ViewModel, ScanFileKind.Service),
+            GoalCategoryMatches: goalCategoryMatches,
+            SemanticSignalCount: candidate.Signals.Count,
+            DownstreamCount: candidate.SignalSourceCount);
+    }
+
+    private static void AddDecisionTraces(
+        IReadOnlyList<HubObjectAnalysis> analyses,
+        ICollection<PackDecisionTrace> decisionTraces)
+    {
+        foreach (var analysis in analyses)
+        {
+            var decisionKind = analysis.Evaluation.IsSelectable
+                ? "selected"
+                : "omitted-low-score";
+            decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+                "hub-object-selection",
+                analysis.Candidate.Symbol,
+                decisionKind,
+                $"{analysis.Evaluation.ConfidenceLabel}: {analysis.Candidate.DisplayName}",
+                analysis.Evaluation,
+                analysis.Rank,
+                analysis.CandidateCount));
+        }
+    }
+
+    private static void AddUnknowns(
+        RelevantPackContext relevantContext,
+        IReadOnlyList<HubObjectAnalysis> analyses,
+        ICollection<Diagnostic> unknowns,
+        ICollection<PackDecisionTrace> decisionTraces)
+    {
+        if (analyses.Any(static analysis => analysis.Evaluation.IsSelectable))
+        {
+            return;
+        }
+
+        var weakCandidates = analyses
+            .Where(static analysis => analysis.Candidate.Signals.Count == 0)
+            .Select(static analysis => analysis.Candidate.Symbol)
+            .ToArray();
+        if (weakCandidates.Length == 0)
+        {
+            return;
+        }
+
+        var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
+            "hub-object.weak-signal",
+            "Hub-object-like symbols were found, but they did not expose dirty state, snapshot, or identity management signals strongly enough.",
+            null,
+            DiagnosticSeverity.Info,
+            weakCandidates);
+        unknowns.Add(diagnostic);
+        decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+            "hub-object-selection",
+            "hub-object.weak-signal",
+            "unknown-raised",
+            diagnostic.Message,
+            new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence()),
+            0,
+            analyses.Count));
+    }
+
     private async Task AddSnippetsAsync(
         string workspaceRoot,
         WorkspaceScanResult scanResult,
         RelevantPackContext relevantContext,
-        IReadOnlyList<HubObjectCandidate> hubObjects,
+        IReadOnlyList<HubObjectAnalysis> analyses,
         ICollection<SnippetSelectionCandidate> snippetCandidates,
         CancellationToken cancellationToken)
     {
-        foreach (var hubObject in hubObjects)
+        foreach (var analysis in analyses)
         {
-            var filePath = PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, hubObject.Symbol).FirstOrDefault();
+            var filePath = PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, analysis.Candidate.Symbol).FirstOrDefault();
             if (string.IsNullOrWhiteSpace(filePath) || !PackExtractionConventions.ShouldCreateSnippet(scanResult, filePath))
             {
                 continue;
             }
 
-            var className = PackExtractionConventions.GetSimpleTypeName(hubObject.Symbol);
+            var className = PackExtractionConventions.GetSimpleTypeName(analysis.Candidate.Symbol);
             var snippet = await snippetFactory
                 .CreateConstructorSnippetAsync(
                     workspaceRoot,
                     filePath,
                     className,
                     "hub-object",
-                    28,
+                    analysis.Evaluation.ToPriority(28),
                     false,
                     $"{className}(...)",
                     cancellationToken)
@@ -207,14 +322,16 @@ internal sealed class HubObjectPackSectionBuilder
             signals.Add("MarkSaved");
         }
 
+        if (source.Contains("Identity", StringComparison.Ordinal))
+        {
+            signals.Add("Identity");
+        }
+
         return signals;
     }
 
-    private static string BuildSummary(IReadOnlyList<HubObjectCandidate> hubObjects)
-    {
-        var samples = hubObjects.Take(3).Select(static item => item.ToIndexLine()).ToArray();
-        return $"Discovered {hubObjects.Count} shared state holder candidates. Examples: {string.Join(" / ", samples)}";
-    }
+    private static string BuildSummary(IReadOnlyList<HubObjectAnalysis> analyses) =>
+        $"Selected {analyses.Count} hub objects. {string.Join(" / ", analyses.Take(3).Select(static analysis => analysis.ToIndexLine()))}";
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,
@@ -228,13 +345,23 @@ internal sealed class HubObjectPackSectionBuilder
     private sealed record HubObjectCandidate(
         string Symbol,
         IReadOnlyList<string> Signals,
-        IReadOnlyList<string> FilePaths)
+        IReadOnlyList<string> FilePaths,
+        int SignalSourceCount)
     {
         internal string DisplayName => PackExtractionConventions.GetSimpleTypeName(Symbol);
+    }
+
+    private sealed record HubObjectAnalysis(
+        HubObjectCandidate Candidate,
+        SectionSelectionEvaluation Evaluation)
+    {
+        internal int Rank { get; init; }
+
+        internal int CandidateCount { get; init; }
 
         internal string ToIndexLine() =>
-            Signals.Count == 0
-                ? DisplayName
-                : $"{DisplayName} ({string.Join(", ", Signals)})";
+            Candidate.Signals.Count == 0
+                ? $"{Evaluation.ConfidenceLabel}: {Candidate.DisplayName}"
+                : $"{Evaluation.ConfidenceLabel}: {Candidate.DisplayName} ({string.Join(", ", Candidate.Signals)})";
     }
 }
