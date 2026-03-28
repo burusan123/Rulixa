@@ -37,6 +37,8 @@ internal static class Program
             var contractExtractor = new WpfNet8ContractExtractor(workspaceFileSystem);
             var renderer = new MarkdownContextPackRenderer();
             var evidenceBundleWriter = new EvidenceBundleWriter(JsonOptions);
+            var evidenceBundleReader = new EvidenceBundleReader(JsonOptions);
+            var evidenceBundleDiffRenderer = new EvidenceBundleDiffRenderer();
 
             var scanWorkspaceUseCase = new ScanWorkspaceUseCase(workspaceScanner);
             var resolveEntryUseCase = new ResolveEntryUseCase(entryResolver);
@@ -47,6 +49,7 @@ internal static class Program
                 "scan" => await RunScanAsync(args[1..], scanWorkspaceUseCase).ConfigureAwait(false),
                 "resolve-entry" => await RunResolveEntryAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase).ConfigureAwait(false),
                 "pack" => await RunPackAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase, buildContextPackUseCase, renderer, evidenceBundleWriter).ConfigureAwait(false),
+                "compare-evidence" => await RunCompareEvidenceAsync(args[1..], evidenceBundleReader, evidenceBundleDiffRenderer).ConfigureAwait(false),
                 _ => Fail(CliMessages.UnknownCommand(args[0]))
             };
         }
@@ -121,6 +124,22 @@ internal static class Program
         }
 
         return exitCode;
+    }
+
+    private static async Task<int> RunCompareEvidenceAsync(
+        string[] args,
+        EvidenceBundleReader evidenceBundleReader,
+        EvidenceBundleDiffRenderer evidenceBundleDiffRenderer)
+    {
+        var baseDirectory = GetRequiredOption(args, "--base");
+        var targetDirectory = GetRequiredOption(args, "--target");
+        var outputPath = GetOption(args, "--out");
+
+        var before = await evidenceBundleReader.ReadAsync(baseDirectory).ConfigureAwait(false);
+        var after = await evidenceBundleReader.ReadAsync(targetDirectory).ConfigureAwait(false);
+        var diff = evidenceBundleDiffRenderer.Render(baseDirectory, before, targetDirectory, after);
+
+        return await WriteOutputAsync(diff, outputPath).ConfigureAwait(false);
     }
 
     private static string GetRequiredOption(IReadOnlyList<string> args, string optionName) =>

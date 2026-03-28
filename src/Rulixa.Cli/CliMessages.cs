@@ -8,7 +8,8 @@ internal static class CliMessages
     [
         "  rulixa scan [--workspace <path>] [--out <path>]",
         "  rulixa resolve-entry --entry <entry> [--workspace <path>]",
-        "  rulixa pack --entry <entry> --goal <goal> [--workspace <path>] [--out <path>] [--evidence-dir <path>] [--max-files <n>] [--max-total-lines <n>] [--max-snippets-per-file <n>]"
+        "  rulixa pack --entry <entry> --goal <goal> [--workspace <path>] [--out <path>] [--evidence-dir <path>] [--max-files <n>] [--max-total-lines <n>] [--max-snippets-per-file <n>]",
+        "  rulixa compare-evidence --base <bundle-dir> --target <bundle-dir> [--out <path>]"
     ];
 
     public static string UnknownCommand(string command) => $"未対応のコマンドです: {command}";

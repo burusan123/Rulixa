@@ -9,11 +9,6 @@ namespace Rulixa.Cli;
 
 internal sealed class EvidenceBundleWriter(JsonSerializerOptions jsonOptions)
 {
-    private const string ManifestFileName = "manifest.json";
-    private const string ScanFileName = "scan.json";
-    private const string ResolvedEntryFileName = "resolved-entry.json";
-    private const string PackFileName = "pack.md";
-
     public async Task<string> WriteAsync(
         string evidenceRootDirectory,
         string workspaceRoot,
@@ -44,10 +39,10 @@ internal sealed class EvidenceBundleWriter(JsonSerializerOptions jsonOptions)
         var manifestJson = JsonSerializer.Serialize(manifest, jsonOptions);
         var files = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [ManifestFileName] = manifestJson,
-            [ScanFileName] = scanJson,
-            [ResolvedEntryFileName] = resolvedEntryJson,
-            [PackFileName] = markdown
+            [EvidenceBundleConventions.ManifestFileName] = manifestJson,
+            [EvidenceBundleConventions.ScanFileName] = scanJson,
+            [EvidenceBundleConventions.ResolvedEntryFileName] = resolvedEntryJson,
+            [EvidenceBundleConventions.PackFileName] = markdown
         };
 
         var fullRootPath = Path.GetFullPath(evidenceRootDirectory);
@@ -73,7 +68,7 @@ internal sealed class EvidenceBundleWriter(JsonSerializerOptions jsonOptions)
         ResolvedEntry resolvedEntry,
         ContextPack contextPack) =>
         new(
-            SchemaVersion: "rulixa.phase1.evidence.v1",
+            SchemaVersion: EvidenceBundleConventions.SchemaVersion,
             DirectoryName: directoryName,
             WorkspaceRoot: NormalizePath(Path.GetFullPath(workspaceRoot))!,
             GeneratedAtUtc: generatedAtUtc.UtcDateTime.ToString("O"),
@@ -114,10 +109,10 @@ internal sealed class EvidenceBundleWriter(JsonSerializerOptions jsonOptions)
                         snippet.IsRequired))
                     .ToArray()),
             Artifacts: new EvidenceArtifactsDto(
-                ManifestFileName,
-                ScanFileName,
-                ResolvedEntryFileName,
-                PackFileName));
+                EvidenceBundleConventions.ManifestFileName,
+                EvidenceBundleConventions.ScanFileName,
+                EvidenceBundleConventions.ResolvedEntryFileName,
+                EvidenceBundleConventions.PackFileName));
 
     private static string ResolveTargetDirectory(
         string evidenceRootDirectory,
@@ -218,57 +213,4 @@ internal sealed class EvidenceBundleWriter(JsonSerializerOptions jsonOptions)
     }
 
     private static string? NormalizePath(string? path) => path?.Replace('\\', '/');
-
-    internal sealed record EvidenceManifestDto(
-        string SchemaVersion,
-        string DirectoryName,
-        string WorkspaceRoot,
-        string GeneratedAtUtc,
-        string Entry,
-        string Goal,
-        EvidenceBudgetDto Budget,
-        EvidenceResolvedEntryDto ResolvedEntry,
-        EvidenceSelectionSummaryDto SelectionSummary,
-        EvidenceArtifactsDto Artifacts);
-
-    internal sealed record EvidenceBudgetDto(
-        int MaxFiles,
-        int MaxTotalLines,
-        int MaxSnippetsPerFile);
-
-    internal sealed record EvidenceResolvedEntryDto(
-        string ResolvedKind,
-        string? ResolvedPath,
-        string? Symbol,
-        string Confidence);
-
-    internal sealed record EvidenceSelectionSummaryDto(
-        IReadOnlyList<EvidenceContractDto> Contracts,
-        IReadOnlyList<EvidenceSelectedFileDto> SelectedFiles,
-        IReadOnlyList<EvidenceSelectedSnippetDto> SelectedSnippets);
-
-    internal sealed record EvidenceContractDto(
-        string Kind,
-        string Title,
-        string Summary);
-
-    internal sealed record EvidenceSelectedFileDto(
-        string Path,
-        string Reason,
-        bool IsRequired,
-        int LineCount);
-
-    internal sealed record EvidenceSelectedSnippetDto(
-        string Path,
-        string Reason,
-        string Anchor,
-        int StartLine,
-        int EndLine,
-        bool IsRequired);
-
-    internal sealed record EvidenceArtifactsDto(
-        string Manifest,
-        string Scan,
-        string ResolvedEntry,
-        string Pack);
 }
