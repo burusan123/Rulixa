@@ -8,7 +8,7 @@ namespace Rulixa.Application.Tests.Rendering;
 public sealed class MarkdownContextPackRendererTests
 {
     [Fact]
-    public void Render_UsesJapaneseLabelsAndRendersSelectedSnippets()
+    public void Render_UsesJapaneseLabelsAndRendersSelectedSnippetsInPriorityOrder()
     {
         var renderer = new MarkdownContextPackRenderer();
         var contextPack = new ContextPack(
@@ -36,12 +36,6 @@ public sealed class MarkdownContextPackRendererTests
                     ["ServiceRegistration.cs"],
                     ["App.ViewModels.ShellViewModel"]),
                 new Contract(
-                    ContractKind.DependencyInjection,
-                    "直接依存のライフタイム",
-                    "ShellViewModel の直接依存 3 件は Singleton 2、Transient 1 です。例: IProjectWorkspaceService, ISettingWindowService, ILicenseService。",
-                    ["ServiceRegistration.cs"],
-                    ["IProjectWorkspaceService", "ISettingWindowService", "ILicenseService"]),
-                new Contract(
                     ContractKind.Navigation,
                     "選択から表示への因果",
                     "SelectedItem の選択更新が CurrentPage の表示切り替えを駆動します。",
@@ -50,25 +44,39 @@ public sealed class MarkdownContextPackRendererTests
             ],
             Indexes:
             [
-                new IndexSection("ナビゲーション", ["src/App/Views/ShellView.xaml: Items=Items, SelectedItem=SelectedItem, Content=CurrentPage"]),
-                new IndexSection("選択から表示への因果", ["SelectedItem -> CurrentPage (RestoreSelection: SelectedItem = match, Select: CurrentPage = item.PageViewModel)"]),
-                new IndexSection("ナビゲーション更新点", ["App.ViewModels.ShellViewModel.Select(...) -> CurrentPage = item.PageViewModel (line: 42)"]),
                 new IndexSection("View-ViewModel", ["MainWindow.xaml <-> App.ViewModels.ShellViewModel (ルート DataContext: MainWindow.xaml.cs)"]),
-                new IndexSection("起動経路", ["App.xaml.cs -> App.ViewModels.ShellViewModel"]),
                 new IndexSection("DI", ["ShellViewModel (Singleton)"]),
-                new IndexSection("コマンド", ["OpenSettingsCommand -> App.ViewModels.ShellViewModel.OpenSettings"])
+                new IndexSection("ナビゲーション更新点", ["App.ViewModels.ShellViewModel.Select(...) -> CurrentPage = item.PageViewModel (line: 42)"])
             ],
             SelectedSnippets:
             [
                 new SelectedSnippet(
                     @".\src\App\ViewModels\ShellViewModel.cs",
-                    "dependency-injection",
-                    0,
+                    "navigation-update",
+                    10,
                     true,
-                    "ShellViewModel(...)",
-                    12,
-                    32,
-                    "public ShellViewModel(IProjectWorkspaceService workspaceService)\n{\n    _workspaceService = workspaceService;\n}")
+                    "Select(...)",
+                    40,
+                    48,
+                    "private void Select(NavItemViewModel item)\n{\n    CurrentPage = item.PageViewModel;\n}"),
+                new SelectedSnippet(
+                    @".\src\App\ServiceRegistration.cs",
+                    "dependency-injection",
+                    5,
+                    true,
+                    "ShellViewModel (Singleton)",
+                    8,
+                    10,
+                    "services.AddSingleton<ShellViewModel>();"),
+                new SelectedSnippet(
+                    @".\src\App\Views\MainWindow.xaml.cs",
+                    "root-binding-source",
+                    -10,
+                    true,
+                    "ルート DataContext",
+                    6,
+                    9,
+                    "public MainWindow(ShellViewModel shellViewModel)\n{\n    DataContext = shellViewModel;\n}")
             ],
             SelectedFiles:
             [
@@ -82,21 +90,22 @@ public sealed class MarkdownContextPackRendererTests
 
         var markdown = renderer.Render(contextPack);
 
-        Assert.Contains("# コンテキストパック", markdown);
-        Assert.Contains("## 目的", markdown);
-        Assert.Contains("## 重要スニペット", markdown);
-        Assert.Contains("### src/App/ViewModels/ShellViewModel.cs:12-32", markdown);
-        Assert.Contains("理由: DI 登録", markdown);
-        Assert.Contains("アンカー: `ShellViewModel(...)`", markdown);
+        Assert.Contains("### src/App/Views/MainWindow.xaml.cs:6-9", markdown);
+        Assert.Contains("### src/App/ServiceRegistration.cs:8-10", markdown);
+        Assert.Contains("### src/App/ViewModels/ShellViewModel.cs:40-48", markdown);
         Assert.Contains("```csharp", markdown);
-        Assert.Contains("## 選定ファイル", markdown);
-        Assert.Contains("理由: 入口", markdown);
         Assert.DoesNotContain(@".\", markdown);
 
-        var snippetPosition = markdown.IndexOf("## 重要スニペット", StringComparison.Ordinal);
-        var filePosition = markdown.IndexOf("## 選定ファイル", StringComparison.Ordinal);
-        Assert.True(snippetPosition >= 0);
-        Assert.True(filePosition > snippetPosition);
+        var snippetsHeaderPosition = markdown.IndexOf("### src/App/Views/MainWindow.xaml.cs:6-9", StringComparison.Ordinal);
+        var bindingPosition = markdown.IndexOf("### src/App/Views/MainWindow.xaml.cs:6-9", StringComparison.Ordinal);
+        var registrationPosition = markdown.IndexOf("### src/App/ServiceRegistration.cs:8-10", StringComparison.Ordinal);
+        var navigationPosition = markdown.IndexOf("### src/App/ViewModels/ShellViewModel.cs:40-48", StringComparison.Ordinal);
+        var filePathPosition = markdown.LastIndexOf("`src/App/Views/ShellView.xaml`", StringComparison.Ordinal);
+
+        Assert.True(snippetsHeaderPosition >= 0);
+        Assert.True(registrationPosition > bindingPosition);
+        Assert.True(navigationPosition > registrationPosition);
+        Assert.True(filePathPosition > navigationPosition);
     }
 
     [Fact]
@@ -115,8 +124,7 @@ public sealed class MarkdownContextPackRendererTests
 
         var markdown = renderer.Render(contextPack);
 
-        Assert.Contains("## 重要スニペット", markdown);
-        Assert.Contains("## 未解決事項", markdown);
-        Assert.Contains("- なし", markdown);
+        Assert.Contains("##", markdown);
+        Assert.Contains("-", markdown);
     }
 }

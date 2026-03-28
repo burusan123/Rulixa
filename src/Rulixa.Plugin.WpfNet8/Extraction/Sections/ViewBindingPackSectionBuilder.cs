@@ -6,40 +6,24 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal static class ViewBindingPackSectionBuilder
 {
-    internal static void AddBindingContracts(
+    internal static async Task AddBindingContractsAsync(
+        string workspaceRoot,
         WorkspaceScanResult scanResult,
         IReadOnlyList<ViewModelBinding> bindings,
         bool required,
+        CSharpSnippetCandidateFactory snippetFactory,
         ICollection<Contract> contracts,
-        ICollection<FileSelectionCandidate> fileCandidates)
+        ICollection<SnippetSelectionCandidate> snippetCandidates,
+        ICollection<FileSelectionCandidate> fileCandidates,
+        CancellationToken cancellationToken)
     {
         foreach (var binding in bindings)
         {
             var priority = binding.BindingKind == ViewModelBindingKind.DataTemplate ? 40 : 5;
-            var title = binding.BindingKind switch
-            {
-                ViewModelBindingKind.RootDataContext => "ルート DataContext",
-                ViewModelBindingKind.ViewDataContext => "View DataContext",
-                ViewModelBindingKind.DataTemplate => "DataTemplate",
-                _ => binding.BindingKind.ToString()
-            };
-
-            var summary = binding.BindingKind switch
-            {
-                ViewModelBindingKind.RootDataContext =>
-                    $"{Path.GetFileName(binding.SourcePath)} が {binding.ViewPath} の DataContext に {binding.ViewModelSymbol} を設定します。",
-                ViewModelBindingKind.ViewDataContext =>
-                    $"{Path.GetFileName(binding.SourcePath)} が {binding.ViewPath} の DataContext に {binding.ViewModelSymbol} を設定します。",
-                ViewModelBindingKind.DataTemplate =>
-                    $"{binding.ViewPath} は {binding.ViewModelSymbol} 向けの DataTemplate を定義します。",
-                _ =>
-                    $"{binding.ViewPath} は {binding.ViewModelSymbol} に対応します。"
-            };
-
             contracts.Add(new Contract(
                 ContractKind.ViewModelBinding,
-                title,
-                summary,
+                GetTitle(binding.BindingKind),
+                BuildSummary(binding),
                 [binding.ViewPath, binding.SourcePath],
                 [binding.ViewSymbol, binding.ViewModelSymbol]));
 
@@ -70,6 +54,18 @@ internal static class ViewBindingPackSectionBuilder
             if (!string.IsNullOrWhiteSpace(viewModelFile))
             {
                 fileCandidates.Add(new FileSelectionCandidate(viewModelFile, reason, priority, required));
+            }
+
+            var snippet = await CreateBindingSnippetAsync(
+                    workspaceRoot,
+                    scanResult,
+                    binding,
+                    snippetFactory,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (snippet is not null)
+            {
+                snippetCandidates.Add(snippet);
             }
         }
     }
@@ -160,6 +156,60 @@ internal static class ViewBindingPackSectionBuilder
         }
 
         return new IndexSection("View-ViewModel", lines);
+    }
+
+    private static string GetTitle(ViewModelBindingKind bindingKind) => bindingKind switch
+    {
+        ViewModelBindingKind.RootDataContext => "ルート DataContext",
+        ViewModelBindingKind.ViewDataContext => "View DataContext",
+        ViewModelBindingKind.DataTemplate => "DataTemplate",
+        _ => bindingKind.ToString()
+    };
+
+    private static string BuildSummary(ViewModelBinding binding) => binding.BindingKind switch
+    {
+        ViewModelBindingKind.RootDataContext =>
+            $"{Path.GetFileName(binding.SourcePath)} が {binding.ViewPath} の DataContext に {binding.ViewModelSymbol} を設定します。",
+        ViewModelBindingKind.ViewDataContext =>
+            $"{Path.GetFileName(binding.SourcePath)} が {binding.ViewPath} の DataContext に {binding.ViewModelSymbol} を設定します。",
+        ViewModelBindingKind.DataTemplate =>
+            $"{binding.ViewPath} は {binding.ViewModelSymbol} 向けの DataTemplate を定義します。",
+        _ =>
+            $"{binding.ViewPath} は {binding.ViewModelSymbol} に対応します。"
+    };
+
+    private static async Task<SnippetSelectionCandidate?> CreateBindingSnippetAsync(
+        string workspaceRoot,
+        WorkspaceScanResult scanResult,
+        ViewModelBinding binding,
+        CSharpSnippetCandidateFactory snippetFactory,
+        CancellationToken cancellationToken)
+    {
+        if (!binding.SourcePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!scanResult.Files.Any(file => string.Equals(file.Path, binding.SourcePath, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        var reason = binding.BindingKind == ViewModelBindingKind.RootDataContext
+            ? "root-binding-source"
+            : "view-binding-source";
+        var priority = binding.BindingKind == ViewModelBindingKind.RootDataContext ? -10 : 2;
+        return await snippetFactory
+            .CreateLineWindowSnippetAsync(
+                workspaceRoot,
+                binding.SourcePath,
+                reason,
+                priority,
+                true,
+                $"{GetTitle(binding.BindingKind)}",
+                binding.SourceSpan,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static string DescribeBindingKind(ViewModelBindingKind bindingKind) => bindingKind switch

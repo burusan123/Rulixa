@@ -53,7 +53,18 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         await dependencyInjectionBuilder
             .AddAsync(workspaceRoot, scanResult, relevantContext, contracts, indexes, snippetCandidates, fileCandidates, cancellationToken)
             .ConfigureAwait(false);
-        ViewBindingPackSectionBuilder.AddBindingContracts(scanResult, relevantContext.PrimaryBindings, true, contracts, fileCandidates);
+        await ViewBindingPackSectionBuilder
+            .AddBindingContractsAsync(
+                workspaceRoot,
+                scanResult,
+                relevantContext.PrimaryBindings,
+                true,
+                snippetFactory,
+                contracts,
+                snippetCandidates,
+                fileCandidates,
+                cancellationToken)
+            .ConfigureAwait(false);
         ViewBindingPackSectionBuilder.AddConventionalViewFiles(scanResult, resolvedEntry, fileCandidates);
         await navigationBuilder
             .AddAsync(workspaceRoot, scanResult, resolvedEntry, relevantContext, contracts, indexes, snippetCandidates, fileCandidates, cancellationToken)

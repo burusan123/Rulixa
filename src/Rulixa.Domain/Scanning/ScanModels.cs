@@ -43,12 +43,38 @@ public sealed record ScanSymbol(
     int EndLine,
     IReadOnlyList<string> Tags);
 
+public readonly record struct SourceSpan
+{
+    public SourceSpan(int startLine, int endLine)
+    {
+        if (startLine <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(startLine), startLine, "StartLine must be greater than 0.");
+        }
+
+        if (endLine < startLine)
+        {
+            throw new ArgumentOutOfRangeException(nameof(endLine), endLine, "EndLine must be greater than or equal to StartLine.");
+        }
+
+        StartLine = startLine;
+        EndLine = endLine;
+    }
+
+    public int StartLine { get; }
+
+    public int EndLine { get; }
+
+    public int LengthInLines => EndLine - StartLine + 1;
+}
+
 public sealed record ViewModelBinding(
     string ViewPath,
     string ViewSymbol,
     string ViewModelSymbol,
     ViewModelBindingKind BindingKind,
     string SourcePath,
+    SourceSpan SourceSpan,
     ConfidenceLevel Confidence,
     IReadOnlyList<string> Candidates);
 
@@ -67,7 +93,7 @@ public sealed record NavigationTransition(
     string? SelectedItemPropertyName,
     string? CurrentPagePropertyName,
     string UpdateExpressionSummary,
-    int StartLine);
+    SourceSpan SourceSpan);
 
 public sealed record WindowActivation(
     string CallerSymbol,
@@ -81,7 +107,8 @@ public sealed record ServiceRegistration(
     string RegistrationFile,
     string ServiceType,
     string ImplementationType,
-    ServiceRegistrationLifetime Lifetime);
+    ServiceRegistrationLifetime Lifetime,
+    SourceSpan SourceSpan);
 
 public enum ScanFileKind
 {

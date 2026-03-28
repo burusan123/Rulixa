@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Rulixa.Application.Ports;
 using Rulixa.Domain.Packs;
+using Rulixa.Domain.Scanning;
 
 namespace Rulixa.Plugin.WpfNet8.Extraction;
 
@@ -24,12 +25,12 @@ internal sealed class CSharpSnippetCandidateFactory
         int priority,
         bool required,
         string anchor,
-        int fallbackStartLine,
+        SourceSpan? fallbackSpan,
         CancellationToken cancellationToken)
     {
         var source = await ReadSourceAsync(workspaceRoot, relativePath, cancellationToken).ConfigureAwait(false);
         var range = TryFindMethodRange(source, methodName)
-            ?? TryBuildLineWindow(source, fallbackStartLine);
+            ?? TryBuildLineWindow(source, fallbackSpan);
         return range is null
             ? null
             : BuildCandidate(relativePath, reason, priority, required, anchor, source, range.Value);
@@ -59,11 +60,11 @@ internal sealed class CSharpSnippetCandidateFactory
         int priority,
         bool required,
         string anchor,
-        int startLine,
+        SourceSpan sourceSpan,
         CancellationToken cancellationToken)
     {
         var source = await ReadSourceAsync(workspaceRoot, relativePath, cancellationToken).ConfigureAwait(false);
-        var range = TryBuildLineWindow(source, startLine);
+        var range = TryBuildLineWindow(source, sourceSpan);
         return range is null
             ? null
             : BuildCandidate(relativePath, reason, priority, required, anchor, source, range.Value);
@@ -85,7 +86,7 @@ internal sealed class CSharpSnippetCandidateFactory
         bool required,
         string anchor,
         string source,
-        LineRange range)
+        SourceSpan range)
     {
         var boundedRange = BoundRange(source, range);
         var content = ExtractContent(source, boundedRange);
@@ -100,7 +101,7 @@ internal sealed class CSharpSnippetCandidateFactory
             content);
     }
 
-    private static LineRange BoundRange(string source, LineRange range)
+    private static SourceSpan BoundRange(string source, SourceSpan range)
     {
         var lines = SplitLines(source);
         var startLine = Math.Max(1, range.StartLine);
@@ -115,16 +116,16 @@ internal sealed class CSharpSnippetCandidateFactory
             endLine = startLine + MaxSnippetLines - 1;
         }
 
-        return new LineRange(startLine, endLine);
+        return new SourceSpan(startLine, endLine);
     }
 
-    private static string ExtractContent(string source, LineRange range)
+    private static string ExtractContent(string source, SourceSpan range)
     {
         var lines = SplitLines(source);
         return string.Join("\n", lines.Skip(range.StartLine - 1).Take(range.EndLine - range.StartLine + 1));
     }
 
-    private static LineRange? TryFindMethodRange(string source, string methodName)
+    private static SourceSpan? TryFindMethodRange(string source, string methodName)
     {
         var lines = SplitLines(source);
         var pattern = new Regex(
@@ -143,7 +144,7 @@ internal sealed class CSharpSnippetCandidateFactory
         return null;
     }
 
-    private static LineRange? TryFindConstructorRange(string source, string className)
+    private static SourceSpan? TryFindConstructorRange(string source, string className)
     {
         var lines = SplitLines(source);
         var pattern = new Regex(
@@ -162,7 +163,7 @@ internal sealed class CSharpSnippetCandidateFactory
         return null;
     }
 
-    private static LineRange? TryFindMemberBodyRange(string source, IReadOnlyList<string> lines, int startLine)
+    private static SourceSpan? TryFindMemberBodyRange(string source, IReadOnlyList<string> lines, int startLine)
     {
         var startIndex = GetLineStartIndex(source, startLine);
         if (startIndex < 0)
@@ -177,15 +178,15 @@ internal sealed class CSharpSnippetCandidateFactory
             var semicolonIndex = source.IndexOf(';', expressionIndex);
             if (semicolonIndex < 0)
             {
-                return new LineRange(startLine, Math.Min(lines.Count, startLine + MaxSnippetLines - 1));
+                return new SourceSpan(startLine, Math.Min(lines.Count, startLine + MaxSnippetLines - 1));
             }
 
-            return new LineRange(startLine, GetLineNumberAt(source, semicolonIndex));
+            return new SourceSpan(startLine, GetLineNumberAt(source, semicolonIndex));
         }
 
         if (braceIndex < 0)
         {
-            return new LineRange(startLine, Math.Min(lines.Count, startLine + MaxSnippetLines - 1));
+            return new SourceSpan(startLine, Math.Min(lines.Count, startLine + MaxSnippetLines - 1));
         }
 
         var depth = 0;
@@ -205,24 +206,24 @@ internal sealed class CSharpSnippetCandidateFactory
             depth--;
             if (depth == 0)
             {
-                return new LineRange(startLine, GetLineNumberAt(source, index));
+                return new SourceSpan(startLine, GetLineNumberAt(source, index));
             }
         }
 
-        return new LineRange(startLine, Math.Min(lines.Count, startLine + MaxSnippetLines - 1));
+        return new SourceSpan(startLine, Math.Min(lines.Count, startLine + MaxSnippetLines - 1));
     }
 
-    private static LineRange? TryBuildLineWindow(string source, int startLine)
+    private static SourceSpan? TryBuildLineWindow(string source, SourceSpan? sourceSpan)
     {
-        if (startLine <= 0)
+        if (sourceSpan is null)
         {
             return null;
         }
 
         var lines = SplitLines(source);
-        var boundedStart = Math.Max(1, startLine - LineWindowBefore);
-        var boundedEnd = Math.Min(lines.Count, startLine + LineWindowAfter);
-        return new LineRange(boundedStart, boundedEnd);
+        var boundedStart = Math.Max(1, sourceSpan.Value.StartLine - LineWindowBefore);
+        var boundedEnd = Math.Min(lines.Count, sourceSpan.Value.EndLine + LineWindowAfter);
+        return new SourceSpan(boundedStart, boundedEnd);
     }
 
     private static int GetLineStartIndex(string source, int lineNumber)
@@ -267,5 +268,4 @@ internal sealed class CSharpSnippetCandidateFactory
     private static IReadOnlyList<string> SplitLines(string source) =>
         source.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
 
-    private readonly record struct LineRange(int StartLine, int EndLine);
 }

@@ -63,7 +63,7 @@ internal sealed class NavigationPackSectionBuilder
         var transitionGroups = relevantContext.RelevantTransitions
             .GroupBy(static transition => new { transition.ViewModelSymbol, transition.SourceFilePath, transition.UpdateMethodName })
             .OrderBy(static group => group.Key.SourceFilePath, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(static group => group.Min(transition => transition.StartLine))
+            .ThenBy(static group => group.Min(transition => transition.SourceSpan.StartLine))
             .ToArray();
 
         foreach (var transitionGroup in transitionGroups)
@@ -267,7 +267,7 @@ internal sealed class NavigationPackSectionBuilder
         new(
             "ナビゲーション更新点",
             transitions.Select(transition =>
-                    $"{transition.ViewModelSymbol}.{transition.UpdateMethodName}(...) -> {transition.UpdateExpressionSummary} (line: {transition.StartLine})")
+                    $"{transition.ViewModelSymbol}.{transition.UpdateMethodName}(...) -> {transition.UpdateExpressionSummary} (line: {transition.SourceSpan.StartLine})")
                 .ToArray());
 
     private async Task<SnippetSelectionCandidate?> CreateTransitionSnippetAsync(
@@ -287,10 +287,10 @@ internal sealed class NavigationPackSectionBuilder
                 transition.SourceFilePath,
                 transition.UpdateMethodName,
                 "navigation-update",
-                -1,
+                10,
                 true,
                 $"{transition.UpdateMethodName}(...)",
-                transition.StartLine,
+                transition.SourceSpan,
                 cancellationToken)
             .ConfigureAwait(false);
     }

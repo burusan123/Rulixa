@@ -52,6 +52,7 @@ internal sealed class XamlViewModelBindingExtractor
                     ViewModelSymbol: $"{namespaceName}.{typeName}",
                     BindingKind: ViewModelBindingKind.DataTemplate,
                     SourcePath: path,
+                    SourceSpan: SourceSpanFactory.FromMatch(content, match.Index, match.Length),
                     Confidence: ConfidenceLevel.High,
                     Candidates: []));
             }
@@ -88,6 +89,7 @@ internal sealed class XamlViewModelBindingExtractor
                 ViewModelSymbol: resolvedSymbol,
                 BindingKind: IsRootDataContextPath(path) ? ViewModelBindingKind.RootDataContext : ViewModelBindingKind.ViewDataContext,
                 SourcePath: path,
+                SourceSpan: SourceSpanFactory.FromMatch(content, dataContextMatch.Index, dataContextMatch.Length),
                 Confidence: candidates.Length == 1 ? ConfidenceLevel.High : ConfidenceLevel.Medium,
                 Candidates: candidates.Select(static symbol => symbol.QualifiedName).ToArray()));
         }

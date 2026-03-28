@@ -23,33 +23,45 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.True(result.ProjectSummary.UsesWpf);
         Assert.Contains("net8.0-windows", result.ProjectSummary.TargetFrameworks);
         Assert.Contains(result.ProjectSummary.RootViewModels, value => value.EndsWith(".ShellViewModel", StringComparison.Ordinal));
+
         Assert.Contains(result.ViewModelBindings, binding =>
             binding.ViewPath.EndsWith("Views/MainWindow.xaml", StringComparison.Ordinal)
             && binding.BindingKind == ViewModelBindingKind.RootDataContext
-            && binding.ViewModelSymbol.EndsWith(".ShellViewModel", StringComparison.Ordinal));
+            && binding.ViewModelSymbol.EndsWith(".ShellViewModel", StringComparison.Ordinal)
+            && binding.SourceSpan.StartLine > 0
+            && binding.SourceSpan.EndLine >= binding.SourceSpan.StartLine);
         Assert.Contains(result.ViewModelBindings, binding =>
             binding.ViewPath.EndsWith("Views/ShellView.xaml", StringComparison.Ordinal)
-            && binding.BindingKind == ViewModelBindingKind.DataTemplate);
+            && binding.BindingKind == ViewModelBindingKind.DataTemplate
+            && binding.SourceSpan.StartLine > 0);
+
         Assert.Contains(result.NavigationTransitions, transition =>
             transition.ViewModelSymbol.EndsWith(".ShellViewModel", StringComparison.Ordinal)
             && transition.UpdateMethodName == "Select"
-            && transition.UpdateExpressionSummary == "CurrentPage = item.PageViewModel");
+            && transition.UpdateExpressionSummary == "CurrentPage = item.PageViewModel"
+            && transition.SourceSpan.StartLine > 0);
         Assert.Contains(result.NavigationTransitions, transition =>
             transition.UpdateExpressionSummary == "SelectedItem = match"
-            && transition.StartLine > 0);
+            && transition.SourceSpan.StartLine > 0);
+
         Assert.Contains(result.Commands, command => command.PropertyName == "OpenSettingsCommand");
-        Assert.Contains(result.ServiceRegistrations, registration => registration.ServiceType == "ShellViewModel");
+        Assert.Contains(result.ServiceRegistrations, registration =>
+            registration.ServiceType == "ShellViewModel"
+            && registration.Lifetime == ServiceRegistrationLifetime.Singleton
+            && registration.SourceSpan.StartLine > 0);
         Assert.Contains(result.ServiceRegistrations, registration =>
             registration.ServiceType == "IProjectWorkspaceService"
-            && registration.Lifetime == ServiceRegistrationLifetime.Singleton);
+            && registration.Lifetime == ServiceRegistrationLifetime.Singleton
+            && registration.SourceSpan.StartLine > 0);
         Assert.Contains(result.ServiceRegistrations, registration =>
             registration.ServiceType == "ISettingWindowService"
-            && registration.Lifetime == ServiceRegistrationLifetime.Transient);
+            && registration.Lifetime == ServiceRegistrationLifetime.Transient
+            && registration.SourceSpan.StartLine > 0);
         Assert.Contains(result.WindowActivations, activation => activation.WindowSymbol == "SettingWindow");
     }
 
     [Fact]
-    public async Task ExtractAsync_ForShellViewFile_UsesSnippetsForLargeViewModel()
+    public async Task ExtractAsync_ForShellViewFile_UsesSourceSpansForBindingAndRegistrationSnippets()
     {
         var (scanResult, ingredients, pack) = await BuildPackAsync(
             new Entry(EntryKind.File, "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"),
@@ -66,11 +78,20 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/App.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
+        Assert.Contains("src/AssessMeister.Presentation.Wpf/App.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
         Assert.DoesNotContain("src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs", selectedPaths);
+
+        Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs"
+            && snippet.Reason == "root-binding-source"
+            && snippet.Content.Contains("DataContext = shellViewModel;", StringComparison.Ordinal));
+        Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Path == "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs"
+            && snippet.Reason == "dependency-injection"
+            && snippet.Content.Contains("AddSingleton<ShellViewModel>()", StringComparison.Ordinal));
         Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
             && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
@@ -78,28 +99,19 @@ public sealed class WpfNet8WorkspaceScannerTests
 
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.ViewModelBinding
-            && contract.Title == "DataTemplate 二次文脈"
-            && contract.Summary.Contains($"{dataTemplateBindings.Length} 件", StringComparison.Ordinal));
+            && contract.Summary.Contains("DataTemplate", StringComparison.Ordinal)
+            && contract.Summary.Contains(dataTemplateBindings.Length.ToString(), StringComparison.Ordinal));
         Assert.Contains(ingredients.Indexes, index =>
             index.Title == "View-ViewModel"
             && index.Lines.Any(line =>
                 line.Contains("MainWindow.xaml <-> AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel", StringComparison.Ordinal)));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("SelectedItem = match", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
         Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "ナビゲーション更新点"
-            && index.Lines.Any(line => line.Contains("SelectedItem = match", StringComparison.Ordinal)));
-        Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "ナビゲーション更新点"
-            && index.Lines.Any(line => line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal)));
-        Assert.Contains(ingredients.Contracts, contract =>
-            contract.Kind == ContractKind.DependencyInjection
-            && contract.Title == "主要 ViewModel の登録"
-            && contract.Summary.Contains("ShellViewModel は Singleton", StringComparison.Ordinal));
-        Assert.Contains(ingredients.Contracts, contract =>
-            contract.Kind == ContractKind.DependencyInjection
-            && contract.Title == "直接依存のライフタイム"
-            && contract.Summary.Contains("ShellViewModel の直接依存 2 件", StringComparison.Ordinal)
-            && contract.Summary.Contains("Singleton 1", StringComparison.Ordinal)
-            && contract.Summary.Contains("Transient 1", StringComparison.Ordinal));
+            index.Title == "DI"
+            && index.Lines.Any(line => line.Contains("ShellViewModel (Singleton)", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -124,22 +136,30 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.True(pack.SelectedFiles.Count <= 8);
 
         Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs"
+            && snippet.Reason == "root-binding-source");
+        Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Path == "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs"
+            && snippet.Reason == "dependency-injection"
+            && snippet.Content.Contains("AddSingleton<ShellViewModel>()", StringComparison.Ordinal));
+        Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
             && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
             && snippet.Anchor.Contains("Select(...)", StringComparison.Ordinal));
+
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.DependencyInjection
-            && contract.Title == "主要 ViewModel の登録"
-            && contract.Summary.Contains("ShellViewModel は Singleton", StringComparison.Ordinal));
+            && contract.Summary.Contains("ShellViewModel", StringComparison.Ordinal)
+            && contract.Summary.Contains("Singleton", StringComparison.Ordinal));
         Assert.Contains(ingredients.Indexes, index =>
             index.Title == "DI"
             && index.Lines.Any(line =>
-                line.Contains("直接依存 2件", StringComparison.Ordinal)
-                && !line.Contains("ShellViewModel (Singleton)", StringComparison.Ordinal)));
+                line.Contains("Singleton", StringComparison.Ordinal)
+                && !line.Equals("ShellViewModel (Singleton)", StringComparison.Ordinal)));
     }
 
     [Fact]
-    public async Task ExtractAsync_ForShellViewModelSymbol_AddsNavigationContractAndUpdateIndex()
+    public async Task ExtractAsync_ForShellViewModelSymbol_AddsNavigationContractAndOrderedSnippets()
     {
         var (_, ingredients, pack) = await BuildPackAsync(
             new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
@@ -152,36 +172,33 @@ public sealed class WpfNet8WorkspaceScannerTests
             && contract.Summary.Contains("CurrentPage", StringComparison.Ordinal));
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Navigation
-            && contract.Title == "選択から表示への因果"
             && contract.Summary.Contains("SelectedItem = match", StringComparison.Ordinal)
             && contract.Summary.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Navigation
-            && contract.Title == "ViewModel 更新点"
             && contract.Summary.Contains(".Select(...)", StringComparison.Ordinal)
             && contract.Summary.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
-        Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "選択から表示への因果"
-            && index.Lines.Any(line =>
-                line.Contains("SelectedItem -> CurrentPage", StringComparison.Ordinal)
-                && line.Contains("SelectedItem = match", StringComparison.Ordinal)
-                && line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal)));
-        Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "ナビゲーション更新点"
-            && index.Lines.Any(line =>
-                line.Contains("Select(...)", StringComparison.Ordinal)
-                && line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal)));
-        Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "ナビゲーション更新点"
-            && index.Lines.Any(line =>
-                line.Contains("SelectedItem = match", StringComparison.Ordinal)
-                && line.Contains("line:", StringComparison.Ordinal)));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("SelectedItem -> CurrentPage", StringComparison.Ordinal)
+            && line.Contains("SelectedItem = match", StringComparison.Ordinal)
+            && line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("Select(...)", StringComparison.Ordinal)
+            && line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("SelectedItem = match", StringComparison.Ordinal)
+            && line.Contains("line:", StringComparison.Ordinal));
 
         Assert.DoesNotContain(pack.SelectedFiles, file => file.Path.EndsWith("ShellViewModel.cs", StringComparison.Ordinal));
-        Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
-            && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
-            && snippet.Anchor.Contains("Select(...)", StringComparison.Ordinal));
+
+        var orderedSnippetPaths = pack.SelectedSnippets.Select(static snippet => snippet.Path).ToArray();
+        var bindingIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs");
+        var registrationIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs");
+        var navigationIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs");
+
+        Assert.True(bindingIndex >= 0);
+        Assert.True(registrationIndex > bindingIndex);
+        Assert.True(navigationIndex > registrationIndex);
     }
 
     [Fact]

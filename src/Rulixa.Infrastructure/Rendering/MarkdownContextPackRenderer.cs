@@ -57,7 +57,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         }
         else
         {
-            foreach (var snippet in contextPack.SelectedSnippets)
+            foreach (var snippet in contextPack.SelectedSnippets.OrderBy(static snippet => snippet.Priority).ThenBy(static snippet => snippet.Path, StringComparer.OrdinalIgnoreCase).ThenBy(static snippet => snippet.StartLine))
             {
                 builder.AppendLine($"### {NormalizePath(snippet.Path)}:{snippet.StartLine}-{snippet.EndLine}");
                 builder.AppendLine($"- 理由: {ToDisplayText(snippet.Reason)}, アンカー: `{snippet.Anchor}`");

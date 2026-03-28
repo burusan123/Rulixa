@@ -41,7 +41,7 @@ internal sealed class ViewModelNavigationTransitionExtractor
         return transitions
             .OrderBy(static transition => transition.ViewModelSymbol, StringComparer.OrdinalIgnoreCase)
             .ThenBy(static transition => transition.SourceFilePath, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(static transition => transition.StartLine)
+            .ThenBy(static transition => transition.SourceSpan.StartLine)
             .ToArray();
     }
 
@@ -79,7 +79,7 @@ internal sealed class ViewModelNavigationTransitionExtractor
                     selectedItemProperty,
                     currentPageProperty,
                     $"{propertyName} = {expression}",
-                    lineIndex + 1);
+                    SourceSpanFactory.FromLineNumber(lineIndex + 1));
             }
         }
     }

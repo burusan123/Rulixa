@@ -91,7 +91,7 @@ internal static class RelevantPackContextFactory
                 relevantSymbols.Contains(transition.ViewModelSymbol)
                 || string.Equals(transition.SourceFilePath, resolvedEntry.ResolvedPath, StringComparison.OrdinalIgnoreCase))
             .OrderBy(static transition => transition.SourceFilePath, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(static transition => transition.StartLine)
+            .ThenBy(static transition => transition.SourceSpan.StartLine)
             .ToArray();
     }
 }

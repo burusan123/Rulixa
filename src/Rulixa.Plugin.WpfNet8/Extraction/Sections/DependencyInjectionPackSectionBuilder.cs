@@ -89,6 +89,12 @@ internal sealed class DependencyInjectionPackSectionBuilder
         }
 
         indexes.Add(BuildIndex(summary.Value));
+        await AddRegistrationSnippetsAsync(
+                workspaceRoot,
+                summary.Value.ViewModelRegistrations,
+                snippetCandidates,
+                cancellationToken)
+            .ConfigureAwait(false);
         await AddConstructorSnippetsAsync(
                 workspaceRoot,
                 scanResult,
@@ -426,9 +432,36 @@ internal sealed class DependencyInjectionPackSectionBuilder
                     viewModelFilePath,
                     className,
                     "dependency-injection",
-                    0,
+                    6,
                     true,
                     $"{className}(...)",
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (snippet is not null)
+            {
+                snippetCandidates.Add(snippet);
+            }
+        }
+    }
+
+    private async Task AddRegistrationSnippetsAsync(
+        string workspaceRoot,
+        IReadOnlyList<ServiceRegistration> registrations,
+        ICollection<SnippetSelectionCandidate> snippetCandidates,
+        CancellationToken cancellationToken)
+    {
+        foreach (var registration in registrations)
+        {
+            var simpleTypeName = PackExtractionConventions.GetSimpleTypeName(registration.ImplementationType);
+            var snippet = await snippetFactory
+                .CreateLineWindowSnippetAsync(
+                    workspaceRoot,
+                    registration.RegistrationFile,
+                    "dependency-injection",
+                    5,
+                    true,
+                    $"{simpleTypeName} ({registration.Lifetime})",
+                    registration.SourceSpan,
                     cancellationToken)
                 .ConfigureAwait(false);
             if (snippet is not null)

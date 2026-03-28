@@ -76,7 +76,7 @@ internal sealed class DialogPackSectionBuilder
                             25,
                             false,
                             $"{methodName}(...)",
-                            0,
+                            null,
                             cancellationToken)
                         .ConfigureAwait(false);
                     if (snippet is not null)

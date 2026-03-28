@@ -1,11 +1,22 @@
 # 実装計画
 
 ## 現在の到達点
-Phase 1 の現在実装は、`WPF + .NET 8` ワークスペースに対して次を行えます。
 
-- `scan` で WPF 固有の事実を抽出する
-- `resolve-entry` で `file` / `symbol` を具体解決する
-- `pack` で契約・index・selected files・selected snippets を組み立てる
+Phase 1 の実装は `WPF + .NET 8` ワークスペースを対象に、`scan -> resolve-entry -> pack` を通せる状態です。
+
+実装済み:
+
+- `scan` で WPF 固有事実を抽出する
+- `resolve-entry` で `file` / `symbol` を解決する
+- `pack` で contracts / index / selected files / selected snippets を組み立てる
+- `publish/*` と `*_wpftmp.csproj` を走査除外する
+- `file entry` の `DataTemplate` を要約表示する
+- `SelectedItem -> CurrentPage` の因果を要約契約として出す
+- コマンド導線を件数ベースで要約する
+- 主要 ViewModel と直接依存の DI lifetime を要約する
+- 巨大 `*.cs` を `SelectedSnippets` へ置き換える
+- `ViewModelBinding` / `NavigationTransition` / `ServiceRegistration` に `SourceSpan` を持たせる
+- `MainWindow.xaml.cs` の root binding と `ServiceRegistration.cs` の登録行も snippet 化する
 
 ## 現在の構成
 
@@ -15,10 +26,8 @@ Phase 1 の現在実装は、`WPF + .NET 8` ワークスペースに対して次
 - `ResolvedEntry`
 - `Budget`
 - `ContextPack`
-- `Contract`
-- `IndexSection`
-- `SelectedFile`
 - `SelectedSnippet`
+- `SourceSpan`
 
 ### Application
 
@@ -38,63 +47,47 @@ Phase 1 の現在実装は、`WPF + .NET 8` ワークスペースに対して次
 - `Scanning/Context`
 - `Scanning/Sections`
 
-`WpfNet8ContractExtractor` と `WpfNet8WorkspaceScanner` は orchestration に寄せ、抽出責務は section builder に分離しています。
+`WpfNet8ContractExtractor` と `WpfNet8WorkspaceScanner` は orchestration に限定し、WPF 固有知識は builder に分割しています。
 
-## 実装済み
+## テスト観点
 
-### Pack 圧縮
+### Domain
 
-- `file entry` の `DataTemplate` は個別列挙せず、`DataTemplate 二次文脈` として要約する
-- `SelectedItem -> CurrentPage` の因果を契約と index の両方で短く表現する
-- コマンド導線が多い場合は要約契約に圧縮する
+- budget 下での file/snippet 選定
+- snippet merge
+- snippet 上限
+- `SourceSpan` の不変条件
 
-### DI 表示
+### Application
 
-- 主要 ViewModel の DI 登録を明示する
-- 直接依存の lifetime を `Singleton / Scoped / Transient / Factory` 単位で要約する
-- index に `DI` セクションを持つ
+- `BuildContextPackUseCase`
+- `MarkdownContextPackRenderer`
 
-### 巨大 C# ファイルのスニペット化
+### Plugin
 
-- `ContextPack` に `SelectedSnippets` を追加した
-- `maxSnippetsPerFile` を実際に適用する
-- `*.cs` かつ `LineCount > 250` のファイルでは、constructor / navigation update / command execute / dialog activation の根拠を snippet 化する
-- snippet が採用された巨大 `*.cs` は `SelectedFiles` から除外する
-- `MarkdownContextPackRenderer` は `## 重要スニペット` を描画する
-
-## テスト状況
-
-- Domain
-  - budget での全文選定
-  - snippet 置換
-  - snippet merge
-  - snippet 上限
-- Application
-  - `BuildContextPackUseCase`
-  - `MarkdownContextPackRenderer`
-- Plugin
-  - fixture scan
-  - `file entry` pack
-  - `symbol entry` pack
-  - command summary
-  - generated / temp file の除外
+- fixture scan
+- `file entry` pack
+- `symbol entry` pack
+- command summary
+- DI summary
+- root binding / registration snippet
+- generated / temp file 除外
 
 ## 次の候補
 
 ### P1
 
-- `ViewModelBinding` に行番号を持たせ、root binding も snippet 化できるようにする
-- `ServiceRegistration` に行番号を持たせ、DI 登録ファイルも line-range で指せるようにする
-- snippet merge 後の `anchor` と `reason` の表現をさらに短く整える
+- XAML 本体の line-range snippet 化
+- `ServiceRegistration` の複数行登録への span 拡張
+- snippet reason の粒度整理
 
 ### P2
 
-- コマンドの影響対象を 1 段深く出す
-- 選定ファイル理由の粒度をさらに上げる
-- dialog 起動の owner / activation kind を pack 本文に反映する
+- command 影響先の 1 段深掘り
+- selected file reason の詳細化
+- dialog activation の owner / activation kind 強化
 
 ### P3
 
-- XAML / code-behind の snippet 化
-- 行番号の利用強化
-- snippet 優先度の goal 連動
+- goal に応じた snippet 優先度の調整
+- 追加 plugin への抽出規則展開

@@ -123,12 +123,12 @@ internal static class CommandPackSectionBuilder
                     workspaceRoot,
                     viewModelFilePath,
                     methodName,
-                    "command-viewmodel",
-                    20,
-                    false,
-                    $"{methodName}(...)",
-                    0,
-                    cancellationToken)
+                "command-viewmodel",
+                20,
+                false,
+                $"{methodName}(...)",
+                null,
+                cancellationToken)
                 .ConfigureAwait(false);
             if (snippet is not null)
             {
