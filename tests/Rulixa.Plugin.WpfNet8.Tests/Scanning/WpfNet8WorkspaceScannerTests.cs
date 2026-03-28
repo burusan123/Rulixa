@@ -1831,6 +1831,527 @@ public sealed class WpfNet8WorkspaceScannerTests
     }
 
     [Fact]
+    public async Task BuildPack_ForRootViewModel_BuildsSystemPackAcrossSubMaps()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase3-system-pack-{Guid.NewGuid():N}");
+
+        try
+        {
+            await CreateSampleWorkspaceAsync(
+                workspaceRoot,
+                """
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf.ViewModels;
+
+                public sealed class ShellViewModel
+                {
+                    private readonly IProjectWorkspaceFlowService projectWorkspaceFlowService;
+                    private readonly IDraftingWindowService draftingWindowService;
+                    private readonly ShellThreeDViewModel shellThreeDViewModel;
+                    private readonly IReportExportService reportExportService;
+                    private readonly ISettingWindowService settingWindowService;
+
+                    public ShellViewModel(
+                        IProjectWorkspaceFlowService projectWorkspaceFlowService,
+                        IDraftingWindowService draftingWindowService,
+                        ShellThreeDViewModel shellThreeDViewModel,
+                        IReportExportService reportExportService,
+                        ISettingWindowService settingWindowService)
+                    {
+                        this.projectWorkspaceFlowService = projectWorkspaceFlowService;
+                        this.draftingWindowService = draftingWindowService;
+                        this.shellThreeDViewModel = shellThreeDViewModel;
+                        this.reportExportService = reportExportService;
+                        this.settingWindowService = settingWindowService;
+
+                        var projectDocument = projectWorkspaceFlowService.OpenMostRecent();
+                        shellThreeDViewModel.Load(projectDocument);
+                    }
+
+                    public void OpenDrafting()
+                    {
+                        draftingWindowService.Show();
+                    }
+
+                    public void ExportReport()
+                    {
+                        reportExportService.Export();
+                    }
+
+                    public void OpenSettings()
+                    {
+                        settingWindowService.Show();
+                    }
+                }
+                """,
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                        services.AddSingleton<ShellThreeDViewModel>();
+                        services.AddScoped<IProjectWorkspaceFlowService, ProjectWorkspaceFlowService>();
+                        services.AddScoped<IProjectRepository, ProjectRepository>();
+                        services.AddScoped<ISettingsQuery, SettingsQuery>();
+                        services.AddScoped<IProjectWorkspaceService, ProjectWorkspaceService>();
+                        services.AddScoped<IDraftingWorkflowService, DraftingWorkflowService>();
+                        services.AddScoped<IDraftingWindowService, DraftingWindowService>();
+                        services.AddScoped<IReportExportService, ReportExportService>();
+                        services.AddScoped<ISettingWindowService, SettingWindowService>();
+                    }
+                }
+                """,
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Models/ProjectDocument.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Models;
+
+                    public sealed class ProjectDocument
+                    {
+                        public ProjectDocument(string path)
+                        {
+                            Path = path;
+                        }
+
+                        public string Path { get; }
+
+                        public bool IsDirty { get; private set; }
+
+                        public void MarkDirty() => IsDirty = true;
+
+                        public void MarkSaved() => IsDirty = false;
+
+                        public string CreateSnapshot() => Path;
+
+                        public void RestoreFromSnapshot(string snapshot) => _ = snapshot;
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Models/DraftingEditSession.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+
+                    namespace Sample.Presentation.Wpf.Models;
+
+                    public sealed class DraftingEditSession
+                    {
+                        public DraftingEditSession(ProjectDocument document)
+                        {
+                            Document = document;
+                        }
+
+                        public ProjectDocument Document { get; }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/ViewModels/ShellThreeDViewModel.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+
+                    namespace Sample.Presentation.Wpf.ViewModels;
+
+                    public sealed class ShellThreeDViewModel
+                    {
+                        public ProjectDocument? Document { get; private set; }
+
+                        public void Load(ProjectDocument projectDocument)
+                        {
+                            Document = projectDocument;
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/ViewModels/DraftingWindowViewModel.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+                    using Sample.Presentation.Wpf.Services;
+
+                    namespace Sample.Presentation.Wpf.ViewModels;
+
+                    public sealed class DraftingWindowViewModel
+                    {
+                        private readonly IDraftingWorkflowService draftingWorkflowService;
+                        private readonly DraftingEditSession draftingEditSession;
+
+                        public DraftingWindowViewModel(
+                            IDraftingWorkflowService draftingWorkflowService,
+                            DraftingEditSession draftingEditSession)
+                        {
+                            this.draftingWorkflowService = draftingWorkflowService;
+                            this.draftingEditSession = draftingEditSession;
+                        }
+
+                        public void Analyze()
+                        {
+                            draftingWorkflowService.Analyze(draftingEditSession.Document);
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Views/DraftingWindow.xaml",
+                    """
+                    <Window
+                        x:Class="Sample.Presentation.Wpf.Views.DraftingWindow"
+                        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    </Window>
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/ProjectRepository.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public interface IProjectRepository
+                    {
+                        ProjectDocument Load(string projectPath);
+                    }
+
+                    public sealed class ProjectRepository : IProjectRepository
+                    {
+                        public ProjectDocument Load(string projectPath)
+                        {
+                            return new ProjectDocument(projectPath);
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/ProjectWorkspaceFlowService.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public interface IProjectWorkspaceFlowService
+                    {
+                        ProjectDocument OpenMostRecent();
+                    }
+
+                    public sealed class ProjectWorkspaceFlowService : IProjectWorkspaceFlowService
+                    {
+                        private readonly IProjectRepository projectRepository;
+                        private readonly ISettingsQuery settingsQuery;
+
+                        public ProjectWorkspaceFlowService(IProjectRepository projectRepository, ISettingsQuery settingsQuery)
+                        {
+                            this.projectRepository = projectRepository;
+                            this.settingsQuery = settingsQuery;
+                        }
+
+                        public ProjectDocument OpenMostRecent()
+                        {
+                            var settings = settingsQuery.Load();
+                            var document = projectRepository.Load(settings.DefaultProjectPath);
+                            document.MarkDirty();
+                            return document;
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/ProjectWorkspaceService.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public interface IProjectWorkspaceService
+                    {
+                        void Remember(ProjectDocument projectDocument);
+                    }
+
+                    public sealed class ProjectWorkspaceService : IProjectWorkspaceService
+                    {
+                        public void Remember(ProjectDocument projectDocument)
+                        {
+                            projectDocument.MarkSaved();
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/SettingsQuery.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public interface ISettingsQuery
+                    {
+                        WorkspaceSettings Load();
+                    }
+
+                    public sealed class SettingsQuery : ISettingsQuery
+                    {
+                        public WorkspaceSettings Load()
+                        {
+                            var settingsPath = Path.Combine("Config", "WorkspaceSettings.xlsx");
+                            return new WorkspaceSettings(settingsPath, "project.asm");
+                        }
+                    }
+
+                    public sealed record WorkspaceSettings(string SettingsPath, string DefaultProjectPath);
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/SettingWindowService.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public interface ISettingWindowService
+                    {
+                        void Show();
+                    }
+
+                    public sealed class SettingWindowService : ISettingWindowService
+                    {
+                        public void Show()
+                        {
+                            var window = new SettingWindow();
+                            window.ShowDialog();
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/DraftingWorkflowService.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public interface IDraftingWorkflowService
+                    {
+                        void Analyze(ProjectDocument projectDocument);
+                    }
+
+                    public sealed class DraftingWorkflowService : IDraftingWorkflowService
+                    {
+                        private readonly DiagramAnalyzer diagramAnalyzer;
+                        private readonly WallAlgorithmRunner wallAlgorithmRunner;
+
+                        public DraftingWorkflowService(DiagramAnalyzer diagramAnalyzer, WallAlgorithmRunner wallAlgorithmRunner)
+                        {
+                            this.diagramAnalyzer = diagramAnalyzer;
+                            this.wallAlgorithmRunner = wallAlgorithmRunner;
+                        }
+
+                        public void Analyze(ProjectDocument projectDocument)
+                        {
+                            diagramAnalyzer.Analyze(projectDocument);
+                            wallAlgorithmRunner.Run(projectDocument);
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/DraftingWindowService.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+                    using Sample.Presentation.Wpf.ViewModels;
+
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public interface IDraftingWindowService
+                    {
+                        void Show();
+                    }
+
+                    public sealed class DraftingWindowService : IDraftingWindowService
+                    {
+                        private readonly IDraftingWorkflowService draftingWorkflowService;
+
+                        public DraftingWindowService(IDraftingWorkflowService draftingWorkflowService)
+                        {
+                            this.draftingWorkflowService = draftingWorkflowService;
+                        }
+
+                        public void Show()
+                        {
+                            var window = new DraftingWindow();
+                            window.DataContext = new DraftingWindowViewModel(
+                                draftingWorkflowService,
+                                new DraftingEditSession(new ProjectDocument("draft.asm")));
+                            window.ShowDialog();
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/DiagramAnalyzer.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public sealed class DiagramAnalyzer
+                    {
+                        public void Analyze(ProjectDocument projectDocument)
+                        {
+                            projectDocument.MarkDirty();
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/WallAlgorithmRunner.cs",
+                    """
+                    using Sample.Presentation.Wpf.Models;
+
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public sealed class WallAlgorithmRunner
+                    {
+                        public void Run(ProjectDocument projectDocument)
+                        {
+                            projectDocument.MarkDirty();
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/ReportExportService.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public interface IReportExportService
+                    {
+                        void Export();
+                    }
+
+                    public sealed class ReportExportService : IReportExportService
+                    {
+                        public void Export()
+                        {
+                            var templatePath = Path.Combine("Templates", "report.template");
+                            if (File.Exists(templatePath))
+                            {
+                                File.ReadAllText(templatePath);
+                            }
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "tests/Sample.Architecture.Tests/LayerGuardTests.cs",
+                    """
+                    namespace Sample.Architecture.Tests;
+
+                    public sealed class LayerGuardTests
+                    {
+                        public void Architecture_dependencies_flow_inward()
+                        {
+                        }
+                    }
+                    """));
+
+            var pack = await BuildContextPackFromWorkspaceAsync(
+                workspaceRoot,
+                new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel"),
+                "project system");
+
+            var systemPack = Assert.Single(pack.Contracts, contract => contract.Title == "System Pack");
+
+            Assert.Contains("Shell / Drafting / Settings / 3D / Report/Export / Architecture", systemPack.Summary, StringComparison.Ordinal);
+            Assert.Contains("ProjectDocument", systemPack.Summary, StringComparison.Ordinal);
+            Assert.InRange(pack.Indexes.Where(index => index.Title == "Workflow").SelectMany(static index => index.Lines).Count(), 1, 8);
+            Assert.InRange(pack.Indexes.Where(index => index.Title == "Persistence").SelectMany(static index => index.Lines).Count(), 1, 6);
+            Assert.InRange(pack.Indexes.Where(index => index.Title == "Hub Objects").SelectMany(static index => index.Lines).Count(), 1, 3);
+            Assert.InRange(pack.Indexes.Where(index => index.Title == "External Assets").SelectMany(static index => index.Lines).Count(), 1, 4);
+            Assert.InRange(pack.Indexes.Where(index => index.Title == "Architecture Tests").SelectMany(static index => index.Lines).Count(), 1, 4);
+            Assert.Contains(pack.SelectedFiles, file => file.Path.EndsWith("DraftingWindowViewModel.cs", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task BuildPack_ForRootViewFile_UsesSystemPack()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase3-system-pack-file-{Guid.NewGuid():N}");
+
+        try
+        {
+            await CreateSampleWorkspaceAsync(
+                workspaceRoot,
+                "namespace Sample.Presentation.Wpf.ViewModels; public sealed class ShellViewModel { }",
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                    }
+                }
+                """);
+
+            var pack = await BuildContextPackFromWorkspaceAsync(
+                workspaceRoot,
+                new Entry(EntryKind.File, "src/Sample.Presentation.Wpf/Views/ShellView.xaml"),
+                "system");
+
+            Assert.Contains(pack.Contracts, contract => contract.Title == "System Pack");
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task BuildPack_ForNonRootViewModel_DoesNotPromoteToSystemPack()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase3-non-root-{Guid.NewGuid():N}");
+
+        try
+        {
+            await CreateSampleWorkspaceAsync(
+                workspaceRoot,
+                "namespace Sample.Presentation.Wpf.ViewModels; public sealed class ShellViewModel { }",
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                        services.AddScoped<DraftingWindowViewModel>();
+                    }
+                }
+                """,
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/ViewModels/DraftingWindowViewModel.cs",
+                    "namespace Sample.Presentation.Wpf.ViewModels; public sealed class DraftingWindowViewModel { }"));
+
+            var pack = await BuildContextPackFromWorkspaceAsync(
+                workspaceRoot,
+                new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.DraftingWindowViewModel"),
+                "drafting");
+
+            Assert.DoesNotContain(pack.Contracts, contract => contract.Title == "System Pack");
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task ExtractAsync_ForShellViewModelSymbol_IsDeterministic()
     {
         var first = await BuildPackAsync(
@@ -1891,6 +2412,22 @@ public sealed class WpfNet8WorkspaceScannerTests
         return await extractor.ExtractAsync(workspaceRoot, scanResult, resolvedEntry, goal);
     }
 
+    private static async Task<ContextPack> BuildContextPackFromWorkspaceAsync(
+        string workspaceRoot,
+        Entry entry,
+        string goal)
+    {
+        var fileSystem = new WorkspaceFileSystem();
+        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+        var resolver = new ScanBackedEntryResolver();
+        var extractor = new WpfNet8ContractExtractor(fileSystem);
+
+        var scanResult = await scanner.ScanAsync(workspaceRoot);
+        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
+        var ingredients = await extractor.ExtractAsync(workspaceRoot, scanResult, resolvedEntry, goal);
+        return ContextPackFactory.Create(goal, entry, resolvedEntry, ingredients, scanResult, Budget.Default);
+    }
+
     private static async Task CreateSampleWorkspaceAsync(
         string workspaceRoot,
         string shellViewModelSource,
@@ -1914,11 +2451,36 @@ public sealed class WpfNet8WorkspaceScannerTests
             new(
                 "src/Sample.Presentation.Wpf/Views/ShellView.xaml",
                 """
-                <Window
+                <UserControl
                     x:Class="Sample.Presentation.Wpf.Views.ShellView"
                     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                </UserControl>
+                """),
+            new(
+                "src/Sample.Presentation.Wpf/Views/MainWindow.xaml",
+                """
+                <Window
+                    x:Class="Sample.Presentation.Wpf.Views.MainWindow"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    <Grid />
                 </Window>
+                """),
+            new(
+                "src/Sample.Presentation.Wpf/Views/MainWindow.xaml.cs",
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+
+                namespace Sample.Presentation.Wpf.Views;
+
+                public partial class MainWindow
+                {
+                    public MainWindow(ShellViewModel shellViewModel)
+                    {
+                        DataContext = shellViewModel;
+                    }
+                }
                 """),
             new(
                 "src/Sample.Presentation.Wpf/Views/ShellView.xaml.cs",

@@ -33,7 +33,7 @@ internal sealed class PersistencePackSectionBuilder
     {
         var discovery = await DiscoverLinksAsync(workspaceRoot, scanResult, relevantContext, cancellationToken).ConfigureAwait(false);
         var analyses = AnalyzeLinks(scanResult, relevantContext, discovery.Links);
-        var compression = CompressAnalyses(analyses);
+        var compression = CompressAnalyses(relevantContext, analyses);
         AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
         var selected = compression.Selected.ToArray();
@@ -74,7 +74,7 @@ internal sealed class PersistencePackSectionBuilder
         var ambiguousCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ownerCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var rootSymbol in relevantContext.ViewModelSymbols.OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase))
+        foreach (var rootSymbol in relevantContext.ExplorationRootSymbols.OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase))
         {
             var owners = await DiscoverOwnerSymbolsAsync(
                     workspaceRoot,
@@ -319,13 +319,15 @@ internal sealed class PersistencePackSectionBuilder
         }
     }
 
-    private static SectionCompressionResult<PersistenceAnalysis> CompressAnalyses(IReadOnlyList<PersistenceAnalysis> analyses)
+    private static SectionCompressionResult<PersistenceAnalysis> CompressAnalyses(
+        RelevantPackContext relevantContext,
+        IReadOnlyList<PersistenceAnalysis> analyses)
     {
         var candidates = analyses
             .Select(analysis => new SectionCompressionCandidate<PersistenceAnalysis>(
                 analysis,
                 analysis.Link.Key,
-                BuildCanonicalKey(analysis.Link),
+                BuildCanonicalKey(relevantContext, analysis.Link),
                 analysis.Evaluation,
                 IsUiBoundaryCandidate(analysis.Link),
                 IsSelfLoopCandidate(analysis.Link)))
@@ -409,10 +411,10 @@ internal sealed class PersistencePackSectionBuilder
         return $"この画面は {analyses.Count} 本の代表境界で {string.Join(" / ", families)} 系の永続化に触れます。";
     }
 
-    private static string BuildCanonicalKey(PersistenceLink link) =>
+    private static string BuildCanonicalKey(RelevantPackContext relevantContext, PersistenceLink link) =>
         string.Join(
             "|",
-            link.RootSymbol,
+            PackAnalysisHelpers.GetSystemCanonicalRoot(relevantContext, link.RootSymbol),
             PackAnalysisHelpers.ClassifyWorkflowFamily(link.OwnerSymbol),
             PackAnalysisHelpers.ClassifyPersistenceFamily(link.PersistenceSymbol));
 

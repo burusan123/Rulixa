@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Rulixa.Cli;
-using Rulixa.Domain.Diagnostics;
 using Rulixa.Domain.Entries;
 using Rulixa.Domain.Packs;
 using Rulixa.Domain.Scanning;
@@ -38,23 +37,17 @@ public sealed class CompareEvidenceBundleTests
                 Contracts:
                 [
                     new Contract(
-                        ContractKind.Navigation,
-                        "ViewModel 更新処理",
-                        "RestoreSelection(...) が SelectedItem を更新します。",
+                        ContractKind.Startup,
+                        "System Pack",
+                        "ShellViewModel から Shell / Settings の局所地図を束ねます。中心状態は ProjectDocument です。",
                         ["src/Sample.App/ViewModels/ShellViewModel.cs"],
-                        ["Sample.App.ShellViewModel.RestoreSelection"]),
+                        ["Sample.App.ShellViewModel"]),
                     new Contract(
                         ContractKind.Navigation,
-                        "ViewModel 更新処理",
+                        "ViewModel 更新",
                         "Select(...) が CurrentPage を更新します。",
                         ["src/Sample.App/ViewModels/ShellViewModel.cs"],
-                        ["Sample.App.ShellViewModel.Select"]),
-                    new Contract(
-                        ContractKind.Navigation,
-                        "選択から表示への因果",
-                        "SelectedItem が CurrentPage を更新します。",
-                        ["src/Sample.App/ViewModels/ShellViewModel.cs"],
-                        ["Sample.App.ShellViewModel"])
+                        ["Sample.App.ShellViewModel.Select"])
                 ],
                 Indexes: [],
                 SelectedSnippets:
@@ -79,7 +72,7 @@ public sealed class CompareEvidenceBundleTests
                         "command-selection",
                         "OpenProjectCommand",
                         "selected-all",
-                        "OpenProjectCommand は command 数が閾値以下のため選定されました。",
+                        "OpenProjectCommand は command 群を要約したため選定されました。",
                         0,
                         1,
                         1,
@@ -95,23 +88,17 @@ public sealed class CompareEvidenceBundleTests
                 Contracts:
                 [
                     new Contract(
-                        ContractKind.Navigation,
-                        "ViewModel 更新処理",
-                        "RestoreSelection(...) が SelectedItem を更新します。",
-                        ["src/Sample.App/ViewModels/ShellViewModel.cs"],
-                        ["Sample.App.ShellViewModel.RestoreSelection"]),
-                    new Contract(
-                        ContractKind.Navigation,
-                        "ViewModel 更新処理",
-                        "Select(...) が CurrentPage を更新します。",
-                        ["src/Sample.App/ViewModels/ShellViewModel.cs"],
-                        ["Sample.App.ShellViewModel.Select"]),
-                    new Contract(
-                        ContractKind.Navigation,
-                        "選択から表示への因果",
-                        "SelectedItem が CurrentPage と SelectedPageTitle を更新します。",
+                        ContractKind.Startup,
+                        "System Pack",
+                        "ShellViewModel から Shell / Settings / Report/Export の局所地図を束ねます。中心状態は ProjectDocument です。",
                         ["src/Sample.App/ViewModels/ShellViewModel.cs"],
                         ["Sample.App.ShellViewModel"]),
+                    new Contract(
+                        ContractKind.Navigation,
+                        "ViewModel 更新",
+                        "Select(...) が CurrentPage と SelectedPageTitle を更新します。",
+                        ["src/Sample.App/ViewModels/ShellViewModel.cs"],
+                        ["Sample.App.ShellViewModel.Select"]),
                     new Contract(
                         ContractKind.Command,
                         "OpenSettingsCommand",
@@ -143,7 +130,7 @@ public sealed class CompareEvidenceBundleTests
                         "command-selection",
                         "OpenSettingsCommand",
                         "selected-by-goal",
-                        "OpenSettingsCommand は goal と一致する term により選定されました。",
+                        "OpenSettingsCommand は goal と一致するため選定されました。",
                         5,
                         1,
                         7,
@@ -154,7 +141,7 @@ public sealed class CompareEvidenceBundleTests
                         "workflow-selection",
                         "workflow.missing-downstream",
                         "unknown-raised",
-                        "追跡できた範囲: DraftingWorkflowPort。停止点: algorithm / analyzer に到達する経路を 2 hop 以内で確定できませんでした。次に見る候補: DiagramAnalyzer, WallAlgorithmRunner",
+                        "既知の範囲: DraftingWorkflowPort。停止点: algorithm / analyzer に到達する入口を 2 hop 以内で追跡できませんでした。 次に見る候補: DiagramAnalyzer, WallAlgorithmRunner",
                         0,
                         0,
                         3,
@@ -179,19 +166,20 @@ public sealed class CompareEvidenceBundleTests
             var diff = await File.ReadAllTextAsync(diffPath);
 
             Assert.Equal(0, exitCode);
+            Assert.Contains("## システム地図の差分", diff, StringComparison.Ordinal);
+            Assert.Contains("Shell / Settings / Report/Export", diff, StringComparison.Ordinal);
             Assert.Contains("## メタデータ差分", diff, StringComparison.Ordinal);
             Assert.Contains("goal: `project` -> `settings`", diff, StringComparison.Ordinal);
             Assert.Contains("## 契約差分", diff, StringComparison.Ordinal);
             Assert.Contains("OpenSettingsCommand", diff, StringComparison.Ordinal);
-            Assert.Contains("SettingsWindow", diff, StringComparison.Ordinal);
-            Assert.Contains("before: SelectedItem が CurrentPage を更新します。", diff, StringComparison.Ordinal);
-            Assert.Contains("after: SelectedItem が CurrentPage と SelectedPageTitle を更新します。", diff, StringComparison.Ordinal);
+            Assert.Contains("before: Select(...) が CurrentPage を更新します。", diff, StringComparison.Ordinal);
+            Assert.Contains("after: Select(...) が CurrentPage と SelectedPageTitle を更新します。", diff, StringComparison.Ordinal);
             Assert.Contains("## 選択ファイル差分", diff, StringComparison.Ordinal);
             Assert.Contains("src/Sample.App/Views/SettingsWindow.xaml (reason: dialog-window, required: required, lines: 12)", diff, StringComparison.Ordinal);
             Assert.Contains("## 選択スニペット差分", diff, StringComparison.Ordinal);
             Assert.Contains("before: 4-12, reason=root-binding-source, required=required", diff, StringComparison.Ordinal);
             Assert.Contains("after: 4-14, reason=root-binding-source, required=required", diff, StringComparison.Ordinal);
-            Assert.Contains("## 圧縮品質差分", diff, StringComparison.Ordinal);
+            Assert.Contains("## 選定理由差分", diff, StringComparison.Ordinal);
             Assert.Contains("[command-selection] OpenSettingsCommand (selected-by-goal, score: 5, rank: 1, matched: setting)", diff, StringComparison.Ordinal);
             Assert.Contains("DiagramAnalyzer, WallAlgorithmRunner", diff, StringComparison.Ordinal);
         }

@@ -24,6 +24,12 @@ public sealed class MarkdownContextPackRendererTests
             Contracts:
             [
                 new Contract(
+                    ContractKind.Startup,
+                    "System Pack",
+                    "ShellViewModel から Shell / Drafting / Settings の局所地図を束ねます。中心状態は ProjectDocument です。",
+                    ["src/App/ViewModels/ShellViewModel.cs"],
+                    ["App.ViewModels.ShellViewModel"]),
+                new Contract(
                     ContractKind.ViewModelBinding,
                     "ルート DataContext",
                     "MainWindow.xaml.cs が MainWindow.xaml の DataContext に ShellViewModel を設定します。",
@@ -32,7 +38,7 @@ public sealed class MarkdownContextPackRendererTests
                 new Contract(
                     ContractKind.Command,
                     "Workflow",
-                    "この画面は 2 本の代表チェーンで処理を流し、persistence / hub-object へ接続します。",
+                    "この画面は ProjectWorkflowService を起点に ProjectDocument へ仕事を流します。",
                     ["ServiceRegistration.cs"],
                     ["App.ViewModels.ShellViewModel"])
             ],
@@ -71,7 +77,7 @@ public sealed class MarkdownContextPackRendererTests
             [
                 new Diagnostic(
                     "workflow.missing-downstream",
-                    "追跡できた範囲: IDraftingWorkflowService。停止点: algorithm / analyzer に到達する経路を 2 hop 以内で確定できませんでした。",
+                    "既知の範囲: IDraftingWorkflowService。停止点: algorithm / analyzer に到達する入口を 2 hop 以内で追跡できませんでした。",
                     null,
                     DiagnosticSeverity.Info,
                     ["App.Services.DraftingAiDiagramAnalysisService", "App.Algorithms.WallAlgorithmRunner"])
@@ -81,12 +87,15 @@ public sealed class MarkdownContextPackRendererTests
 
         Assert.Contains("# コンテキストパック", markdown);
         Assert.Contains("## 目的", markdown);
+        Assert.Contains("## システム地図", markdown);
+        Assert.Contains("Shell / Drafting / Settings", markdown);
         Assert.Contains("## 未解決事項", markdown);
         Assert.Contains("既知の範囲:", markdown);
         Assert.Contains("次に見る候補:", markdown);
-        Assert.Contains("Workflow の探索ガイド", markdown);
+        Assert.Contains("Workflow の下流が不足しています", markdown);
         Assert.Contains("App.Services.DraftingAiDiagramAnalysisService", markdown);
         Assert.DoesNotContain(@".\", markdown);
+        Assert.DoesNotContain("[起動経路] System Pack", markdown);
     }
 
     [Fact]
@@ -106,7 +115,7 @@ public sealed class MarkdownContextPackRendererTests
 
         var markdown = renderer.Render(contextPack);
 
-        Assert.Contains("## 抜粋スニペット", markdown);
+        Assert.Contains("## 選択スニペット", markdown);
         Assert.Contains("## 未解決事項", markdown);
         Assert.Contains("- なし", markdown);
     }

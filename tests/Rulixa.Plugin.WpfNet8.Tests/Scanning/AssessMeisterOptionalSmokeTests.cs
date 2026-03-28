@@ -50,6 +50,10 @@ public sealed class AssessMeisterOptionalSmokeTests
         Assert.Contains(pack.Contracts, contract =>
             contract.Kind == ContractKind.DependencyInjection);
         Assert.Contains(pack.Contracts, contract =>
+            contract.Title == "System Pack"
+            && contract.Summary.Contains("Drafting", StringComparison.Ordinal)
+            && contract.Summary.Contains("Architecture", StringComparison.Ordinal));
+        Assert.Contains(pack.Contracts, contract =>
             contract.Kind == ContractKind.DialogActivation);
         Assert.Contains(pack.Contracts, contract =>
             contract.Kind == ContractKind.Command
@@ -64,8 +68,11 @@ public sealed class AssessMeisterOptionalSmokeTests
         Assert.Contains("SelectedItem", markdown, StringComparison.Ordinal);
         Assert.Contains("CurrentPage", markdown, StringComparison.Ordinal);
         Assert.Contains("project", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("システム地図", markdown, StringComparison.Ordinal);
         Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(pack, "Persistence"), 1, 6);
         Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(pack, "Hub Objects"), 1, 3);
+        Assert.Contains(pack.Indexes.Where(index => index.Title == "Hub Objects").SelectMany(static index => index.Lines),
+            line => line.Contains("ProjectDocument", StringComparison.Ordinal));
     }
 
     [OptionalAssessMeisterFact]

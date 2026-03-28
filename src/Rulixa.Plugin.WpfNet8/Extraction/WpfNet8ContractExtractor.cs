@@ -63,9 +63,15 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
 
         AddResolvedEntryFileCandidate(resolvedEntry, fileCandidates);
 
-        var relevantContext = RelevantPackContextFactory.Create(scanResult, resolvedEntry, goal);
+        var relevantContext = await RelevantPackContextFactory
+            .CreateAsync(workspaceRoot, workspaceFileSystem, scanResult, resolvedEntry, goal, cancellationToken)
+            .ConfigureAwait(false);
 
         AddStartupContracts(scanResult, contracts, fileCandidates);
+        foreach (var candidate in SystemPackSummaryBuilder.BuildRepresentativeFiles(relevantContext))
+        {
+            fileCandidates.Add(candidate);
+        }
         await dependencyInjectionBuilder
             .AddAsync(workspaceRoot, scanResult, relevantContext, contracts, indexes, snippetCandidates, fileCandidates, cancellationToken)
             .ConfigureAwait(false);
@@ -176,6 +182,11 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             goal,
             workspaceFileSystem,
             cancellationToken).ConfigureAwait(false));
+        var systemSummaryContract = SystemPackSummaryBuilder.BuildContract(relevantContext, indexes);
+        if (systemSummaryContract is not null)
+        {
+            contracts.Add(systemSummaryContract);
+        }
 
         return new PackIngredients(
             Contracts: contracts.Distinct().ToArray(),

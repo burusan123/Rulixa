@@ -28,7 +28,7 @@ internal sealed class ArchitectureTestPackSectionBuilder
     {
         var families = await DiscoverFamiliesAsync(workspaceRoot, scanResult, cancellationToken).ConfigureAwait(false);
         var analyses = AnalyzeFamilies(scanResult, relevantContext, families);
-        var compression = CompressAnalyses(analyses);
+        var compression = CompressAnalyses(relevantContext, analyses);
         AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
         var selected = compression.Selected.ToArray();
@@ -140,13 +140,14 @@ internal sealed class ArchitectureTestPackSectionBuilder
     }
 
     private static SectionCompressionResult<ArchitectureFamilyAnalysis> CompressAnalyses(
+        RelevantPackContext relevantContext,
         IReadOnlyList<ArchitectureFamilyAnalysis> analyses)
     {
         var candidates = analyses
             .Select(analysis => new SectionCompressionCandidate<ArchitectureFamilyAnalysis>(
                 analysis,
                 analysis.Family.Family,
-                analysis.Family.Family,
+                $"{analysis.Family.Family}|{(relevantContext.SystemPack is null ? "local" : "system")}",
                 analysis.Evaluation,
                 IsWeakRoute: analysis.Family.TotalFileCount == 0))
             .ToArray();

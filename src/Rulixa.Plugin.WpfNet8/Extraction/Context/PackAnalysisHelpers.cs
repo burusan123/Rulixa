@@ -82,6 +82,9 @@ internal static class PackAnalysisHelpers
         return referenced;
     }
 
+    internal static bool IsViewModelLikeName(string simpleName) =>
+        simpleName.EndsWith("ViewModel", StringComparison.Ordinal);
+
     internal static bool IsPersistenceLikeName(string simpleName) =>
         simpleName.EndsWith("Repository", StringComparison.Ordinal)
         || simpleName.EndsWith("Query", StringComparison.Ordinal)
@@ -107,6 +110,18 @@ internal static class PackAnalysisHelpers
         simpleName.EndsWith("Analyzer", StringComparison.Ordinal)
         || simpleName.EndsWith("ExecutionPlan", StringComparison.Ordinal)
         || simpleName.EndsWith("Pipeline", StringComparison.Ordinal);
+
+    internal static bool IsSettingsLikeName(string simpleName) =>
+        simpleName.Contains("Setting", StringComparison.Ordinal)
+        || simpleName.Contains("Settings", StringComparison.Ordinal);
+
+    internal static bool IsThreeDLikeName(string simpleName) =>
+        simpleName.Contains("ThreeD", StringComparison.Ordinal)
+        || simpleName.Contains("3D", StringComparison.Ordinal);
+
+    internal static bool IsReportLikeName(string simpleName) =>
+        simpleName.Contains("Report", StringComparison.Ordinal)
+        || simpleName.Contains("Export", StringComparison.Ordinal);
 
     internal static bool IsUiBoundaryLikeName(string simpleName) =>
         simpleName.EndsWith("Window", StringComparison.Ordinal)
@@ -412,6 +427,82 @@ internal static class PackAnalysisHelpers
             .Select(path => scanResult.Files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase)))
             .Where(static file => file is not null)
             .Count(file => expected.Contains(file!.Kind));
+    }
+
+    internal static bool IsSystemExpansionRelevantName(string simpleName) =>
+        IsViewModelLikeName(simpleName)
+        || simpleName.EndsWith("Window", StringComparison.Ordinal)
+        || IsWorkflowLikeName(simpleName)
+        || IsPersistenceLikeName(simpleName)
+        || IsHubObjectLikeName(simpleName)
+        || IsAlgorithmLikeName(simpleName)
+        || IsAnalyzerLikeName(simpleName)
+        || IsSettingsLikeName(simpleName)
+        || IsThreeDLikeName(simpleName)
+        || IsReportLikeName(simpleName);
+
+    internal static string ClassifySystemFamily(string symbolOrName)
+    {
+        var simpleName = PackExtractionConventions.GetSimpleTypeName(symbolOrName);
+        if (simpleName.Contains("Drafting", StringComparison.Ordinal)
+            || simpleName.Contains("Diagram", StringComparison.Ordinal)
+            || simpleName.Contains("Floor", StringComparison.Ordinal)
+            || IsAlgorithmLikeName(simpleName)
+            || IsAnalyzerLikeName(simpleName))
+        {
+            return "Drafting";
+        }
+
+        if (IsSettingsLikeName(simpleName)
+            || simpleName.EndsWith("Window", StringComparison.Ordinal) && simpleName.Contains("Setting", StringComparison.Ordinal))
+        {
+            return "Settings";
+        }
+
+        if (IsThreeDLikeName(simpleName))
+        {
+            return "3D";
+        }
+
+        if (IsReportLikeName(simpleName))
+        {
+            return "Report/Export";
+        }
+
+        if (simpleName.Contains("Architecture", StringComparison.Ordinal)
+            || simpleName.Contains("Golden", StringComparison.Ordinal)
+            || simpleName.Contains("Regression", StringComparison.Ordinal)
+            || simpleName.Contains("Compatibility", StringComparison.Ordinal))
+        {
+            return "Architecture";
+        }
+
+        return "Shell";
+    }
+
+    internal static int GetSystemFamilyPriority(string family) => family switch
+    {
+        "Shell" => 0,
+        "Drafting" => 1,
+        "Settings" => 2,
+        "3D" => 3,
+        "Report/Export" => 4,
+        "Architecture" => 5,
+        _ => 100
+    };
+
+    internal static string GetSystemFamily(RelevantPackContext relevantContext, string symbol) =>
+        relevantContext.SystemPack?.TryGetFamily(symbol)
+        ?? ClassifySystemFamily(symbol);
+
+    internal static string GetSystemCanonicalRoot(RelevantPackContext relevantContext, string symbol)
+    {
+        if (relevantContext.SystemPack is null)
+        {
+            return symbol;
+        }
+
+        return GetSystemFamily(relevantContext, symbol);
     }
 
     private static string ClassifySingleDownstreamFamily(string symbolOrName)

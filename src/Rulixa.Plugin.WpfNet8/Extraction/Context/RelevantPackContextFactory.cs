@@ -1,3 +1,4 @@
+using Rulixa.Application.Ports;
 using Rulixa.Domain.Entries;
 using Rulixa.Domain.Scanning;
 
@@ -5,36 +6,49 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal static class RelevantPackContextFactory
 {
-    internal static RelevantPackContext Create(
+    internal static async Task<RelevantPackContext> CreateAsync(
+        string workspaceRoot,
+        IWorkspaceFileSystem workspaceFileSystem,
         WorkspaceScanResult scanResult,
         ResolvedEntry resolvedEntry,
-        string goal)
+        string goal,
+        CancellationToken cancellationToken)
     {
         var goalProfile = GoalDrivenExpansionPlanner.Analyze(goal);
         var relevantViewModelSymbols = FindRelevantViewModelSymbols(scanResult, resolvedEntry);
-        var relevantBindings = FindRelevantBindings(scanResult, resolvedEntry, relevantViewModelSymbols);
+        var systemPack = await new SystemExpansionPlanner(workspaceFileSystem)
+            .PlanAsync(workspaceRoot, scanResult, resolvedEntry, relevantViewModelSymbols, cancellationToken)
+            .ConfigureAwait(false);
+        var explorationRootSymbols = systemPack?.ExplorationRootSymbols ?? relevantViewModelSymbols;
+        var relevantBindings = FindRelevantBindings(scanResult, resolvedEntry, explorationRootSymbols);
         var primaryBindings = relevantBindings
             .Where(static binding => binding.BindingKind is ViewModelBindingKind.RootDataContext or ViewModelBindingKind.ViewDataContext)
             .ToArray();
         var secondaryBindings = relevantBindings
             .Where(static binding => binding.BindingKind == ViewModelBindingKind.DataTemplate)
             .ToArray();
-        var relevantTransitions = FindRelevantTransitions(scanResult, resolvedEntry, relevantViewModelSymbols, relevantBindings);
+        var relevantTransitions = FindRelevantTransitions(scanResult, resolvedEntry, explorationRootSymbols, relevantBindings);
         var aggregateSymbols = relevantViewModelSymbols
+            .Concat(explorationRootSymbols)
             .Concat(relevantBindings.Select(static binding => binding.ViewModelSymbol))
             .Concat(relevantTransitions.Select(static transition => transition.ViewModelSymbol))
+            .Concat(systemPack is null ? Array.Empty<string>() : systemPack.RelatedSymbols)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var symbolAggregates = PartialSymbolAggregateResolver.Build(scanResult, aggregateSymbols);
+        var relatedSymbols = aggregateSymbols.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return new RelevantPackContext(
             goalProfile,
             relevantViewModelSymbols,
+            explorationRootSymbols,
+            relatedSymbols,
             symbolAggregates,
             relevantBindings,
             primaryBindings,
             secondaryBindings,
-            relevantTransitions);
+            relevantTransitions,
+            systemPack);
     }
 
     private static IReadOnlySet<string> FindRelevantViewModelSymbols(

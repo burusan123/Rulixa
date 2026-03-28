@@ -41,7 +41,7 @@ internal sealed class WorkflowPackSectionBuilder
                 cancellationToken)
             .ConfigureAwait(false);
         var analyses = AnalyzeCandidates(scanResult, relevantContext, discovery.Candidates);
-        var compression = CompressAnalyses(analyses);
+        var compression = CompressAnalyses(relevantContext, analyses);
         AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
         var selected = compression.Selected.ToArray();
@@ -97,7 +97,7 @@ internal sealed class WorkflowPackSectionBuilder
             .Select(static symbol => symbol!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var rootSymbol in relevantContext.ViewModelSymbols.OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase))
+        foreach (var rootSymbol in relevantContext.ExplorationRootSymbols.OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase))
         {
             var firstHopCandidates = await DiscoverFirstHopCandidatesAsync(
                     workspaceRoot,
@@ -383,13 +383,15 @@ internal sealed class WorkflowPackSectionBuilder
         }
     }
 
-    private static SectionCompressionResult<WorkflowAnalysis> CompressAnalyses(IReadOnlyList<WorkflowAnalysis> analyses)
+    private static SectionCompressionResult<WorkflowAnalysis> CompressAnalyses(
+        RelevantPackContext relevantContext,
+        IReadOnlyList<WorkflowAnalysis> analyses)
     {
         var candidates = analyses
             .Select(analysis => new SectionCompressionCandidate<WorkflowAnalysis>(
                 analysis,
                 analysis.Candidate.Key,
-                BuildCanonicalKey(analysis.Candidate),
+                BuildCanonicalKey(relevantContext, analysis.Candidate),
                 analysis.Evaluation,
                 IsUiBoundaryCandidate(analysis.Candidate),
                 IsSelfLoopCandidate(analysis.Candidate),
@@ -525,10 +527,10 @@ internal sealed class WorkflowPackSectionBuilder
         return $"この画面は {analyses.Count} 本の代表チェーンで処理を流し、{string.Join(" / ", downstreamFamilies)} へ接続します。";
     }
 
-    private static string BuildCanonicalKey(WorkflowCandidate candidate) =>
+    private static string BuildCanonicalKey(RelevantPackContext relevantContext, WorkflowCandidate candidate) =>
         string.Join(
             "|",
-            candidate.RootSymbol,
+            PackAnalysisHelpers.GetSystemCanonicalRoot(relevantContext, candidate.RootSymbol),
             PackAnalysisHelpers.ClassifyWorkflowFamily(candidate.FirstHopSymbol),
             PackAnalysisHelpers.ClassifyDownstreamFamily(candidate.NextSymbols));
 

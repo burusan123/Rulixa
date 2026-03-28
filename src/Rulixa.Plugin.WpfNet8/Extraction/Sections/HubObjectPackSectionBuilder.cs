@@ -34,7 +34,7 @@ internal sealed class HubObjectPackSectionBuilder
         var hubObjects = await DiscoverHubObjectsAsync(workspaceRoot, scanResult, relevantContext, cancellationToken)
             .ConfigureAwait(false);
         var analyses = AnalyzeHubObjects(scanResult, relevantContext, hubObjects);
-        var compression = CompressAnalyses(analyses);
+        var compression = CompressAnalyses(relevantContext, analyses);
         AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
         var selected = compression.Selected.ToArray();
@@ -72,9 +72,9 @@ internal sealed class HubObjectPackSectionBuilder
         CancellationToken cancellationToken)
     {
         var candidates = new Dictionary<string, HubObjectCandidate>(StringComparer.OrdinalIgnoreCase);
-        var symbolsToInspect = new HashSet<string>(relevantContext.ViewModelSymbols, StringComparer.OrdinalIgnoreCase);
+        var symbolsToInspect = new HashSet<string>(relevantContext.ExplorationRootSymbols, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var viewModelSymbol in relevantContext.ViewModelSymbols)
+        foreach (var viewModelSymbol in relevantContext.ExplorationRootSymbols)
         {
             foreach (var filePath in PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, viewModelSymbol))
             {
@@ -223,13 +223,18 @@ internal sealed class HubObjectPackSectionBuilder
         }
     }
 
-    private static SectionCompressionResult<HubObjectAnalysis> CompressAnalyses(IReadOnlyList<HubObjectAnalysis> analyses)
+    private static SectionCompressionResult<HubObjectAnalysis> CompressAnalyses(
+        RelevantPackContext relevantContext,
+        IReadOnlyList<HubObjectAnalysis> analyses)
     {
         var candidates = analyses
             .Select(analysis => new SectionCompressionCandidate<HubObjectAnalysis>(
                 analysis,
                 analysis.Candidate.Symbol,
-                PackAnalysisHelpers.ClassifyHubObjectFamily(analysis.Candidate.Symbol),
+                string.Join(
+                    "|",
+                    PackAnalysisHelpers.GetSystemFamily(relevantContext, analysis.Candidate.Symbol),
+                    PackAnalysisHelpers.ClassifyHubObjectFamily(analysis.Candidate.Symbol)),
                 analysis.Evaluation,
                 IsSelfLoop: false,
                 IsWeakRoute: analysis.Candidate.Signals.Count < 2))

@@ -13,6 +13,12 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         ArgumentNullException.ThrowIfNull(contextPack);
 
         var builder = new StringBuilder();
+        var systemPackContract = contextPack.Contracts.FirstOrDefault(static contract =>
+            string.Equals(contract.Title, "System Pack", StringComparison.Ordinal));
+        var displayContracts = contextPack.Contracts
+            .Where(static contract => !string.Equals(contract.Title, "System Pack", StringComparison.Ordinal))
+            .ToArray();
+
         builder.AppendLine("# コンテキストパック");
         builder.AppendLine();
         builder.AppendLine("## 目的");
@@ -31,22 +37,29 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
             builder.AppendLine($"- シンボル: `{contextPack.ResolvedEntry.Symbol}`");
         }
 
+        if (systemPackContract is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("## システム地図");
+            builder.AppendLine($"- {systemPackContract.Summary}");
+        }
+
         builder.AppendLine();
         builder.AppendLine("## 契約");
-        if (contextPack.Contracts.Count == 0)
+        if (displayContracts.Length == 0)
         {
             builder.AppendLine("- なし");
         }
         else
         {
-            foreach (var contract in contextPack.Contracts.OrderBy(GetContractPriority).ThenBy(static contract => contract.Title, StringComparer.Ordinal))
+            foreach (var contract in displayContracts.OrderBy(GetContractPriority).ThenBy(static contract => contract.Title, StringComparer.Ordinal))
             {
                 builder.AppendLine($"- [{ToDisplayText(contract.Kind)}] {contract.Title}: {contract.Summary}");
             }
         }
 
         builder.AppendLine();
-        builder.AppendLine("## 参照ガイド / インデックス");
+        builder.AppendLine("## ガイド / インデックス");
         if (contextPack.Indexes.Count == 0)
         {
             builder.AppendLine("- なし");
@@ -64,7 +77,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         }
 
         builder.AppendLine();
-        builder.AppendLine("## 抜粋スニペット");
+        builder.AppendLine("## 選択スニペット");
         if (contextPack.SelectedSnippets.Count == 0)
         {
             builder.AppendLine("- なし");
@@ -165,34 +178,37 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "view-binding" => "View DataContext",
         "view-binding-source" => "View DataContext の設定元",
         "data-template" => "DataTemplate 対応",
-        "data-template-source" => "DataTemplate 設定元",
-        "conventional-view" => "規約対応 View",
+        "data-template-source" => "DataTemplate の設定元",
+        "conventional-view" => "慣例対応 View",
         "code-behind" => "code-behind",
         "command-viewmodel" => "コマンド関連 ViewModel",
         "command-impact" => "コマンド影響先",
-        "command-bound-view" => "コマンドが使われる View",
+        "command-bound-view" => "コマンド利用 View",
         "command-support" => "コマンド補助実装",
         "dialog-service" => "ダイアログ起動サービス",
+        "dialog-window" => "ダイアログ Window",
+        "dialog-viewmodel" => "ダイアログ ViewModel",
         "navigation-view" => "ナビゲーション View",
         "navigation-xaml-binding" => "XAML ナビゲーション binding",
-        "navigation-update" => "ナビゲーション更新処理",
-        "workflow" => "ワークフロー候補",
-        "persistence" => "永続化候補",
-        "hub-object" => "共有状態候補",
-        "external-asset" => "外部資産候補",
-        "architecture-test" => "アーキテクチャテスト候補",
+        "navigation-update" => "ナビゲーション更新",
+        "workflow" => "ワークフロー代表",
+        "persistence" => "永続化代表",
+        "hub-object" => "共有状態代表",
+        "external-asset" => "外部資産代表",
+        "architecture-test" => "アーキテクチャテスト代表",
+        "system-pack" => "System Pack 代表",
         _ => reason
     };
 
     private static string ToDiagnosticLabel(string code) => code switch
     {
-        "entry.unresolved" => "入口の解決失敗",
-        "workflow.missing-downstream" => "Workflow の探索ガイド",
-        "workflow.ambiguous-target" => "Workflow の候補が競合",
-        "persistence.missing-owner" => "Persistence の探索ガイド",
-        "hub-object.weak-signal" => "Hub Object の探索ガイド",
-        "external-asset.unresolved-source" => "外部資産の探索ガイド",
-        "architecture-tests.not-found" => "Architecture Test の探索ガイド",
+        "entry.unresolved" => "入口を解決できませんでした",
+        "workflow.missing-downstream" => "Workflow の下流が不足しています",
+        "workflow.ambiguous-target" => "Workflow の候補が競合しています",
+        "persistence.missing-owner" => "Persistence の owner を確定できません",
+        "hub-object.weak-signal" => "Hub Object の根拠が弱いです",
+        "external-asset.unresolved-source" => "外部資産の読込経路を確定できません",
+        "architecture-tests.not-found" => "Architecture Tests を見つけられませんでした",
         _ => code
     };
 
@@ -203,38 +219,42 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
 
     private static string FormatUnknownMessage(string message)
     {
-        const string knownPrefix = "追跡できた範囲: ";
-        if (!message.StartsWith(knownPrefix, StringComparison.Ordinal))
+        const string knownPrefix = "既知の範囲: ";
+        if (message.StartsWith(knownPrefix, StringComparison.Ordinal))
         {
-            return message;
+            return message[knownPrefix.Length..];
         }
 
-        return message[knownPrefix.Length..];
+        const string legacyPrefix = "既知の範囲: ";
+        return message.StartsWith(legacyPrefix, StringComparison.Ordinal)
+            ? message[legacyPrefix.Length..]
+            : message;
     }
 
-    private static int GetContractPriority(Contract contract) => contract.Kind switch
+    private static int GetContractPriority(Contract contract) => contract switch
     {
-        ContractKind.ViewModelBinding when !contract.Title.Contains("DataTemplate", StringComparison.Ordinal) => 0,
-        ContractKind.Startup => 10,
-        ContractKind.DependencyInjection when contract.Title == "Workflow" => 24,
-        ContractKind.DependencyInjection when contract.Title == "Persistence" => 25,
-        ContractKind.DependencyInjection when contract.Title == "Hub Objects" => 26,
-        ContractKind.DependencyInjection when contract.Title == "External Assets" => 27,
-        ContractKind.DependencyInjection when contract.Title == "Architecture Tests" => 28,
-        ContractKind.DependencyInjection => 22,
-        ContractKind.Navigation => 30,
-        ContractKind.ViewModelBinding => 40,
-        ContractKind.Command when contract.Title == "Workflow" => 45,
-        ContractKind.Command => 50,
-        ContractKind.DialogActivation => 60,
+        { Title: "System Pack" } => -10,
+        { Kind: ContractKind.ViewModelBinding } when !contract.Title.Contains("DataTemplate", StringComparison.Ordinal) => 0,
+        { Kind: ContractKind.Startup } => 10,
+        { Kind: ContractKind.DependencyInjection, Title: "Workflow" } => 24,
+        { Kind: ContractKind.DependencyInjection, Title: "Persistence" } => 25,
+        { Kind: ContractKind.DependencyInjection, Title: "Hub Objects" } => 26,
+        { Kind: ContractKind.DependencyInjection, Title: "External Assets" } => 27,
+        { Kind: ContractKind.DependencyInjection, Title: "Architecture Tests" } => 28,
+        { Kind: ContractKind.DependencyInjection } => 22,
+        { Kind: ContractKind.Navigation } => 30,
+        { Kind: ContractKind.ViewModelBinding } => 40,
+        { Kind: ContractKind.Command, Title: "Workflow" } => 45,
+        { Kind: ContractKind.Command } => 50,
+        { Kind: ContractKind.DialogActivation } => 60,
         _ => 100
     };
 
     private static int GetIndexPriority(IndexSection index) => index.Title switch
     {
         "ナビゲーション" => 0,
-        "選択から表示への因果" => 10,
-        "ナビゲーション更新処理" => 20,
+        "選択から表示への反映" => 10,
+        "ナビゲーション更新" => 20,
         "View-ViewModel" => 30,
         "起動経路" => 40,
         "DI" => 45,

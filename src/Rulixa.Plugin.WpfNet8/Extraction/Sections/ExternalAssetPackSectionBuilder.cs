@@ -28,7 +28,7 @@ internal sealed class ExternalAssetPackSectionBuilder
     {
         var usages = await DiscoverAssetsAsync(workspaceRoot, scanResult, relevantContext, cancellationToken).ConfigureAwait(false);
         var analyses = AnalyzeAssets(scanResult, relevantContext, usages);
-        var compression = CompressAnalyses(analyses);
+        var compression = CompressAnalyses(relevantContext, analyses);
         AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
         var selected = compression.Selected.ToArray();
@@ -65,9 +65,9 @@ internal sealed class ExternalAssetPackSectionBuilder
         CancellationToken cancellationToken)
     {
         var usages = new List<ExternalAssetUsage>();
-        var candidateSymbols = new HashSet<string>(relevantContext.ViewModelSymbols, StringComparer.OrdinalIgnoreCase);
+        var candidateSymbols = new HashSet<string>(relevantContext.ExplorationRootSymbols, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var symbol in relevantContext.ViewModelSymbols)
+        foreach (var symbol in relevantContext.ExplorationRootSymbols)
         {
             foreach (var filePath in PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, symbol))
             {
@@ -206,13 +206,18 @@ internal sealed class ExternalAssetPackSectionBuilder
         }
     }
 
-    private static SectionCompressionResult<ExternalAssetAnalysis> CompressAnalyses(IReadOnlyList<ExternalAssetAnalysis> analyses)
+    private static SectionCompressionResult<ExternalAssetAnalysis> CompressAnalyses(
+        RelevantPackContext relevantContext,
+        IReadOnlyList<ExternalAssetAnalysis> analyses)
     {
         var candidates = analyses
             .Select(analysis => new SectionCompressionCandidate<ExternalAssetAnalysis>(
                 analysis,
                 analysis.Usage.Key,
-                analysis.Usage.AssetFamily,
+                string.Join(
+                    "|",
+                    PackAnalysisHelpers.GetSystemFamily(relevantContext, analysis.Usage.OwnerSymbol),
+                    analysis.Usage.AssetFamily),
                 analysis.Evaluation,
                 IsUiBoundary: PackAnalysisHelpers.IsUiBoundaryLikeName(analysis.Usage.OwnerDisplayName),
                 IsWeakRoute: !analysis.Usage.HasResolutionCode || string.Equals(analysis.Usage.AssetFamily, "other", StringComparison.OrdinalIgnoreCase)))

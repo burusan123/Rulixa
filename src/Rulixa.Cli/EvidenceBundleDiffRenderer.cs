@@ -14,11 +14,12 @@ internal sealed class EvidenceBundleDiffRenderer
         var builder = new StringBuilder();
         builder.AppendLine("# Evidence 差分");
         builder.AppendLine();
-        builder.AppendLine("## 対象");
+        builder.AppendLine("## 比較対象");
         builder.AppendLine($"- base: `{NormalizePath(Path.GetFullPath(baseDirectory))}`");
         builder.AppendLine($"- target: `{NormalizePath(Path.GetFullPath(targetDirectory))}`");
         builder.AppendLine();
 
+        AppendSystemPackDiff(builder, before.SelectionSummary.Contracts, after.SelectionSummary.Contracts);
         AppendMetadataDiff(builder, before, after);
         AppendContractDiff(builder, before.SelectionSummary.Contracts, after.SelectionSummary.Contracts);
         AppendSelectedFileDiff(builder, before.SelectionSummary.SelectedFiles, after.SelectionSummary.SelectedFiles);
@@ -26,6 +27,24 @@ internal sealed class EvidenceBundleDiffRenderer
         AppendDecisionTraceDiff(builder, before.DecisionTraces, after.DecisionTraces);
 
         return builder.ToString();
+    }
+
+    private static void AppendSystemPackDiff(
+        StringBuilder builder,
+        IReadOnlyList<EvidenceContractDto> beforeContracts,
+        IReadOnlyList<EvidenceContractDto> afterContracts)
+    {
+        var beforeSystem = beforeContracts.FirstOrDefault(static contract => contract.Title == "System Pack");
+        var afterSystem = afterContracts.FirstOrDefault(static contract => contract.Title == "System Pack");
+        if (beforeSystem is null && afterSystem is null)
+        {
+            return;
+        }
+
+        builder.AppendLine("## システム地図の差分");
+        builder.AppendLine($"- before: {beforeSystem?.Summary ?? "なし"}");
+        builder.AppendLine($"- after: {afterSystem?.Summary ?? "なし"}");
+        builder.AppendLine();
     }
 
     private static void AppendMetadataDiff(StringBuilder builder, EvidenceManifestDto before, EvidenceManifestDto after)
@@ -113,7 +132,7 @@ internal sealed class EvidenceBundleDiffRenderer
         IReadOnlyList<EvidenceDecisionTraceDto> after)
     {
         builder.AppendLine();
-        builder.AppendLine("## 圧縮品質差分");
+        builder.AppendLine("## 選定理由差分");
         var beforeMap = BuildIndexedMap(before, static item => $"{item.Category}|{item.ItemKey}");
         var afterMap = BuildIndexedMap(after, static item => $"{item.Category}|{item.ItemKey}");
         AppendAddedRemovedChanged(
