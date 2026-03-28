@@ -36,6 +36,7 @@ internal static class Program
             var entryResolver = new ScanBackedEntryResolver();
             var contractExtractor = new WpfNet8ContractExtractor(workspaceFileSystem);
             var renderer = new MarkdownContextPackRenderer();
+            var evidenceBundleWriter = new EvidenceBundleWriter(JsonOptions);
 
             var scanWorkspaceUseCase = new ScanWorkspaceUseCase(workspaceScanner);
             var resolveEntryUseCase = new ResolveEntryUseCase(entryResolver);
@@ -45,7 +46,7 @@ internal static class Program
             {
                 "scan" => await RunScanAsync(args[1..], scanWorkspaceUseCase).ConfigureAwait(false),
                 "resolve-entry" => await RunResolveEntryAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase).ConfigureAwait(false),
-                "pack" => await RunPackAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase, buildContextPackUseCase, renderer).ConfigureAwait(false),
+                "pack" => await RunPackAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase, buildContextPackUseCase, renderer, evidenceBundleWriter).ConfigureAwait(false),
                 _ => Fail(CliMessages.UnknownCommand(args[0]))
             };
         }
@@ -86,12 +87,14 @@ internal static class Program
         ScanWorkspaceUseCase scanUseCase,
         ResolveEntryUseCase resolveUseCase,
         BuildContextPackUseCase packUseCase,
-        IContextPackRenderer renderer)
+        IContextPackRenderer renderer,
+        EvidenceBundleWriter evidenceBundleWriter)
     {
         var workspace = GetOption(args, "--workspace") ?? Directory.GetCurrentDirectory();
         var entryText = GetRequiredOption(args, "--entry");
         var goal = GetRequiredOption(args, "--goal");
         var outputPath = GetOption(args, "--out");
+        var evidenceDirectory = GetOption(args, "--evidence-dir");
         var budget = new Budget(
             MaxFiles: GetOptionAsInt(args, "--max-files", 8),
             MaxTotalLines: GetOptionAsInt(args, "--max-total-lines", 1600),
@@ -102,7 +105,22 @@ internal static class Program
         var resolvedEntry = await resolveUseCase.ExecuteAsync(entry, scanResult).ConfigureAwait(false);
         var contextPack = await packUseCase.ExecuteAsync(workspace, scanResult, entry, resolvedEntry, goal, budget).ConfigureAwait(false);
         var markdown = renderer.Render(contextPack);
-        return await WriteOutputAsync(markdown, outputPath).ConfigureAwait(false);
+        var exitCode = await WriteOutputAsync(markdown, outputPath).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            var bundleDirectory = await evidenceBundleWriter.WriteAsync(
+                    evidenceDirectory,
+                    workspace,
+                    budget,
+                    scanResult,
+                    resolvedEntry,
+                    contextPack,
+                    markdown)
+                .ConfigureAwait(false);
+            Console.Error.WriteLine(CliMessages.EvidenceWritten(bundleDirectory));
+        }
+
+        return exitCode;
     }
 
     private static string GetRequiredOption(IReadOnlyList<string> args, string optionName) =>
