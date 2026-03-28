@@ -1272,6 +1272,28 @@ public sealed class WpfNet8WorkspaceScannerTests
     }
 
     [Fact]
+    public async Task ExtractAsync_ForProjectGoal_CompressesPhase2Indexes()
+    {
+        var (_, ingredients, _) = await BuildPackAsync(
+            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            Budget.Default,
+            goal: "project system understand");
+
+        Assert.InRange(GetIndexLines(ingredients, "Workflow").Count, 1, 6);
+        Assert.InRange(GetIndexLines(ingredients, "Persistence").Count, 1, 6);
+        Assert.InRange(GetIndexLines(ingredients, "Hub Objects").Count, 1, 3);
+        Assert.InRange(GetIndexLines(ingredients, "Architecture Tests").Count, 1, 4);
+        Assert.DoesNotContain(
+            GetIndexLines(ingredients, "Workflow"),
+            line => line.Contains("ISettingWindowService", StringComparison.Ordinal)
+                || line.Contains("SettingWindow", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            GetIndexLines(ingredients, "Persistence"),
+            line => line.Contains("ISettingWindowService", StringComparison.Ordinal)
+                || line.Contains("SettingWindow", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ExtractAsync_ForProjectGoal_DoesNotReportPhase2UnknownsWhenSignalsExist()
     {
         var (_, ingredients, _) = await BuildPackAsync(
@@ -1525,6 +1547,104 @@ public sealed class WpfNet8WorkspaceScannerTests
     }
 
     [Fact]
+    public async Task ExtractAsync_WhenPersistenceFamiliesDuplicate_KeepsSingleRepresentative()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase2-persistence-compress-{Guid.NewGuid():N}");
+
+        try
+        {
+            await CreateSampleWorkspaceAsync(
+                workspaceRoot,
+                """
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf.ViewModels;
+
+                public sealed class ShellViewModel
+                {
+                    private readonly ProjectWorkspaceFlowService flowService;
+                    private readonly ProjectWorkspaceService workspaceService;
+
+                    public ShellViewModel(ProjectWorkspaceFlowService flowService, ProjectWorkspaceService workspaceService)
+                    {
+                        this.flowService = flowService;
+                        this.workspaceService = workspaceService;
+                    }
+                }
+                """,
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                        services.AddScoped<ProjectWorkspaceFlowService>();
+                        services.AddScoped<ProjectWorkspaceService>();
+                        services.AddScoped<IProjectRepository, ProjectRepository>();
+                    }
+                }
+                """,
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/ProjectWorkspaceFlowService.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public sealed class ProjectWorkspaceFlowService
+                    {
+                        private readonly IProjectRepository projectRepository;
+
+                        public ProjectWorkspaceFlowService(IProjectRepository projectRepository)
+                        {
+                            this.projectRepository = projectRepository;
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/ProjectWorkspaceService.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public sealed class ProjectWorkspaceService
+                    {
+                        private readonly ProjectRepository projectRepository;
+
+                        public ProjectWorkspaceService(ProjectRepository projectRepository)
+                        {
+                            this.projectRepository = projectRepository;
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/IProjectRepository.cs",
+                    "namespace Sample.Presentation.Wpf.Services; public interface IProjectRepository { }"),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/ProjectRepository.cs",
+                    "namespace Sample.Presentation.Wpf.Services; public sealed class ProjectRepository : IProjectRepository { }"));
+
+            var ingredients = await BuildPackFromWorkspaceAsync(
+                workspaceRoot,
+                new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel"),
+                "project workspace");
+
+            var persistenceLines = GetIndexLines(ingredients, "Persistence");
+            Assert.Single(persistenceLines);
+            Assert.Contains(persistenceLines, line => line.Contains("ProjectRepository", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task ExtractAsync_ForShellViewModelSymbol_IsDeterministic()
     {
         var first = await BuildPackAsync(
@@ -1656,6 +1776,12 @@ public sealed class WpfNet8WorkspaceScannerTests
                     : file)
                 .ToArray()
         };
+
+    private static IReadOnlyList<string> GetIndexLines(PackIngredients ingredients, string title) =>
+        ingredients.Indexes
+            .Where(index => index.Title == title)
+            .SelectMany(static index => index.Lines)
+            .ToArray();
 
     private sealed record WorkspaceFileDefinition(
         string Path,

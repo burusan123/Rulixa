@@ -7,6 +7,7 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal sealed class ArchitectureTestPackSectionBuilder
 {
+    private const int MaxArchitectureFamilies = 4;
     private readonly IWorkspaceFileSystem workspaceFileSystem;
 
     internal ArchitectureTestPackSectionBuilder(IWorkspaceFileSystem workspaceFileSystem)
@@ -25,20 +26,19 @@ internal sealed class ArchitectureTestPackSectionBuilder
         ICollection<Diagnostic> unknowns,
         CancellationToken cancellationToken)
     {
-        var tests = await DiscoverTestsAsync(workspaceRoot, scanResult, cancellationToken).ConfigureAwait(false);
-        var analyses = AnalyzeTests(scanResult, relevantContext, tests);
-        AddDecisionTraces(analyses, decisionTraces);
+        var families = await DiscoverFamiliesAsync(workspaceRoot, scanResult, cancellationToken).ConfigureAwait(false);
+        var analyses = AnalyzeFamilies(scanResult, relevantContext, families);
+        var compression = CompressAnalyses(analyses);
+        AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
-        var selected = analyses
-            .Where(static analysis => analysis.Evaluation.IsSelectable)
-            .ToArray();
+        var selected = compression.Selected.ToArray();
         if (selected.Length == 0)
         {
             if (relevantContext.GoalProfile.HasCategory("architecture") || relevantContext.GoalProfile.HasCategory("system"))
             {
                 var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
                     "architecture-tests.not-found",
-                    "No architecture, golden, or regression-style tests were detected from the scanned workspace.",
+                    "No representative architecture, golden, regression, or compatibility test families were detected from the scanned workspace.",
                     null,
                     DiagnosticSeverity.Info,
                     []);
@@ -61,20 +61,23 @@ internal sealed class ArchitectureTestPackSectionBuilder
             ContractKind.DependencyInjection,
             "Architecture Tests",
             BuildSummary(selected),
-            selected.Select(static analysis => analysis.Signal.FilePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            selected.SelectMany(static analysis => analysis.Family.RepresentativeFiles).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             []));
 
         foreach (var analysis in selected)
         {
-            fileCandidates.Add(new FileSelectionCandidate(
-                analysis.Signal.FilePath,
-                "architecture-test",
-                analysis.Evaluation.ToPriority(32),
-                false));
+            foreach (var filePath in analysis.Family.RepresentativeFiles)
+            {
+                fileCandidates.Add(new FileSelectionCandidate(
+                    filePath,
+                    "architecture-test",
+                    analysis.Evaluation.ToPriority(32),
+                    false));
+            }
         }
     }
 
-    private async Task<IReadOnlyList<ArchitectureTestSignal>> DiscoverTestsAsync(
+    private async Task<IReadOnlyList<ArchitectureFamilyCandidate>> DiscoverFamiliesAsync(
         string workspaceRoot,
         WorkspaceScanResult scanResult,
         CancellationToken cancellationToken)
@@ -86,37 +89,48 @@ internal sealed class ArchitectureTestPackSectionBuilder
             .Where(static file => file.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             .OrderBy(static file => file.Path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var signals = new List<ArchitectureTestSignal>();
+        var filesByFamily = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var candidate in candidates)
         {
             var source = await ReadSourceAsync(workspaceRoot, candidate.Path, cancellationToken).ConfigureAwait(false);
-            var descriptors = ExtractDescriptors(candidate.Path, source);
-            if (descriptors.Count == 0)
+            foreach (var family in ExtractFamilies(candidate.Path, source))
             {
-                continue;
-            }
+                if (!filesByFamily.TryGetValue(family, out var files))
+                {
+                    files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    filesByFamily[family] = files;
+                }
 
-            signals.Add(new ArchitectureTestSignal(candidate.Path, descriptors));
+                files.Add(candidate.Path);
+            }
         }
 
-        return signals;
+        return filesByFamily
+            .Select(static pair => new ArchitectureFamilyCandidate(
+                pair.Key,
+                pair.Value.OrderBy(static file => file, StringComparer.OrdinalIgnoreCase).Take(2).ToArray(),
+                pair.Value.Count))
+            .OrderByDescending(static candidate => candidate.TotalFileCount)
+            .ThenBy(static candidate => candidate.Family, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
-    private IReadOnlyList<ArchitectureTestAnalysis> AnalyzeTests(
+    private IReadOnlyList<ArchitectureFamilyAnalysis> AnalyzeFamilies(
         WorkspaceScanResult scanResult,
         RelevantPackContext relevantContext,
-        IReadOnlyList<ArchitectureTestSignal> signals)
+        IReadOnlyList<ArchitectureFamilyCandidate> families)
     {
-        var analyses = signals
-            .Select(signal => new ArchitectureTestAnalysis(
-                signal,
+        var analyses = families
+            .Select(family => new ArchitectureFamilyAnalysis(
+                family,
                 HighSignalSelectionSupport.Evaluate(
                     relevantContext.GoalProfile,
-                    BuildTextEvidence(signal),
-                    BuildEvidence(scanResult, relevantContext, signal))))
+                    BuildTextEvidence(family),
+                    BuildEvidence(scanResult, relevantContext, family))))
             .OrderByDescending(static analysis => analysis.Evaluation.Score)
-            .ThenBy(static analysis => analysis.Signal.FilePath, StringComparer.OrdinalIgnoreCase)
+            .ThenByDescending(static analysis => analysis.Family.TotalFileCount)
+            .ThenBy(static analysis => analysis.Family.Family, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         for (var index = 0; index < analyses.Length; index++)
@@ -127,16 +141,30 @@ internal sealed class ArchitectureTestPackSectionBuilder
         return analyses;
     }
 
-    private static IReadOnlyList<SectionTextEvidence> BuildTextEvidence(ArchitectureTestSignal signal) =>
+    private static SectionCompressionResult<ArchitectureFamilyAnalysis> CompressAnalyses(
+        IReadOnlyList<ArchitectureFamilyAnalysis> analyses)
+    {
+        var candidates = analyses
+            .Select(analysis => new SectionCompressionCandidate<ArchitectureFamilyAnalysis>(
+                analysis,
+                analysis.Family.Family,
+                analysis.Family.Family,
+                analysis.Evaluation,
+                IsWeakRoute: analysis.Family.TotalFileCount == 0))
+            .ToArray();
+        return SectionCompressionSupport.Compress(candidates, MaxArchitectureFamilies);
+    }
+
+    private static IReadOnlyList<SectionTextEvidence> BuildTextEvidence(ArchitectureFamilyCandidate family) =>
     [
-        new("test-file", [signal.FilePath]),
-        new("test-descriptor", signal.Descriptors)
+        new("test-family", [family.Family]),
+        new("test-file", family.RepresentativeFiles)
     ];
 
     private static SectionSignalEvidence BuildEvidence(
         WorkspaceScanResult scanResult,
         RelevantPackContext relevantContext,
-        ArchitectureTestSignal signal)
+        ArchitectureFamilyCandidate family)
     {
         var goalCategoryMatches =
             relevantContext.GoalProfile.HasCategory("architecture") || relevantContext.GoalProfile.HasCategory("system")
@@ -144,55 +172,63 @@ internal sealed class ArchitectureTestPackSectionBuilder
                 : 0;
 
         return new SectionSignalEvidence(
-            FileKindMatches: PackAnalysisHelpers.CountFileKindMatches(scanResult, [signal.FilePath], ScanFileKind.CSharp),
+            FileKindMatches: PackAnalysisHelpers.CountFileKindMatches(scanResult, family.RepresentativeFiles, ScanFileKind.CSharp),
             GoalCategoryMatches: goalCategoryMatches,
-            SemanticSignalCount: signal.Descriptors.Count,
-            DownstreamCount: 1);
+            SemanticSignalCount: family.TotalFileCount,
+            DownstreamCount: family.RepresentativeFiles.Count);
     }
 
     private static void AddDecisionTraces(
-        IReadOnlyList<ArchitectureTestAnalysis> analyses,
+        IReadOnlyList<ArchitectureFamilyAnalysis> analyses,
+        IReadOnlyDictionary<string, string> decisionKinds,
         ICollection<PackDecisionTrace> decisionTraces)
     {
         foreach (var analysis in analyses)
         {
-            var decisionKind = analysis.Evaluation.IsSelectable
-                ? "selected"
+            var decisionKind = decisionKinds.TryGetValue(analysis.Family.Family, out var resolvedDecision)
+                ? resolvedDecision
                 : "omitted-low-score";
             decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
                 "architecture-test-selection",
-                analysis.Signal.FilePath,
+                analysis.Family.Family,
                 decisionKind,
-                $"{analysis.Evaluation.ConfidenceLabel}: {Path.GetFileName(analysis.Signal.FilePath)}",
+                $"{analysis.Evaluation.ConfidenceLabel}: {analysis.Family.Family}",
                 analysis.Evaluation,
                 analysis.Rank,
                 analysis.CandidateCount));
         }
     }
 
-    private static IReadOnlyList<string> ExtractDescriptors(string path, string source)
+    private static IReadOnlyList<string> ExtractFamilies(string path, string source)
     {
-        var descriptors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        AddIfContains(path, source, descriptors, "Architecture");
-        AddIfContains(path, source, descriptors, "Golden");
-        AddIfContains(path, source, descriptors, "Regression");
-        AddIfContains(path, source, descriptors, "layer");
-        AddIfContains(path, source, descriptors, "dependency");
-        AddIfContains(path, source, descriptors, "Should");
-        return descriptors.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+        var families = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddFamilyIfContains(path, source, families, "Architecture", "Architecture");
+        AddFamilyIfContains(path, source, families, "Golden", "Golden");
+        AddFamilyIfContains(path, source, families, "Regression", "Regression");
+        AddFamilyIfContains(path, source, families, "Compatibility", "Compatibility");
+        if ((path.Contains("layer", StringComparison.OrdinalIgnoreCase)
+                || source.Contains("layer", StringComparison.OrdinalIgnoreCase)
+                || path.Contains("dependency", StringComparison.OrdinalIgnoreCase)
+                || source.Contains("dependency", StringComparison.OrdinalIgnoreCase))
+            && !families.Contains("Architecture"))
+        {
+            families.Add("Architecture");
+        }
+
+        return families.OrderBy(static family => family, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    private static void AddIfContains(string path, string source, ISet<string> descriptors, string token)
+    private static void AddFamilyIfContains(string path, string source, ISet<string> families, string token, string family)
     {
         if (path.Contains(token, StringComparison.OrdinalIgnoreCase)
             || source.Contains(token, StringComparison.OrdinalIgnoreCase))
         {
-            descriptors.Add(token);
+            families.Add(family);
         }
     }
 
-    private static string BuildSummary(IReadOnlyList<ArchitectureTestAnalysis> analyses) =>
-        $"Selected {analyses.Count} architecture test signals. {string.Join(" / ", analyses.Take(3).Select(static analysis => analysis.ToIndexLine()))}";
+    private static string BuildSummary(IReadOnlyList<ArchitectureFamilyAnalysis> analyses) =>
+        $"Representative test families: {string.Join(", ", analyses.Select(static analysis => analysis.Family.Family))}.";
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,
@@ -203,19 +239,23 @@ internal sealed class ArchitectureTestPackSectionBuilder
         return await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
     }
 
-    private sealed record ArchitectureTestSignal(
-        string FilePath,
-        IReadOnlyList<string> Descriptors);
+    private sealed record ArchitectureFamilyCandidate(
+        string Family,
+        IReadOnlyList<string> RepresentativeFiles,
+        int TotalFileCount);
 
-    private sealed record ArchitectureTestAnalysis(
-        ArchitectureTestSignal Signal,
+    private sealed record ArchitectureFamilyAnalysis(
+        ArchitectureFamilyCandidate Family,
         SectionSelectionEvaluation Evaluation)
     {
         internal int Rank { get; init; }
 
         internal int CandidateCount { get; init; }
 
-        internal string ToIndexLine() =>
-            $"{Evaluation.ConfidenceLabel}: {Path.GetFileName(Signal.FilePath)} -> {string.Join(" / ", Signal.Descriptors)}";
+        internal string ToIndexLine()
+        {
+            var samples = string.Join(", ", Family.RepresentativeFiles.Select(Path.GetFileName));
+            return $"{Evaluation.ConfidenceLabel}: {Family.Family} family ({samples})";
+        }
     }
 }

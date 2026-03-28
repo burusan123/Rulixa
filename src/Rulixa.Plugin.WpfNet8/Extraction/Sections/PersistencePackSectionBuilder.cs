@@ -7,6 +7,7 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal sealed class PersistencePackSectionBuilder
 {
+    private const int MaxPersistenceLines = 6;
     private readonly IWorkspaceFileSystem workspaceFileSystem;
     private readonly CSharpSnippetCandidateFactory snippetFactory;
 
@@ -32,11 +33,10 @@ internal sealed class PersistencePackSectionBuilder
     {
         var discovery = await DiscoverLinksAsync(workspaceRoot, scanResult, relevantContext, cancellationToken).ConfigureAwait(false);
         var analyses = AnalyzeLinks(scanResult, relevantContext, discovery.Links);
-        AddDecisionTraces(analyses, decisionTraces);
+        var compression = CompressAnalyses(analyses);
+        AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
-        var selected = analyses
-            .Where(static analysis => analysis.Evaluation.IsSelectable)
-            .ToArray();
+        var selected = compression.Selected.ToArray();
         if (selected.Length == 0)
         {
             AddUnknowns(relevantContext, discovery, analyses, unknowns, decisionTraces);
@@ -300,12 +300,13 @@ internal sealed class PersistencePackSectionBuilder
 
     private static void AddDecisionTraces(
         IReadOnlyList<PersistenceAnalysis> analyses,
+        IReadOnlyDictionary<string, string> decisionKinds,
         ICollection<PackDecisionTrace> decisionTraces)
     {
         foreach (var analysis in analyses)
         {
-            var decisionKind = analysis.Evaluation.IsSelectable
-                ? "selected"
+            var decisionKind = decisionKinds.TryGetValue(analysis.Link.Key, out var resolvedDecision)
+                ? resolvedDecision
                 : "omitted-low-score";
             decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
                 "persistence-selection",
@@ -316,6 +317,20 @@ internal sealed class PersistencePackSectionBuilder
                 analysis.Rank,
                 analysis.CandidateCount));
         }
+    }
+
+    private static SectionCompressionResult<PersistenceAnalysis> CompressAnalyses(IReadOnlyList<PersistenceAnalysis> analyses)
+    {
+        var candidates = analyses
+            .Select(analysis => new SectionCompressionCandidate<PersistenceAnalysis>(
+                analysis,
+                analysis.Link.Key,
+                BuildCanonicalKey(analysis.Link),
+                analysis.Evaluation,
+                IsUiBoundaryCandidate(analysis.Link),
+                IsSelfLoopCandidate(analysis.Link)))
+            .ToArray();
+        return SectionCompressionSupport.Compress(candidates, MaxPersistenceLines);
     }
 
     private static void AddUnknowns(
@@ -334,7 +349,7 @@ internal sealed class PersistencePackSectionBuilder
         {
             var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
                 "persistence.missing-owner",
-                "Persistence-related symbols were seen, but no high-confidence owner-to-persistence chain was resolved.",
+                "Persistence-related symbols were seen, but no representative owner-to-persistence boundary survived compression with strong evidence.",
                 null,
                 DiagnosticSeverity.Info,
                 discovery.AmbiguousCandidates.Concat(discovery.OwnerCandidates));
@@ -385,8 +400,29 @@ internal sealed class PersistencePackSectionBuilder
         }
     }
 
-    private static string BuildSummary(IReadOnlyList<PersistenceAnalysis> analyses) =>
-        $"Selected {analyses.Count} persistence chains. {string.Join(" / ", analyses.Take(3).Select(static analysis => analysis.ToIndexLine()))}";
+    private static string BuildSummary(IReadOnlyList<PersistenceAnalysis> analyses)
+    {
+        var families = analyses
+            .Select(static analysis => PackAnalysisHelpers.ClassifyPersistenceFamily(analysis.Link.PersistenceSymbol))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static family => family, StringComparer.Ordinal)
+            .ToArray();
+        return $"This screen crosses {analyses.Count} representative persistence boundaries: {string.Join(", ", families)}.";
+    }
+
+    private static string BuildCanonicalKey(PersistenceLink link) =>
+        string.Join(
+            "|",
+            link.RootSymbol,
+            PackAnalysisHelpers.ClassifyWorkflowFamily(link.OwnerSymbol),
+            PackAnalysisHelpers.ClassifyPersistenceFamily(link.PersistenceSymbol));
+
+    private static bool IsUiBoundaryCandidate(PersistenceLink link) =>
+        PackAnalysisHelpers.IsUiBoundaryLikeName(PackExtractionConventions.GetSimpleTypeName(link.OwnerSymbol))
+        || PackAnalysisHelpers.IsUiBoundaryLikeName(PackExtractionConventions.GetSimpleTypeName(link.PersistenceSymbol));
+
+    private static bool IsSelfLoopCandidate(PersistenceLink link) =>
+        PackAnalysisHelpers.HasSameTypeIdentity(link.OwnerSymbol, link.PersistenceSymbol);
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,

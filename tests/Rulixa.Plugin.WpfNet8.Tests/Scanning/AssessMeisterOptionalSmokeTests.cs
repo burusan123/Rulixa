@@ -64,6 +64,8 @@ public sealed class AssessMeisterOptionalSmokeTests
         Assert.Contains("SelectedItem", markdown, StringComparison.Ordinal);
         Assert.Contains("CurrentPage", markdown, StringComparison.Ordinal);
         Assert.Contains("project", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(pack, "Persistence"), 1, 6);
+        Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(pack, "Hub Objects"), 1, 3);
     }
 
     [OptionalAssessMeisterFact]
@@ -89,6 +91,15 @@ public sealed class AssessMeisterOptionalSmokeTests
             || ingredients.Indexes.SelectMany(static index => index.Lines).Any(line =>
                 line.Contains("WallAlgorithm", StringComparison.Ordinal)
                 || line.Contains("Algorithm", StringComparison.Ordinal)));
+        Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(ingredients, "Workflow"), 0, 6);
+        Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(ingredients, "Persistence"), 0, 6);
+        Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(ingredients, "Architecture Tests"), 0, 4);
+        Assert.DoesNotContain(
+            ingredients.Indexes.Where(index => index.Title is "Workflow" or "Persistence").SelectMany(static index => index.Lines),
+            line => line.Contains("IFileDialogService", StringComparison.Ordinal)
+                || line.Contains("IUserPromptService", StringComparison.Ordinal)
+                || line.Contains("FloorSettingsWindow", StringComparison.Ordinal)
+                || line.Contains("IDraftingOverlayRenderer", StringComparison.Ordinal));
     }
 }
 
@@ -114,4 +125,19 @@ public sealed class OptionalAssessMeisterFactAttribute : FactAttribute
             Skip = $"{AssessMeisterOptionalSmokeTests.EnableEnvironmentVariableName}=1 is required to run the optional smoke test.";
         }
     }
+}
+
+file static class AssessMeisterSmokeAssertions
+{
+    internal static int GetIndexLineCount(ContextPack contextPack, string title) =>
+        contextPack.Indexes
+            .Where(index => index.Title == title)
+            .SelectMany(static index => index.Lines)
+            .Count();
+
+    internal static int GetIndexLineCount(PackIngredients ingredients, string title) =>
+        ingredients.Indexes
+            .Where(index => index.Title == title)
+            .SelectMany(static index => index.Lines)
+            .Count();
 }

@@ -7,6 +7,7 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal sealed class ExternalAssetPackSectionBuilder
 {
+    private const int MaxExternalAssetLines = 3;
     private readonly IWorkspaceFileSystem workspaceFileSystem;
 
     internal ExternalAssetPackSectionBuilder(IWorkspaceFileSystem workspaceFileSystem)
@@ -27,11 +28,10 @@ internal sealed class ExternalAssetPackSectionBuilder
     {
         var usages = await DiscoverAssetsAsync(workspaceRoot, scanResult, relevantContext, cancellationToken).ConfigureAwait(false);
         var analyses = AnalyzeAssets(scanResult, relevantContext, usages);
-        AddDecisionTraces(analyses, decisionTraces);
+        var compression = CompressAnalyses(analyses);
+        AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
-        var selected = analyses
-            .Where(static analysis => analysis.Evaluation.IsSelectable)
-            .ToArray();
+        var selected = compression.Selected.ToArray();
         if (selected.Length == 0)
         {
             AddUnknowns(relevantContext, analyses, unknowns, decisionTraces);
@@ -118,7 +118,7 @@ internal sealed class ExternalAssetPackSectionBuilder
                     symbol,
                     filePath,
                     descriptors,
-                    descriptors.Any(static descriptor => descriptor is "File.Exists" or "Path.Combine")));
+                    HasResolutionCode(descriptors)));
             }
         }
 
@@ -187,12 +187,13 @@ internal sealed class ExternalAssetPackSectionBuilder
 
     private static void AddDecisionTraces(
         IReadOnlyList<ExternalAssetAnalysis> analyses,
+        IReadOnlyDictionary<string, string> decisionKinds,
         ICollection<PackDecisionTrace> decisionTraces)
     {
         foreach (var analysis in analyses)
         {
-            var decisionKind = analysis.Evaluation.IsSelectable
-                ? "selected"
+            var decisionKind = decisionKinds.TryGetValue(analysis.Usage.Key, out var resolvedDecision)
+                ? resolvedDecision
                 : "omitted-low-score";
             decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
                 "external-asset-selection",
@@ -203,6 +204,20 @@ internal sealed class ExternalAssetPackSectionBuilder
                 analysis.Rank,
                 analysis.CandidateCount));
         }
+    }
+
+    private static SectionCompressionResult<ExternalAssetAnalysis> CompressAnalyses(IReadOnlyList<ExternalAssetAnalysis> analyses)
+    {
+        var candidates = analyses
+            .Select(analysis => new SectionCompressionCandidate<ExternalAssetAnalysis>(
+                analysis,
+                analysis.Usage.Key,
+                analysis.Usage.AssetFamily,
+                analysis.Evaluation,
+                IsUiBoundary: PackAnalysisHelpers.IsUiBoundaryLikeName(analysis.Usage.OwnerDisplayName),
+                IsWeakRoute: !analysis.Usage.HasResolutionCode || string.Equals(analysis.Usage.AssetFamily, "other", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        return SectionCompressionSupport.Compress(candidates, MaxExternalAssetLines);
     }
 
     private static void AddUnknowns(
@@ -224,7 +239,7 @@ internal sealed class ExternalAssetPackSectionBuilder
 
         var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
             "external-asset.unresolved-source",
-            "External asset-like paths were found, but no high-confidence resolution code was detected.",
+            "External asset-like paths were found, but no representative asset-loading route could be confirmed from path resolution or file access code.",
             null,
             DiagnosticSeverity.Info,
             candidates);
@@ -249,7 +264,23 @@ internal sealed class ExternalAssetPackSectionBuilder
         AddIfContains(source, descriptors, ".template");
         AddIfContains(source, descriptors, "File.Exists");
         AddIfContains(source, descriptors, "Path.Combine");
+        AddIfContains(source, descriptors, "ReadAllText");
+        AddIfContains(source, descriptors, "ReadAllBytes");
+        AddIfContains(source, descriptors, "OpenRead");
+        AddIfContains(source, descriptors, "OpenText");
+        AddIfContains(source, descriptors, "GetManifestResourceStream");
         return descriptors.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static bool HasResolutionCode(IReadOnlyList<string> descriptors)
+    {
+        var descriptorSet = descriptors.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return descriptorSet.Contains("Path.Combine")
+            || descriptorSet.Contains("ReadAllText")
+            || descriptorSet.Contains("ReadAllBytes")
+            || descriptorSet.Contains("OpenRead")
+            || descriptorSet.Contains("OpenText")
+            || descriptorSet.Contains("GetManifestResourceStream");
     }
 
     private static void AddIfContains(string source, ISet<string> descriptors, string token)
@@ -261,7 +292,7 @@ internal sealed class ExternalAssetPackSectionBuilder
     }
 
     private static string BuildSummary(IReadOnlyList<ExternalAssetAnalysis> analyses) =>
-        $"Selected {analyses.Count} external asset access points. {string.Join(" / ", analyses.Take(3).Select(static analysis => analysis.ToIndexLine()))}";
+        $"Representative external asset families: {string.Join(", ", analyses.Select(static analysis => analysis.Usage.AssetFamily))}.";
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,
@@ -281,6 +312,8 @@ internal sealed class ExternalAssetPackSectionBuilder
         internal string Key => $"{OwnerSymbol}|{FilePath}|{string.Join("|", Descriptors)}";
 
         internal string OwnerDisplayName => PackExtractionConventions.GetSimpleTypeName(OwnerSymbol);
+
+        internal string AssetFamily => PackAnalysisHelpers.ClassifyAssetFamily(Descriptors);
     }
 
     private sealed record ExternalAssetAnalysis(

@@ -7,6 +7,7 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal sealed class HubObjectPackSectionBuilder
 {
+    private const int MaxHubObjectLines = 3;
     private readonly IWorkspaceFileSystem workspaceFileSystem;
     private readonly CSharpSnippetCandidateFactory snippetFactory;
 
@@ -33,11 +34,10 @@ internal sealed class HubObjectPackSectionBuilder
         var hubObjects = await DiscoverHubObjectsAsync(workspaceRoot, scanResult, relevantContext, cancellationToken)
             .ConfigureAwait(false);
         var analyses = AnalyzeHubObjects(scanResult, relevantContext, hubObjects);
-        AddDecisionTraces(analyses, decisionTraces);
+        var compression = CompressAnalyses(analyses);
+        AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
-        var selected = analyses
-            .Where(static analysis => analysis.Evaluation.IsSelectable)
-            .ToArray();
+        var selected = compression.Selected.ToArray();
         if (selected.Length == 0)
         {
             AddUnknowns(relevantContext, analyses, unknowns, decisionTraces);
@@ -204,12 +204,13 @@ internal sealed class HubObjectPackSectionBuilder
 
     private static void AddDecisionTraces(
         IReadOnlyList<HubObjectAnalysis> analyses,
+        IReadOnlyDictionary<string, string> decisionKinds,
         ICollection<PackDecisionTrace> decisionTraces)
     {
         foreach (var analysis in analyses)
         {
-            var decisionKind = analysis.Evaluation.IsSelectable
-                ? "selected"
+            var decisionKind = decisionKinds.TryGetValue(analysis.Candidate.Symbol, out var resolvedDecision)
+                ? resolvedDecision
                 : "omitted-low-score";
             decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
                 "hub-object-selection",
@@ -220,6 +221,20 @@ internal sealed class HubObjectPackSectionBuilder
                 analysis.Rank,
                 analysis.CandidateCount));
         }
+    }
+
+    private static SectionCompressionResult<HubObjectAnalysis> CompressAnalyses(IReadOnlyList<HubObjectAnalysis> analyses)
+    {
+        var candidates = analyses
+            .Select(analysis => new SectionCompressionCandidate<HubObjectAnalysis>(
+                analysis,
+                analysis.Candidate.Symbol,
+                PackAnalysisHelpers.ClassifyHubObjectFamily(analysis.Candidate.Symbol),
+                analysis.Evaluation,
+                IsSelfLoop: false,
+                IsWeakRoute: analysis.Candidate.Signals.Count < 2))
+            .ToArray();
+        return SectionCompressionSupport.Compress(candidates, MaxHubObjectLines);
     }
 
     private static void AddUnknowns(
@@ -234,7 +249,7 @@ internal sealed class HubObjectPackSectionBuilder
         }
 
         var weakCandidates = analyses
-            .Where(static analysis => analysis.Candidate.Signals.Count == 0)
+            .Where(static analysis => analysis.Candidate.Signals.Count < 2)
             .Select(static analysis => analysis.Candidate.Symbol)
             .ToArray();
         if (weakCandidates.Length == 0)
@@ -244,7 +259,7 @@ internal sealed class HubObjectPackSectionBuilder
 
         var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
             "hub-object.weak-signal",
-            "Hub-object-like symbols were found, but they did not expose dirty state, snapshot, or identity management signals strongly enough.",
+            "Hub-object-like symbols were found, but they did not expose enough shared-state signals to become representative map anchors.",
             null,
             DiagnosticSeverity.Info,
             weakCandidates);
@@ -331,7 +346,7 @@ internal sealed class HubObjectPackSectionBuilder
     }
 
     private static string BuildSummary(IReadOnlyList<HubObjectAnalysis> analyses) =>
-        $"Selected {analyses.Count} hub objects. {string.Join(" / ", analyses.Take(3).Select(static analysis => analysis.ToIndexLine()))}";
+        $"Representative shared-state anchors: {string.Join(", ", analyses.Select(static analysis => analysis.Candidate.DisplayName))}.";
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,

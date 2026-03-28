@@ -8,6 +8,7 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal sealed class WorkflowPackSectionBuilder
 {
+    private const int MaxWorkflowLines = 6;
     private readonly IWorkspaceFileSystem workspaceFileSystem;
     private readonly CSharpSnippetCandidateFactory snippetFactory;
 
@@ -40,11 +41,10 @@ internal sealed class WorkflowPackSectionBuilder
                 cancellationToken)
             .ConfigureAwait(false);
         var analyses = AnalyzeCandidates(scanResult, relevantContext, discovery.Candidates);
-        AddDecisionTraces(analyses, decisionTraces);
+        var compression = CompressAnalyses(analyses);
+        AddDecisionTraces(analyses, compression.DecisionKinds, decisionTraces);
 
-        var selected = analyses
-            .Where(static analysis => analysis.Evaluation.IsSelectable)
-            .ToArray();
+        var selected = compression.Selected.ToArray();
 
         if (selected.Length == 0)
         {
@@ -327,12 +327,13 @@ internal sealed class WorkflowPackSectionBuilder
 
     private static void AddDecisionTraces(
         IReadOnlyList<WorkflowAnalysis> analyses,
+        IReadOnlyDictionary<string, string> decisionKinds,
         ICollection<PackDecisionTrace> decisionTraces)
     {
         foreach (var analysis in analyses)
         {
-            var decisionKind = analysis.Evaluation.IsSelectable
-                ? "selected"
+            var decisionKind = decisionKinds.TryGetValue(analysis.Candidate.Key, out var resolvedDecision)
+                ? resolvedDecision
                 : analysis.Evaluation.Evidence.HasAmbiguousCandidates
                     ? "omitted-ambiguous"
                     : "omitted-low-score";
@@ -348,6 +349,21 @@ internal sealed class WorkflowPackSectionBuilder
         }
     }
 
+    private static SectionCompressionResult<WorkflowAnalysis> CompressAnalyses(IReadOnlyList<WorkflowAnalysis> analyses)
+    {
+        var candidates = analyses
+            .Select(analysis => new SectionCompressionCandidate<WorkflowAnalysis>(
+                analysis,
+                analysis.Candidate.Key,
+                BuildCanonicalKey(analysis.Candidate),
+                analysis.Evaluation,
+                IsUiBoundaryCandidate(analysis.Candidate),
+                IsSelfLoopCandidate(analysis.Candidate),
+                analysis.Candidate.NextSymbols.Count == 0))
+            .ToArray();
+        return SectionCompressionSupport.Compress(candidates, MaxWorkflowLines);
+    }
+
     private static void AddUnknowns(
         RelevantPackContext relevantContext,
         WorkflowDiscoveryResult discovery,
@@ -359,7 +375,7 @@ internal sealed class WorkflowPackSectionBuilder
         {
             var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
                 "workflow.ambiguous-target",
-                "Workflow candidates were found, but at least one downstream target was ambiguous.",
+                "Workflow owner candidates were found, but at least one downstream target could not be resolved to a single symbol.",
                 null,
                 DiagnosticSeverity.Info,
                 discovery.AmbiguousTargets);
@@ -378,7 +394,7 @@ internal sealed class WorkflowPackSectionBuilder
         {
             var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
                 "workflow.missing-downstream",
-                "Workflow owner was found, but no downstream service or persistence symbol was resolved within two hops.",
+                "Workflow owners were found, but the route stopped before reaching persistence, hub state, or algorithm symbols within two hops.",
                 null,
                 DiagnosticSeverity.Info,
                 discovery.MissingDownstreamCandidates);
@@ -429,8 +445,37 @@ internal sealed class WorkflowPackSectionBuilder
         }
     }
 
-    private static string BuildSummary(IReadOnlyList<WorkflowAnalysis> analyses) =>
-        $"Selected {analyses.Count} workflow chains. {string.Join(" / ", analyses.Take(3).Select(static analysis => analysis.ToIndexLine()))}";
+    private static string BuildSummary(IReadOnlyList<WorkflowAnalysis> analyses)
+    {
+        var downstreamFamilies = analyses
+            .Select(static analysis => PackAnalysisHelpers.ClassifyDownstreamFamily(analysis.Candidate.NextSymbols))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static family => family, StringComparer.Ordinal)
+            .ToArray();
+        return $"This screen routes work through {analyses.Count} representative chains toward {string.Join(", ", downstreamFamilies)}.";
+    }
+
+    private static string BuildCanonicalKey(WorkflowCandidate candidate) =>
+        string.Join(
+            "|",
+            candidate.RootSymbol,
+            PackAnalysisHelpers.ClassifyWorkflowFamily(candidate.FirstHopSymbol),
+            PackAnalysisHelpers.ClassifyDownstreamFamily(candidate.NextSymbols));
+
+    private static bool IsUiBoundaryCandidate(WorkflowCandidate candidate)
+    {
+        if (PackAnalysisHelpers.IsUiBoundaryLikeName(PackExtractionConventions.GetSimpleTypeName(candidate.FirstHopSymbol)))
+        {
+            return true;
+        }
+
+        return candidate.NextSymbols.All(symbol =>
+            PackAnalysisHelpers.IsUiBoundaryLikeName(PackExtractionConventions.GetSimpleTypeName(symbol)));
+    }
+
+    private static bool IsSelfLoopCandidate(WorkflowCandidate candidate) =>
+        PackAnalysisHelpers.HasSameTypeIdentity(candidate.RootSymbol, candidate.FirstHopSymbol)
+        || candidate.NextSymbols.Any(symbol => PackAnalysisHelpers.HasSameTypeIdentity(candidate.FirstHopSymbol, symbol));
 
     private static string? TryExtractTypeSymbol(DirectCommandImpact impact)
     {

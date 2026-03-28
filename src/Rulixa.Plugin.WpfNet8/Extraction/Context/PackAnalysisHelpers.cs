@@ -99,6 +99,17 @@ internal static class PackAnalysisHelpers
         || simpleName.EndsWith("Adapter", StringComparison.Ordinal)
         || IsPersistenceLikeName(simpleName);
 
+    internal static bool IsUiBoundaryLikeName(string simpleName) =>
+        simpleName.EndsWith("Window", StringComparison.Ordinal)
+        || simpleName.EndsWith("View", StringComparison.Ordinal)
+        || simpleName.EndsWith("Dialog", StringComparison.Ordinal)
+        || simpleName.EndsWith("Renderer", StringComparison.Ordinal)
+        || simpleName.EndsWith("Overlay", StringComparison.Ordinal)
+        || simpleName.Contains("FileDialog", StringComparison.Ordinal)
+        || simpleName.Contains("Prompt", StringComparison.Ordinal)
+        || simpleName.Contains("ErrorMessage", StringComparison.Ordinal)
+        || simpleName.Contains("UiPort", StringComparison.Ordinal);
+
     internal static bool IsHubObjectLikeName(string simpleName) =>
         simpleName.EndsWith("Document", StringComparison.Ordinal)
         || simpleName.EndsWith("State", StringComparison.Ordinal)
@@ -113,6 +124,212 @@ internal static class PackAnalysisHelpers
         || source.Contains("RestoreFromSnapshot", StringComparison.Ordinal)
         || source.Contains("MarkDirty", StringComparison.Ordinal)
         || source.Contains("MarkSaved", StringComparison.Ordinal);
+
+    internal static string NormalizeTypeIdentity(string symbolOrName)
+    {
+        var simpleName = PackExtractionConventions.GetSimpleTypeName(symbolOrName);
+        return simpleName.Length > 1 && simpleName[0] == 'I' && char.IsUpper(simpleName[1])
+            ? simpleName[1..]
+            : simpleName;
+    }
+
+    internal static bool HasSameTypeIdentity(string left, string right) =>
+        string.Equals(
+            NormalizeTypeIdentity(left),
+            NormalizeTypeIdentity(right),
+            StringComparison.OrdinalIgnoreCase);
+
+    internal static string ClassifyWorkflowFamily(string symbolOrName)
+    {
+        var simpleName = PackExtractionConventions.GetSimpleTypeName(symbolOrName);
+        if (IsUiBoundaryLikeName(simpleName))
+        {
+            return "ui";
+        }
+
+        if (simpleName.EndsWith("UseCase", StringComparison.Ordinal))
+        {
+            return "use-case";
+        }
+
+        if (simpleName.EndsWith("Workflow", StringComparison.Ordinal))
+        {
+            return "workflow";
+        }
+
+        if (simpleName.EndsWith("Service", StringComparison.Ordinal))
+        {
+            return "service";
+        }
+
+        if (simpleName.EndsWith("Adapter", StringComparison.Ordinal))
+        {
+            return "adapter";
+        }
+
+        if (simpleName.EndsWith("Port", StringComparison.Ordinal))
+        {
+            return "port";
+        }
+
+        if (simpleName.EndsWith("Loader", StringComparison.Ordinal))
+        {
+            return "loader";
+        }
+
+        if (simpleName.EndsWith("Query", StringComparison.Ordinal))
+        {
+            return "query";
+        }
+
+        if (simpleName.EndsWith("Repository", StringComparison.Ordinal))
+        {
+            return "repository";
+        }
+
+        if (simpleName.EndsWith("Saver", StringComparison.Ordinal))
+        {
+            return "saver";
+        }
+
+        if (simpleName.EndsWith("Store", StringComparison.Ordinal))
+        {
+            return "store";
+        }
+
+        if (simpleName.Contains("Settings", StringComparison.Ordinal))
+        {
+            return "settings";
+        }
+
+        return "other";
+    }
+
+    internal static string ClassifyPersistenceFamily(string symbolOrName)
+    {
+        var simpleName = PackExtractionConventions.GetSimpleTypeName(symbolOrName);
+        if (simpleName.EndsWith("Repository", StringComparison.Ordinal))
+        {
+            return "repository";
+        }
+
+        if (simpleName.EndsWith("Query", StringComparison.Ordinal))
+        {
+            return "query";
+        }
+
+        if (simpleName.EndsWith("Saver", StringComparison.Ordinal))
+        {
+            return "saver";
+        }
+
+        if (simpleName.EndsWith("Store", StringComparison.Ordinal))
+        {
+            return "store";
+        }
+
+        if (simpleName.Contains("Settings", StringComparison.Ordinal))
+        {
+            return "settings";
+        }
+
+        return "other";
+    }
+
+    internal static string ClassifyHubObjectFamily(string symbolOrName)
+    {
+        var simpleName = PackExtractionConventions.GetSimpleTypeName(symbolOrName);
+        if (simpleName.EndsWith("Document", StringComparison.Ordinal))
+        {
+            return "document";
+        }
+
+        if (simpleName.EndsWith("Session", StringComparison.Ordinal))
+        {
+            return "session";
+        }
+
+        if (simpleName.EndsWith("State", StringComparison.Ordinal))
+        {
+            return "state";
+        }
+
+        if (simpleName.EndsWith("Context", StringComparison.Ordinal))
+        {
+            return "context";
+        }
+
+        if (simpleName.EndsWith("Workspace", StringComparison.Ordinal))
+        {
+            return "workspace";
+        }
+
+        return "other";
+    }
+
+    internal static string ClassifyAssetFamily(IEnumerable<string> descriptors)
+    {
+        var descriptorSet = descriptors.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (descriptorSet.Contains(".onnx"))
+        {
+            return "onnx-model";
+        }
+
+        if (descriptorSet.Contains(".xlsx"))
+        {
+            return "excel";
+        }
+
+        if (descriptorSet.Contains(".json"))
+        {
+            return "json";
+        }
+
+        if (descriptorSet.Contains(".pdf"))
+        {
+            return "pdf";
+        }
+
+        if (descriptorSet.Contains(".template"))
+        {
+            return "template";
+        }
+
+        return "other";
+    }
+
+    internal static string ClassifyDownstreamFamily(IEnumerable<string> symbols)
+    {
+        var familySet = symbols
+            .Select(ClassifySingleDownstreamFamily)
+            .Where(static family => family != "other")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (familySet.Length == 0)
+        {
+            return "none";
+        }
+
+        var priority = new[]
+        {
+            "algorithm",
+            "analyzer",
+            "persistence",
+            "hub-object",
+            "settings",
+            "workflow",
+            "ui"
+        };
+        foreach (var family in priority)
+        {
+            if (familySet.Contains(family, StringComparer.OrdinalIgnoreCase))
+            {
+                return family;
+            }
+        }
+
+        return familySet[0];
+    }
 
     internal static PartialSymbolAggregate? ResolveAggregate(
         WorkspaceScanResult scanResult,
@@ -172,6 +389,43 @@ internal static class PackAnalysisHelpers
             .Select(path => scanResult.Files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase)))
             .Where(static file => file is not null)
             .Count(file => expected.Contains(file!.Kind));
+    }
+
+    private static string ClassifySingleDownstreamFamily(string symbolOrName)
+    {
+        var simpleName = PackExtractionConventions.GetSimpleTypeName(symbolOrName);
+        if (IsUiBoundaryLikeName(simpleName))
+        {
+            return "ui";
+        }
+
+        if (simpleName.EndsWith("AlgorithmRunner", StringComparison.Ordinal)
+            || simpleName.EndsWith("Algorithm", StringComparison.Ordinal))
+        {
+            return "algorithm";
+        }
+
+        if (simpleName.EndsWith("Analyzer", StringComparison.Ordinal))
+        {
+            return "analyzer";
+        }
+
+        if (IsPersistenceLikeName(simpleName))
+        {
+            return simpleName.Contains("Settings", StringComparison.Ordinal) ? "settings" : "persistence";
+        }
+
+        if (IsHubObjectLikeName(simpleName))
+        {
+            return "hub-object";
+        }
+
+        if (IsWorkflowLikeName(simpleName))
+        {
+            return "workflow";
+        }
+
+        return "other";
     }
 
     private static string? TryExtractConstructorParameterList(string source, string className)
