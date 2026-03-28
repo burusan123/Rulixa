@@ -1,21 +1,23 @@
 # Phase 1
 
-このフォルダは、`Rulixa` の Phase 1 仕様をまとめた入口です。  
-現在の Phase 1 は `Windows` 上の `WPF + .NET 8` アプリケーションを対象に、AI 用の最小 Context Pack を決定的に生成することを目的にしています。
+このフォルダは `Rulixa` の Phase 1 仕様をまとめた入口です。
 
-## 現在の到達点
+Phase 1 は `Windows` 上の `WPF + .NET 8` アプリケーションを対象に、AI が変更作業を始めるための最小 Context Pack をローカルで生成することを目的にします。
 
-- `Rulixa.Domain`、`Rulixa.Application`、`Rulixa.Infrastructure`、`Rulixa.Plugin.WpfNet8`、`Rulixa.Cli` の 5 プロジェクト構成で実装済みです。
-- CLI として `scan`、`resolve-entry`、`pack` を提供しています。
-- `entry=file` と `entry=symbol` の両方に対応しています。
-- `AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` を起点にした Pack 生成で、Shell 周辺の必須ファイルだけを優先して選定できます。
+## 現在の実装範囲
 
-## 主なドキュメント
+- `Rulixa.Domain`、`Rulixa.Application`、`Rulixa.Infrastructure`、`Rulixa.Plugin.WpfNet8`、`Rulixa.Cli` の 5 プロジェクト構成
+- CLI の `scan`、`resolve-entry`、`pack`
+- `entry=file` と `entry=symbol` の両対応
+- `AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` を主対象にした Pack 生成
+- `SelectedItem` / `CurrentPage` の binding と、ViewModel 側更新点の抽出
+
+## 読む順番
 
 - [scope.md](scope.md)
-  Phase 1 の対象範囲と非対象範囲
+  Phase 1 の対象と非対象
 - [architecture.md](architecture.md)
-  Frontend / Core 分離とプロジェクト構成
+  Frontend / Core 分離とプロジェクト分割
 - [ir.md](ir.md)
   Phase 1 の IR 定義
 - [entry_resolution.md](entry_resolution.md)
@@ -25,7 +27,7 @@
 - [context_pack_rules.md](context_pack_rules.md)
   Context Pack の選定ルール
 - [implementation_plan.md](implementation_plan.md)
-  Phase 1 の実装順序
+  実装状況と改善バックログ
 - [examples/assessmeister_shell_pack_example.md](examples/assessmeister_shell_pack_example.md)
   `AssessMeister` を題材にした Pack 例
 

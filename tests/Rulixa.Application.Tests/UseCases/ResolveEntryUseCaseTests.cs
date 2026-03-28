@@ -42,6 +42,7 @@ public sealed class ResolveEntryUseCaseTests
             [],
             [],
             [],
+            [],
             []);
 
         var actual = await useCase.ExecuteAsync(
@@ -59,6 +60,7 @@ public sealed class ResolveEntryUseCaseTests
             "D:/workspace",
             DateTimeOffset.UtcNow,
             new ProjectSummary([], [], ["net8.0-windows"], true, [], []),
+            [],
             [],
             [],
             [],

@@ -54,15 +54,33 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         var secondaryBindings = relevantBindings
             .Where(static binding => binding.BindingKind == ViewModelBindingKind.DataTemplate)
             .ToArray();
+        var relevantTransitions = FindRelevantTransitions(scanResult, resolvedEntry, relevantBindings);
 
         AddStartupContracts(scanResult, contracts, fileCandidates);
         AddDependencyInjectionContracts(scanResult, contracts, fileCandidates);
         AddBindingContracts(scanResult, primaryBindings, true, contracts, fileCandidates);
         AddBindingContracts(scanResult, secondaryBindings, false, contracts, fileCandidates);
         AddConventionalViewFiles(scanResult, resolvedEntry, fileCandidates);
-        await AddNavigationContractsAsync(workspaceRoot, scanResult, resolvedEntry, relevantBindings, contracts, indexes, fileCandidates, cancellationToken).ConfigureAwait(false);
+        await AddNavigationContractsAsync(
+                workspaceRoot,
+                scanResult,
+                resolvedEntry,
+                relevantBindings,
+                relevantTransitions,
+                contracts,
+                indexes,
+                fileCandidates,
+                cancellationToken)
+            .ConfigureAwait(false);
         AddCommandContracts(scanResult, resolvedEntry, contracts, fileCandidates);
-        await AddReachableDialogContractsAsync(workspaceRoot, scanResult, resolvedEntry, contracts, fileCandidates, cancellationToken).ConfigureAwait(false);
+        await AddReachableDialogContractsAsync(
+                workspaceRoot,
+                scanResult,
+                resolvedEntry,
+                contracts,
+                fileCandidates,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         indexes.Add(BuildStartupIndex(scanResult));
         indexes.Add(BuildViewModelIndex(relevantBindings));
@@ -94,6 +112,34 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 || string.Equals(binding.ViewModelSymbol, resolvedEntry.Symbol, StringComparison.OrdinalIgnoreCase))
             .OrderBy(static binding => binding.BindingKind)
             .ThenBy(static binding => binding.ViewPath, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<NavigationTransition> FindRelevantTransitions(
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry,
+        IReadOnlyList<ViewModelBinding> relevantBindings)
+    {
+        var relevantSymbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(resolvedEntry.Symbol))
+        {
+            relevantSymbols.Add(resolvedEntry.Symbol);
+        }
+
+        foreach (var binding in relevantBindings)
+        {
+            if (!string.IsNullOrWhiteSpace(binding.ViewModelSymbol))
+            {
+                relevantSymbols.Add(binding.ViewModelSymbol);
+            }
+        }
+
+        return scanResult.NavigationTransitions
+            .Where(transition =>
+                relevantSymbols.Contains(transition.ViewModelSymbol)
+                || string.Equals(transition.SourceFilePath, resolvedEntry.ResolvedPath, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static transition => transition.SourceFilePath, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(static transition => transition.StartLine)
             .ToArray();
     }
 
@@ -167,7 +213,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             var title = binding.BindingKind switch
             {
                 ViewModelBindingKind.RootDataContext => "ルート DataContext",
-                ViewModelBindingKind.ViewDataContext => "code-behind DataContext",
+                ViewModelBindingKind.ViewDataContext => "View DataContext",
                 ViewModelBindingKind.DataTemplate => "DataTemplate",
                 _ => binding.BindingKind.ToString()
             };
@@ -179,8 +225,9 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 ViewModelBindingKind.ViewDataContext =>
                     $"{Path.GetFileName(binding.SourcePath)} が {binding.ViewPath} の DataContext に {binding.ViewModelSymbol} を設定します。",
                 ViewModelBindingKind.DataTemplate =>
-                    $"{binding.ViewPath} が {binding.ViewModelSymbol} の DataTemplate を定義します。",
-                _ => $"{binding.ViewPath} が {binding.ViewModelSymbol} に対応します。"
+                    $"{binding.ViewPath} は {binding.ViewModelSymbol} 向けの DataTemplate を定義します。",
+                _ =>
+                    $"{binding.ViewPath} は {binding.ViewModelSymbol} に対応します。"
             };
 
             contracts.Add(new Contract(
@@ -206,7 +253,11 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             };
 
             fileCandidates.Add(new FileSelectionCandidate(binding.ViewPath, reason, priority, required));
-            fileCandidates.Add(new FileSelectionCandidate(binding.SourcePath, sourceReason, priority + 5, required && binding.BindingKind != ViewModelBindingKind.RootDataContext));
+            fileCandidates.Add(new FileSelectionCandidate(
+                binding.SourcePath,
+                sourceReason,
+                priority + 5,
+                required && binding.BindingKind != ViewModelBindingKind.RootDataContext));
 
             var viewModelFile = scanResult.Symbols.FirstOrDefault(symbol =>
                 string.Equals(symbol.QualifiedName, binding.ViewModelSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
@@ -280,6 +331,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         WorkspaceScanResult scanResult,
         ResolvedEntry resolvedEntry,
         IReadOnlyList<ViewModelBinding> relevantBindings,
+        IReadOnlyList<NavigationTransition> relevantTransitions,
         ICollection<Contract> contracts,
         ICollection<IndexSection> indexes,
         ICollection<FileSelectionCandidate> fileCandidates,
@@ -299,13 +351,43 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             }
 
             navigationBindings.Add(navigationBinding);
-            contracts.Add(BuildNavigationContract(resolvedEntry, navigationBinding));
+            contracts.Add(BuildNavigationBindingContract(resolvedEntry, navigationBinding));
             fileCandidates.Add(new FileSelectionCandidate(viewPath, "navigation-view", 8, true));
         }
 
         if (navigationBindings.Count > 0)
         {
             indexes.Add(BuildNavigationIndex(navigationBindings));
+        }
+
+        var transitionGroups = relevantTransitions
+            .GroupBy(static transition => new { transition.ViewModelSymbol, transition.SourceFilePath, transition.UpdateMethodName })
+            .OrderBy(static group => group.Key.SourceFilePath, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(static group => group.Min(transition => transition.StartLine))
+            .ToArray();
+
+        foreach (var transitionGroup in transitionGroups)
+        {
+            var firstTransition = transitionGroup.First();
+            var expressions = transitionGroup
+                .Select(static transition => transition.UpdateExpressionSummary)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var summary = $"{firstTransition.ViewModelSymbol}.{firstTransition.UpdateMethodName}(...) が {string.Join("、", expressions)} を実行します。";
+
+            contracts.Add(new Contract(
+                ContractKind.Navigation,
+                "ViewModel 更新点",
+                summary,
+                [firstTransition.SourceFilePath],
+                BuildTransitionSymbols(firstTransition, expressions)));
+
+            fileCandidates.Add(new FileSelectionCandidate(firstTransition.SourceFilePath, "navigation-update", -1, true));
+        }
+
+        if (relevantTransitions.Count > 0)
+        {
+            indexes.Add(BuildNavigationUpdateIndex(relevantTransitions));
         }
     }
 
@@ -348,7 +430,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             .ToArray();
     }
 
-    private static Contract BuildNavigationContract(ResolvedEntry resolvedEntry, NavigationBinding binding)
+    private static Contract BuildNavigationBindingContract(ResolvedEntry resolvedEntry, NavigationBinding binding)
     {
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(binding.ItemsSourceProperty))
@@ -366,11 +448,11 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             parts.Add($"表示コンテンツを {binding.ContentProperty} にバインド");
         }
 
-        var summary = $"{binding.ViewPath} では {string.Join("、", parts)} してページ切り替えを行います。";
+        var summary = $"{binding.ViewPath} では {string.Join("、", parts)} してページ切り替えを表現します。";
 
         return new Contract(
             ContractKind.Navigation,
-            "選択と表示の切り替え",
+            "一覧・選択・表示の対応",
             summary,
             [binding.ViewPath],
             BuildNavigationSymbols(resolvedEntry, binding));
@@ -399,6 +481,30 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             symbols.Add(binding.ContentProperty);
         }
 
+        return symbols;
+    }
+
+    private static IReadOnlyList<string> BuildTransitionSymbols(
+        NavigationTransition transition,
+        IReadOnlyList<string> expressions)
+    {
+        var symbols = new List<string>
+        {
+            transition.ViewModelSymbol,
+            transition.UpdateMethodName
+        };
+
+        if (!string.IsNullOrWhiteSpace(transition.SelectedItemPropertyName))
+        {
+            symbols.Add(transition.SelectedItemPropertyName);
+        }
+
+        if (!string.IsNullOrWhiteSpace(transition.CurrentPagePropertyName))
+        {
+            symbols.Add(transition.CurrentPagePropertyName);
+        }
+
+        symbols.AddRange(expressions);
         return symbols;
     }
 
@@ -522,6 +628,13 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                     $"{binding.ViewPath}: Items={binding.ItemsSourceProperty ?? "-"}, SelectedItem={binding.SelectedItemProperty ?? "-"}, Content={binding.ContentProperty ?? "-"}")
                 .ToArray());
 
+    private static IndexSection BuildNavigationUpdateIndex(IReadOnlyList<NavigationTransition> transitions) =>
+        new(
+            "ナビゲーション更新点",
+            transitions.Select(transition =>
+                    $"{transition.ViewModelSymbol}.{transition.UpdateMethodName}(...) -> {transition.UpdateExpressionSummary} (line: {transition.StartLine})")
+                .ToArray());
+
     private static IndexSection BuildCommandIndex(WorkspaceScanResult scanResult, ResolvedEntry resolvedEntry) =>
         new(
             "コマンド",
@@ -535,7 +648,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
     private static string DescribeBindingKind(ViewModelBindingKind bindingKind) => bindingKind switch
     {
         ViewModelBindingKind.RootDataContext => "ルート DataContext",
-        ViewModelBindingKind.ViewDataContext => "code-behind DataContext",
+        ViewModelBindingKind.ViewDataContext => "View DataContext",
         ViewModelBindingKind.DataTemplate => "DataTemplate",
         _ => bindingKind.ToString()
     };

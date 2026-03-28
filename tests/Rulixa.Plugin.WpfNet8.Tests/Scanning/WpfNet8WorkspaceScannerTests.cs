@@ -30,6 +30,13 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains(result.ViewModelBindings, binding =>
             binding.ViewPath.EndsWith("Views/ShellView.xaml", StringComparison.Ordinal)
             && binding.BindingKind == ViewModelBindingKind.DataTemplate);
+        Assert.Contains(result.NavigationTransitions, transition =>
+            transition.ViewModelSymbol.EndsWith(".ShellViewModel", StringComparison.Ordinal)
+            && transition.UpdateMethodName == "Select"
+            && transition.UpdateExpressionSummary == "CurrentPage = item.PageViewModel");
+        Assert.Contains(result.NavigationTransitions, transition =>
+            transition.UpdateExpressionSummary == "SelectedItem = match"
+            && transition.StartLine > 0);
         Assert.Contains(result.Commands, command => command.PropertyName == "OpenSettingsCommand");
         Assert.Contains(result.ServiceRegistrations, registration => registration.ServiceType == "ShellViewModel");
         Assert.Contains(result.WindowActivations, activation => activation.WindowSymbol == "SettingWindow");
@@ -86,7 +93,8 @@ public sealed class WpfNet8WorkspaceScannerTests
             scanResult,
             Budget.Default);
 
-        var selectedPaths = pack.SelectedFiles.Select(static file => file.Path).ToArray();
+        var selectedFiles = pack.SelectedFiles.ToArray();
+        var selectedPaths = selectedFiles.Select(static file => file.Path).ToArray();
 
         Assert.Contains("src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
@@ -96,11 +104,14 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains("src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
         Assert.DoesNotContain(selectedPaths, path => path.Contains("/Pages/", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(selectedFiles, file =>
+            file.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+            && file.Reason == "navigation-update");
         Assert.True(pack.SelectedFiles.Count <= 8);
     }
 
     [Fact]
-    public async Task ExtractAsync_ForShellViewModelSymbol_AddsNavigationContract()
+    public async Task ExtractAsync_ForShellViewModelSymbol_AddsNavigationContractAndUpdateIndex()
     {
         var fileSystem = new WorkspaceFileSystem();
         var scanner = new WpfNet8WorkspaceScanner(fileSystem);
@@ -116,10 +127,19 @@ public sealed class WpfNet8WorkspaceScannerTests
             contract.Kind == ContractKind.Navigation
             && contract.Summary.Contains("SelectedItem", StringComparison.Ordinal)
             && contract.Summary.Contains("CurrentPage", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.Navigation
+            && contract.Summary.Contains(".Select(...)", StringComparison.Ordinal)
+            && contract.Summary.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
         Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "ナビゲーション"
+            index.Title == "ナビゲーション更新点"
             && index.Lines.Any(line =>
-                line.Contains("SelectedItem=SelectedItem", StringComparison.Ordinal)
-                && line.Contains("Content=CurrentPage", StringComparison.Ordinal)));
+                line.Contains("Select(...)", StringComparison.Ordinal)
+                && line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal)));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "ナビゲーション更新点"
+            && index.Lines.Any(line =>
+                line.Contains("SelectedItem = match", StringComparison.Ordinal)
+                && line.Contains("line:", StringComparison.Ordinal)));
     }
 }

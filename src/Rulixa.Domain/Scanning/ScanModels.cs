@@ -11,6 +11,7 @@ public sealed record WorkspaceScanResult(
     IReadOnlyList<ScanFile> Files,
     IReadOnlyList<ScanSymbol> Symbols,
     IReadOnlyList<ViewModelBinding> ViewModelBindings,
+    IReadOnlyList<NavigationTransition> NavigationTransitions,
     IReadOnlyList<CommandBinding> Commands,
     IReadOnlyList<WindowActivation> WindowActivations,
     IReadOnlyList<ServiceRegistration> ServiceRegistrations,
@@ -58,6 +59,15 @@ public sealed record CommandBinding(
     string ExecuteSymbol,
     string? CanExecuteSymbol,
     IReadOnlyList<string> BoundViews);
+
+public sealed record NavigationTransition(
+    string ViewModelSymbol,
+    string SourceFilePath,
+    string UpdateMethodName,
+    string? SelectedItemPropertyName,
+    string? CurrentPagePropertyName,
+    string UpdateExpressionSummary,
+    int StartLine);
 
 public sealed record WindowActivation(
     string CallerSymbol,

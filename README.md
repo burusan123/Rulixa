@@ -1,31 +1,33 @@
 # Rulixa
 
-`Rulixa` は、大規模で暗黙仕様の多いコードベースを AI が安全に扱える最小の作業文脈へ圧縮するためのローカル Context Pack 生成器です。  
-現在の Phase 1 は `Windows` 上の `WPF + .NET 8` アプリケーションを対象に、`Contracts`、`Index`、`Context Pack` を組み立てるところまでを実装しています。
+`Rulixa` は、大規模な WPF / .NET ワークスペースから AI が変更作業を始めるための最小文脈を抽出するためのローカル Context Pack 生成ツールです。
 
-## 現在の実装
+現時点の Phase 1 は `Windows` 上の `WPF + .NET 8` アプリケーションを対象にし、`Contracts`、`Index`、`Selected Files` を含む Context Pack を `CLI` と `Codex Plugin` から生成できます。
+
+## 現在の到達点
 
 - `entry=file` と `entry=symbol` の両方で Context Pack を生成できます。
 - 主対象は `AssessMeister` の Shell 導線です。
-- `symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` から、`ShellView.xaml` 周辺の必須ファイルを既定 budget 内で選定できます。
-- `DataTemplate` 由来の PageViewModel 群は、既定では二次文脈として扱います。
+- `symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` から、Shell 導線の必須ファイルを既定 budget 内で選定できます。
+- `Pages/*` の `DataTemplate` 由来 ViewModel は、`symbol` 起点の既定 Pack では二次文脈として落とします。
+- `SelectedItem` と `CurrentPage` の binding だけでなく、`CurrentPage = item.PageViewModel` や `SelectedItem = match` のような ViewModel 側更新点も Pack に含めます。
 
 ## プロジェクト構成
 
 - `src/Rulixa.Domain`
-  ドメインモデルと Context Pack 選定ルール
+  ドメイン型、Pack 選定ルール、IR の中核型
 - `src/Rulixa.Application`
   ユースケースとポート
 - `src/Rulixa.Infrastructure`
-  ファイルシステム、entry 解決、Markdown 出力
+  ファイルシステム、レンダリング、entry 解決支援
 - `src/Rulixa.Plugin.WpfNet8`
-  `WPF + .NET 8` 向け解析
+  `WPF + .NET 8` 固有の走査と契約抽出
 - `src/Rulixa.Cli`
   `scan`、`resolve-entry`、`pack` を提供する CLI
 
 ## CLI
 
-現在の主コマンドは次の 3 つです。
+現在の主要コマンドは次の 3 つです。
 
 - `scan`
 - `resolve-entry`
@@ -51,15 +53,15 @@ dotnet run --project src\Rulixa.Cli -- pack `
 
 ## Codex Plugin
 
-repo-local の Codex Plugin を `plugins/rulixa` に追加しています。  
-この plugin は `Rulixa.Cli` の `pack` を最短導線として扱い、Codex から Context Pack 生成手順を呼び出せるようにするためのものです。
+repo-local の Codex Plugin を `plugins/rulixa` に配置しています。
+この plugin は `Rulixa.Cli` の `pack` を最短導線で呼び出すためのもので、Codex から Context Pack を作る入口として使います。
 
 - plugin root: `plugins/rulixa`
 - marketplace: `.agents/plugins/marketplace.json`
 - 主 skill: `plugins/rulixa/skills/pack/SKILL.md`
 
-## 関連ドキュメント
+## ドキュメント
 
-- [全体仕様](docs/project_full_spec.md)
-- [背景整理](docs/polaris.md)
-- [Phase 1 仕様入口](docs/spec/phase1/README.md)
+- [全体仕様](/D:/C#/Rulixa/docs/project_full_spec.md)
+- [背景整理](/D:/C#/Rulixa/docs/polaris.md)
+- [Phase 1 仕様](/D:/C#/Rulixa/docs/spec/phase1/README.md)

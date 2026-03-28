@@ -16,6 +16,7 @@ public sealed class WpfNet8WorkspaceScanner : IWorkspaceScanner
 
     private readonly IWorkspaceFileSystem fileSystem;
     private readonly XamlViewModelBindingExtractor bindingExtractor = new();
+    private readonly ViewModelNavigationTransitionExtractor navigationTransitionExtractor = new();
     private readonly CommandContractExtractor commandExtractor = new();
     private readonly DialogActivationExtractor dialogExtractor = new();
     private readonly ServiceRegistrationExtractor registrationExtractor = new();
@@ -53,6 +54,7 @@ public sealed class WpfNet8WorkspaceScanner : IWorkspaceScanner
 
         var symbols = ExtractSymbols(fileContents);
         var bindings = bindingExtractor.Extract(fileContents, symbols);
+        var navigationTransitions = navigationTransitionExtractor.Extract(fileContents);
         var commands = commandExtractor.Extract(fileContents, scanFiles);
         var windowActivations = dialogExtractor.Extract(fileContents);
         var serviceRegistrations = registrationExtractor.Extract(fileContents);
@@ -65,6 +67,7 @@ public sealed class WpfNet8WorkspaceScanner : IWorkspaceScanner
             scanFiles,
             symbols,
             bindings,
+            navigationTransitions,
             commands,
             windowActivations,
             serviceRegistrations,

@@ -31,21 +31,28 @@ public sealed class MarkdownContextPackRendererTests
                     ["App.ViewModels.ShellViewModel"]),
                 new Contract(
                     ContractKind.Navigation,
-                    "選択と表示の切り替え",
-                    "src/App/Views/ShellView.xaml では一覧を Items にバインド、選択状態を SelectedItem にバインド、表示コンテンツを CurrentPage にバインドしてページ切り替えを行います。",
+                    "一覧・選択・表示の対応",
+                    "src/App/Views/ShellView.xaml では 一覧を Items にバインド、選択状態を SelectedItem にバインド、表示コンテンツを CurrentPage にバインド してページ切り替えを表現します。",
                     ["src/App/Views/ShellView.xaml"],
-                    ["App.ViewModels.ShellViewModel", "Items", "SelectedItem", "CurrentPage"])
+                    ["App.ViewModels.ShellViewModel", "Items", "SelectedItem", "CurrentPage"]),
+                new Contract(
+                    ContractKind.Navigation,
+                    "ViewModel 更新点",
+                    "App.ViewModels.ShellViewModel.Select(...) が CurrentPage = item.PageViewModel を実行します。",
+                    ["src/App/ViewModels/ShellViewModel.cs"],
+                    ["App.ViewModels.ShellViewModel", "Select", "CurrentPage = item.PageViewModel"])
             ],
             Indexes:
             [
                 new IndexSection("起動経路", ["App.xaml.cs -> App.ViewModels.ShellViewModel"]),
-                new IndexSection("ナビゲーション", ["src/App/Views/ShellView.xaml: Items=Items, SelectedItem=SelectedItem, Content=CurrentPage"])
+                new IndexSection("ナビゲーション", ["src/App/Views/ShellView.xaml: Items=Items, SelectedItem=SelectedItem, Content=CurrentPage"]),
+                new IndexSection("ナビゲーション更新点", ["App.ViewModels.ShellViewModel.Select(...) -> CurrentPage = item.PageViewModel (line: 42)"])
             ],
             SelectedFiles:
             [
                 new SelectedFile(@".\src\App\Views\ShellView.xaml", "entry", 0, true, 42),
                 new SelectedFile(@".\MainWindow.xaml.cs", "startup", 10, true, 10),
-                new SelectedFile(@".\src\App\Views\ShellView.xaml", "navigation-view", 8, true, 42)
+                new SelectedFile(@".\src\App\ViewModels\ShellViewModel.cs", "navigation-update", -1, true, 120)
             ],
             Unknowns:
             [
@@ -59,12 +66,15 @@ public sealed class MarkdownContextPackRendererTests
         Assert.Contains("## 選定ファイル", markdown);
         Assert.Contains("理由: 入口", markdown);
         Assert.Contains("理由: 起動経路", markdown);
-        Assert.Contains("理由: ナビゲーション View", markdown);
+        Assert.Contains("理由: ナビゲーション更新点", markdown);
         Assert.Contains("src/App/Views/ShellView.xaml", markdown);
-        Assert.Contains("MainWindow.xaml.cs", markdown);
+        Assert.Contains("src/App/ViewModels/ShellViewModel.cs", markdown);
         Assert.DoesNotContain(@".\", markdown);
         Assert.Contains("[起動経路]", markdown);
         Assert.Contains("[ナビゲーション]", markdown);
+        Assert.Contains("## 影響範囲 / インデックス", markdown);
+        Assert.Contains("### ナビゲーション更新点", markdown);
+        Assert.Contains("CurrentPage = item.PageViewModel (line: 42)", markdown);
         Assert.Contains("[警告] entry.unresolved", markdown);
     }
 

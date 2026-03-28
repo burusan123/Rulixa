@@ -26,12 +26,18 @@ public sealed class BuildContextPackUseCaseTests
             [],
             [],
             [],
+            [],
             []);
 
         var ingredients = new PackIngredients(
             Contracts:
             [
-                new Contract(ContractKind.ViewModelBinding, "View と ViewModel の対応", "ShellView は ShellViewModel と結び付きます。", ["Views/ShellView.xaml"], ["App.ShellViewModel"])
+                new Contract(
+                    ContractKind.ViewModelBinding,
+                    "View と ViewModel の対応",
+                    "ShellView は ShellViewModel と対応します。",
+                    ["Views/ShellView.xaml"],
+                    ["App.ShellViewModel"])
             ],
             Indexes:
             [

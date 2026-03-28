@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using AssessMeister.Presentation.Wpf.Common;
 
 namespace AssessMeister.Presentation.Wpf.ViewModels;
@@ -19,8 +20,24 @@ public sealed class ShellViewModel
         var dashboardPage = new DashboardPageViewModel();
         var item = new NavItemViewModel("Dashboard", dashboardPage);
         Items.Add(item);
-        SelectedItem = item;
-        CurrentPage = dashboardPage;
+        RestoreSelection();
+    }
+
+    private void RestoreSelection()
+    {
+        var match = Items.FirstOrDefault();
+        if (match is null)
+        {
+            return;
+        }
+
+        SelectedItem = match;
+        Select(match);
+    }
+
+    private void Select(NavItemViewModel item)
+    {
+        CurrentPage = item.PageViewModel;
     }
 
     private void OpenSettings()

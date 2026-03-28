@@ -24,6 +24,7 @@ public sealed class ContextPackFactoryTests
             [],
             [],
             [],
+            [],
             []);
 
         var ingredients = new PackIngredients(
@@ -65,6 +66,7 @@ public sealed class ContextPackFactoryTests
                 new ScanFile("ViewModels/ShellViewModel.cs", ScanFileKind.ViewModel, "App", "hash-3", 120, ["viewmodel"]),
                 new ScanFile("ViewModels/Pages/FloorPageViewModel.cs", ScanFileKind.ViewModel, "App", "hash-4", 220, ["viewmodel"])
             ],
+            [],
             [],
             [],
             [],

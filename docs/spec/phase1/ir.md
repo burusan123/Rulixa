@@ -2,17 +2,15 @@
 
 ## 目的
 
-Phase 1 の IR は、`scan` の結果をフロントや Pack 生成器から利用できるようにするための、**決定的で最小限の中間表現**である。
+Phase 1 の IR は、`scan` の結果を `resolve-entry` と `pack` に渡すための決定的な中間表現です。
+Phase 1 では `WPF + .NET 8` の静的解析で取得できる事実だけを表現し、実行時依存の完全解析は扱いません。
 
-Phase 1 では、`WPF + .NET 8` の静的解析結果を表現するのに必要な情報だけを持つ。
-
-## 設計方針
+## 設計原則
 
 - JSON に直列化しやすい
-- 同じ入力から同じ並び順で出力できる
-- Pack 生成に必要な根拠を保持する
-- 不確実な解決は `confidence` と `candidates` で表現する
-- Phase 1 では過剰に一般化しない
+- 同じ入力から同じ順序で出力できる
+- Pack 組み立てに必要な事実だけを持つ
+- あいまいな解決結果は `confidence` と `candidates` で表す
 
 ## ルート構造
 
@@ -25,6 +23,7 @@ Phase 1 では、`WPF + .NET 8` の静的解析結果を表現するのに必要
   "files": [],
   "symbols": [],
   "viewModelBindings": [],
+  "navigationTransitions": [],
   "commands": [],
   "windowActivations": [],
   "serviceRegistrations": [],
@@ -47,8 +46,6 @@ Phase 1 では、`WPF + .NET 8` の静的解析結果を表現するのに必要
 
 ## files
 
-各ファイルのメタデータを保持する。
-
 ```json
 {
   "path": "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml",
@@ -60,19 +57,20 @@ Phase 1 では、`WPF + .NET 8` の静的解析結果を表現するのに必要
 }
 ```
 
-`kind` の例:
+`kind` の候補:
 
+- `solution`
+- `project`
+- `startup`
 - `xaml`
 - `codebehind`
 - `viewmodel`
 - `service`
 - `config`
-- `project`
-- `startup`
+- `command-support`
+- `csharp`
 
 ## symbols
-
-Pack 生成や `entry=symbol` 解決に使う最小単位。
 
 ```json
 {
@@ -87,7 +85,7 @@ Pack 生成や `entry=symbol` 解決に使う最小単位。
 }
 ```
 
-`kind` の例:
+`kind` の候補:
 
 - `class`
 - `method`
@@ -98,30 +96,50 @@ Pack 生成や `entry=symbol` 解決に使う最小単位。
 
 ## viewModelBindings
 
-View と ViewModel の対応を表現する。
+View と ViewModel の対応を表します。
 
 ```json
 {
   "viewPath": "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml",
   "viewSymbol": "AssessMeister.Presentation.Wpf.Views.ShellView",
   "viewModelSymbol": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
-  "bindingKind": "data-template",
-  "sourcePath": "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml",
+  "bindingKind": "root-data-context",
+  "sourcePath": "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs",
   "confidence": "high",
   "candidates": []
 }
 ```
 
-`bindingKind` の例:
+`bindingKind` の候補:
 
-- `constructor-datacontext`
-- `codebehind-datacontext`
+- `root-data-context`
+- `view-data-context`
 - `data-template`
-- `naming-convention`
+
+## navigationTransitions
+
+ViewModel 側のナビゲーション更新点を表します。
+Phase 1 では完全な制御フロー解析ではなく、典型的な代入パターンを構文ベースで抽出します。
+
+```json
+{
+  "viewModelSymbol": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
+  "sourceFilePath": "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs",
+  "updateMethodName": "Select",
+  "selectedItemPropertyName": "SelectedItem",
+  "currentPagePropertyName": "CurrentPage",
+  "updateExpressionSummary": "CurrentPage = item.PageViewModel",
+  "startLine": 3595
+}
+```
+
+想定する抽出例:
+
+- `CurrentPage = item.PageViewModel`
+- `SelectedItem = match`
+- `CurrentPage` の初期化
 
 ## commands
-
-UI 操作とメソッドの接続を表現する。
 
 ```json
 {
@@ -138,8 +156,6 @@ UI 操作とメソッドの接続を表現する。
 
 ## windowActivations
 
-別 Window / Dialog 起動の経路を表現する。
-
 ```json
 {
   "callerSymbol": "AssessMeister.Presentation.Wpf.Services.DraftingWindowService.OpenDraftingWindow",
@@ -153,8 +169,6 @@ UI 操作とメソッドの接続を表現する。
 
 ## serviceRegistrations
 
-DI から依存関係を取得するための構造。
-
 ```json
 {
   "registrationFile": "ServiceRegistration.cs",
@@ -164,7 +178,7 @@ DI から依存関係を取得するための構造。
 }
 ```
 
-`lifetime` は Phase 1 では次に限定する。
+`lifetime` の候補:
 
 - `singleton`
 - `scoped`
@@ -172,8 +186,6 @@ DI から依存関係を取得するための構造。
 - `factory`
 
 ## diagnostics
-
-解決不能や曖昧性を格納する。
 
 ```json
 {
@@ -190,18 +202,17 @@ DI から依存関係を取得するための構造。
 
 ## 並び順ルール
 
-決定性を保つため、配列は次でソートする。
-
 - `files`: `path`
 - `symbols`: `qualifiedName`, `filePath`, `startLine`
-- `viewModelBindings`: `viewPath`, `viewModelSymbol`
+- `viewModelBindings`: `bindingKind`, `viewPath`, `viewModelSymbol`
+- `navigationTransitions`: `sourceFilePath`, `startLine`
 - `commands`: `viewModelSymbol`, `propertyName`
 - `windowActivations`: `callerSymbol`, `windowSymbol`
 - `serviceRegistrations`: `serviceType`, `implementationType`
 
-## Phase 1 の非目標
+## Phase 1 の制約
 
-- 完全なコード意味解析結果の保存
-- すべての AST ノードの保持
-- 変更差分情報の保持
-- ランタイム状態の再現
+- 動的コード生成の完全解析はしない
+- すべての AST ノードを保持しない
+- 制御フローの完全解析はしない
+- 3rd party control 固有の内部契約は扱わない

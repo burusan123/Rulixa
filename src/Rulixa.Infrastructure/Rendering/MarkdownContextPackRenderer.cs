@@ -117,11 +117,12 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "data-template-source" => "DataTemplate の定義元",
         "conventional-view" => "規約ベースの対応 View",
         "code-behind" => "対応する code-behind",
-        "command-viewmodel" => "コマンド実装",
-        "command-bound-view" => "コマンド関連 View",
+        "command-viewmodel" => "コマンド定義元 ViewModel",
+        "command-bound-view" => "コマンドが使われる View",
         "command-support" => "コマンド基盤",
         "dialog-service" => "ダイアログ起動サービス",
         "navigation-view" => "ナビゲーション View",
+        "navigation-update" => "ナビゲーション更新点",
         _ => reason
     };
 }
