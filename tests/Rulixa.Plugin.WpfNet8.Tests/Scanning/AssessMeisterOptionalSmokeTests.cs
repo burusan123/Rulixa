@@ -36,7 +36,7 @@ public sealed class AssessMeisterOptionalSmokeTests
             scanResult,
             entry,
             resolvedEntry,
-            "\u8A2D\u5B9A\u753B\u9762\u3092\u958B\u304D\u305F\u3044",
+            "project",
             Budget.Default);
         var markdown = renderer.Render(pack);
 
@@ -52,16 +52,17 @@ public sealed class AssessMeisterOptionalSmokeTests
             contract.Kind == ContractKind.DialogActivation);
         Assert.Contains(pack.Contracts, contract =>
             contract.Kind == ContractKind.Command
-            && contract.Summary.Contains("OpenSetting", StringComparison.Ordinal)
-            && (contract.Summary.Contains("OpenSettingWindow", StringComparison.Ordinal)
-                || contract.Summary.Contains("show-dialog", StringComparison.Ordinal)));
+            && (contract.Summary.Contains("LoadPagesFromProjectDocument(...)", StringComparison.Ordinal)
+                || contract.Summary.Contains("ApplyInsulationDefaultsAfterDraftingOk(...)", StringComparison.Ordinal)));
         Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Reason is "root-binding-source" or "dependency-injection" or "navigation-update");
         Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Reason == "command-impact" || snippet.Anchor.Contains("OpenSetting", StringComparison.Ordinal));
+            snippet.Reason == "command-impact"
+            || snippet.Anchor.Contains("LoadPagesFromProjectDocument(...)", StringComparison.Ordinal)
+            || snippet.Anchor.Contains("ApplyInsulationDefaultsAfterDraftingOk(...)", StringComparison.Ordinal));
         Assert.Contains("SelectedItem", markdown, StringComparison.Ordinal);
         Assert.Contains("CurrentPage", markdown, StringComparison.Ordinal);
-        Assert.Contains("show-dialog", markdown, StringComparison.Ordinal);
+        Assert.Contains("project", markdown, StringComparison.OrdinalIgnoreCase);
     }
 }
 

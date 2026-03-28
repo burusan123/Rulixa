@@ -20,9 +20,34 @@ internal sealed class CommandImpactAnalyzer
         RegexOptions.Compiled);
     private static readonly Regex NewTypeRegex = new(@"new\s+(?<type>[A-Za-z_][A-Za-z0-9_\.]*)\s*\(", RegexOptions.Compiled);
     private static readonly Regex IdentifierRegex = new(@"^(?:this\.)?(?<name>[A-Za-z_]\w*)$", RegexOptions.Compiled);
-    private static readonly Regex MemberRegex = new(
-        @"^\s*(?:(?:public|private|internal|protected)\s+)+(?:static\s+|virtual\s+|override\s+|sealed\s+|async\s+|partial\s+|new\s+|unsafe\s+|extern\s+)*(?<return>[A-Za-z_][A-Za-z0-9_<>\.\?,\[\]]*|void)\s+(?<name>[A-Za-z_]\w*)\s*\(",
-        RegexOptions.Compiled | RegexOptions.Multiline);
+    private static readonly Regex ThisHelperInvocationRegex = new(@"\bthis\.(?<method>[A-Za-z_]\w*)\s*\(", RegexOptions.Compiled);
+    private static readonly Regex ImplicitHelperInvocationRegex = new(
+        @"(?<!new\s)(?<![\.\w])(?<method>[A-Za-z_]\w*)\s*\(",
+        RegexOptions.Compiled);
+    private static readonly HashSet<string> HelperInvocationKeywords = new(StringComparer.Ordinal)
+    {
+        "base",
+        "catch",
+        "checked",
+        "default",
+        "do",
+        "else",
+        "finally",
+        "for",
+        "foreach",
+        "if",
+        "lock",
+        "nameof",
+        "new",
+        "return",
+        "sizeof",
+        "switch",
+        "typeof",
+        "unchecked",
+        "using",
+        "while"
+    };
+
     private readonly IWorkspaceFileSystem workspaceFileSystem;
 
     internal CommandImpactAnalyzer(IWorkspaceFileSystem workspaceFileSystem)
@@ -44,23 +69,55 @@ internal sealed class CommandImpactAnalyzer
                 string.Equals(symbol.QualifiedName, command.ViewModelSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
             if (string.IsNullOrWhiteSpace(viewModelFilePath))
             {
-                impactDetails.Add(new CommandImpactDetails(command, [], null));
+                impactDetails.Add(new CommandImpactDetails(command, [], [], null));
                 continue;
             }
 
             var source = await ReadSourceAsync(workspaceRoot, viewModelFilePath, cancellationToken).ConfigureAwait(false);
-            var methodName = command.ExecuteSymbol.Split('.').Last();
-            var methodBody = TryFindMethodBody(source, methodName);
-            if (string.IsNullOrWhiteSpace(methodBody))
+            var executeMethodName = command.ExecuteSymbol.Split('.').Last();
+            var executeMethod = TryFindMethodDefinition(source, executeMethodName);
+            if (executeMethod is null)
             {
-                impactDetails.Add(new CommandImpactDetails(command, [], viewModelFilePath));
+                impactDetails.Add(new CommandImpactDetails(command, [], [], viewModelFilePath));
                 continue;
             }
 
             var knownTypes = ExtractKnownTypes(source);
-            var localTypes = ExtractLocalTypes(methodBody, knownTypes);
-            var impacts = ExtractDirectImpacts(scanResult, command, knownTypes, localTypes, methodBody);
-            impactDetails.Add(new CommandImpactDetails(command, impacts, viewModelFilePath));
+            var directImpacts = ExtractMethodImpacts(
+                scanResult,
+                command,
+                executeMethodName,
+                knownTypes,
+                executeMethod.Body);
+            var helperInvocations = ExtractHelperInvocations(source, viewModelFilePath, executeMethodName, executeMethod.Body);
+            var helperImpacts = ExtractHelperImpacts(
+                source,
+                scanResult,
+                command,
+                knownTypes,
+                helperInvocations);
+            var allImpacts = directImpacts
+                .Concat(helperImpacts)
+                .GroupBy(static impact => new
+                {
+                    impact.DisplaySymbol,
+                    impact.DialogWindowSymbol,
+                    impact.ActivationKind,
+                    impact.OriginMethodName
+                })
+                .Select(static group => group.First())
+                .ToArray();
+            var helperNamesWithImpacts = helperImpacts
+                .Select(static impact => impact.OriginMethodName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            impactDetails.Add(new CommandImpactDetails(
+                command,
+                allImpacts,
+                helperInvocations
+                    .Where(invocation => helperNamesWithImpacts.Contains(invocation.HelperMethodName))
+                    .ToArray(),
+                viewModelFilePath));
         }
 
         return impactDetails;
@@ -73,34 +130,6 @@ internal sealed class CommandImpactAnalyzer
     {
         var absolutePath = Path.Combine(workspaceRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
         return await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static string? TryFindMethodBody(string source, string methodName)
-    {
-        var lines = source.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-        var pattern = new Regex(
-            $@"^\s*(?:(?:public|private|internal|protected|static|virtual|override|sealed|async|partial|new|unsafe|extern)\s+)+(?:[A-Za-z_][A-Za-z0-9_<>,\.\?\[\]]*\s+)+{Regex.Escape(methodName)}\s*\(",
-            RegexOptions.CultureInvariant);
-
-        for (var index = 0; index < lines.Length; index++)
-        {
-            if (!pattern.IsMatch(lines[index]))
-            {
-                continue;
-            }
-
-            var lineNumber = index + 1;
-            var startIndex = GetLineStartIndex(source, lineNumber);
-            var bodyRange = TryFindMemberBodyRange(source, startIndex);
-            if (bodyRange is null)
-            {
-                return null;
-            }
-
-            return source.Substring(bodyRange.Value.BodyStartIndex, bodyRange.Value.EndIndex - bodyRange.Value.BodyStartIndex + 1);
-        }
-
-        return null;
     }
 
     private static Dictionary<string, string> ExtractKnownTypes(string source)
@@ -118,6 +147,75 @@ internal sealed class CommandImpactAnalyzer
         }
 
         return knownTypes;
+    }
+
+    private static IReadOnlyList<DirectCommandImpact> ExtractHelperImpacts(
+        string source,
+        WorkspaceScanResult scanResult,
+        CommandBinding command,
+        IReadOnlyDictionary<string, string> knownTypes,
+        IReadOnlyList<HelperInvocation> helperInvocations)
+    {
+        var helperImpacts = new List<DirectCommandImpact>();
+
+        foreach (var helperInvocation in helperInvocations)
+        {
+            var helperMethod = TryFindMethodDefinition(source, helperInvocation.HelperMethodName);
+            if (helperMethod is null)
+            {
+                continue;
+            }
+
+            helperImpacts.AddRange(ExtractMethodImpacts(
+                scanResult,
+                command,
+                helperInvocation.HelperMethodName,
+                knownTypes,
+                helperMethod.Body));
+        }
+
+        return helperImpacts;
+    }
+
+    private static IReadOnlyList<DirectCommandImpact> ExtractMethodImpacts(
+        WorkspaceScanResult scanResult,
+        CommandBinding command,
+        string originMethodName,
+        IReadOnlyDictionary<string, string> knownTypes,
+        string methodBody)
+    {
+        var localTypes = ExtractLocalTypes(methodBody, knownTypes);
+        var impacts = new List<DirectCommandImpact>();
+
+        foreach (Match match in MethodCallRegex.Matches(methodBody))
+        {
+            var rawTarget = match.Groups["target"].Value.Trim();
+            var targetMethodName = match.Groups["method"].Value;
+            var resolvedTarget = ResolveTarget(
+                scanResult,
+                command.ViewModelSymbol,
+                rawTarget,
+                targetMethodName,
+                knownTypes,
+                localTypes);
+            if (resolvedTarget is null)
+            {
+                continue;
+            }
+
+            impacts.AddRange(BuildImpacts(scanResult, resolvedTarget, originMethodName));
+        }
+
+        return impacts
+            .GroupBy(static impact => new
+            {
+                impact.DisplaySymbol,
+                impact.DialogWindowSymbol,
+                impact.ActivationKind,
+                impact.OriginMethodName
+            })
+            .Select(static group => group.First())
+            .ToArray();
     }
 
     private static Dictionary<string, string> ExtractLocalTypes(
@@ -167,37 +265,67 @@ internal sealed class CommandImpactAnalyzer
         return knownTypes.TryGetValue(identifier, out var resolvedType) ? resolvedType : null;
     }
 
-    private static IReadOnlyList<DirectCommandImpact> ExtractDirectImpacts(
-        WorkspaceScanResult scanResult,
-        CommandBinding command,
-        IReadOnlyDictionary<string, string> knownTypes,
-        IReadOnlyDictionary<string, string> localTypes,
+    private static IReadOnlyList<HelperInvocation> ExtractHelperInvocations(
+        string source,
+        string viewModelFilePath,
+        string executeMethodName,
         string methodBody)
     {
-        var impacts = new List<DirectCommandImpact>();
+        var helperMethods = new Dictionary<string, HelperInvocation>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (Match match in MethodCallRegex.Matches(methodBody))
+        AddHelperInvocations(helperMethods, ThisHelperInvocationRegex.Matches(methodBody), source, viewModelFilePath, executeMethodName);
+        AddHelperInvocations(helperMethods, ImplicitHelperInvocationRegex.Matches(methodBody), source, viewModelFilePath, executeMethodName);
+
+        return helperMethods.Values.ToArray();
+    }
+
+    private static void AddHelperInvocations(
+        IDictionary<string, HelperInvocation> helperMethods,
+        MatchCollection matches,
+        string source,
+        string viewModelFilePath,
+        string executeMethodName)
+    {
+        foreach (Match match in matches)
         {
-            var rawTarget = match.Groups["target"].Value.Trim();
-            var targetMethodName = match.Groups["method"].Value;
-            var resolvedTarget = ResolveTarget(scanResult, command.ViewModelSymbol, rawTarget, targetMethodName, knownTypes, localTypes);
-            if (resolvedTarget is null)
+            var helperMethodName = match.Groups["method"].Value;
+            if (string.IsNullOrWhiteSpace(helperMethodName)
+                || string.Equals(helperMethodName, executeMethodName, StringComparison.OrdinalIgnoreCase)
+                || HelperInvocationKeywords.Contains(helperMethodName))
             {
                 continue;
             }
 
-            impacts.AddRange(BuildImpacts(scanResult, resolvedTarget));
+            var helperMethod = TryFindMethodDefinition(source, helperMethodName);
+            if (helperMethod is null || !IsEligibleHelperMethod(helperMethod.DeclarationLine))
+            {
+                continue;
+            }
+
+            helperMethods[helperMethodName] = new HelperInvocation(
+                helperMethodName,
+                viewModelFilePath,
+                helperMethod.SourceSpan);
+        }
+    }
+
+    private static bool IsEligibleHelperMethod(string declarationLine)
+    {
+        var normalized = declarationLine.Trim();
+        if (normalized.StartsWith("public ", StringComparison.Ordinal))
+        {
+            return false;
         }
 
-        return impacts
-            .GroupBy(static impact => new
-            {
-                impact.DisplaySymbol,
-                impact.DialogWindowSymbol,
-                impact.ActivationKind
-            })
-            .Select(static group => group.First())
-            .ToArray();
+        if (!(normalized.StartsWith("private ", StringComparison.Ordinal)
+              || normalized.StartsWith("internal ", StringComparison.Ordinal)
+              || normalized.StartsWith("protected ", StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        return !normalized.Contains(" static ", StringComparison.Ordinal)
+               && !normalized.StartsWith("static ", StringComparison.Ordinal);
     }
 
     private static ResolvedImpactTarget? ResolveTarget(
@@ -215,7 +343,8 @@ internal sealed class CommandImpactAnalyzer
         }
 
         var targetTypeSymbol = ResolveTypeSymbol(scanResult, targetTypeName);
-        if (string.IsNullOrWhiteSpace(targetTypeSymbol) || string.Equals(targetTypeSymbol, viewModelSymbol, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(targetTypeSymbol)
+            || string.Equals(targetTypeSymbol, viewModelSymbol, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
@@ -259,7 +388,8 @@ internal sealed class CommandImpactAnalyzer
 
     private static IReadOnlyList<DirectCommandImpact> BuildImpacts(
         WorkspaceScanResult scanResult,
-        ResolvedImpactTarget target)
+        ResolvedImpactTarget target,
+        string originMethodName)
     {
         var activations = scanResult.WindowActivations
             .Where(activation => string.Equals(
@@ -275,6 +405,7 @@ internal sealed class CommandImpactAnalyzer
                     $"{target.TargetTypeSymbol}.{target.MethodName}(...)",
                     target.SourceFilePath,
                     target.MethodName,
+                    originMethodName,
                     null,
                     null,
                     null)
@@ -286,6 +417,7 @@ internal sealed class CommandImpactAnalyzer
                 $"{target.TargetTypeSymbol}.{target.MethodName}(...)",
                 target.SourceFilePath,
                 target.MethodName,
+                originMethodName,
                 activation.WindowSymbol,
                 activation.ActivationKind,
                 activation.OwnerKind))
@@ -329,6 +461,38 @@ internal sealed class CommandImpactAnalyzer
             || simpleName.EndsWith("Window", StringComparison.Ordinal);
     }
 
+    private static MethodDefinition? TryFindMethodDefinition(string source, string methodName)
+    {
+        var lines = source.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var pattern = new Regex(
+            $@"^\s*(?:(?:public|private|internal|protected|static|virtual|override|sealed|async|partial|new|unsafe|extern)\s+)+(?:[A-Za-z_][A-Za-z0-9_<>,\.\?\[\]]*\s+)+{Regex.Escape(methodName)}\s*\(",
+            RegexOptions.CultureInvariant);
+
+        for (var index = 0; index < lines.Length; index++)
+        {
+            if (!pattern.IsMatch(lines[index]))
+            {
+                continue;
+            }
+
+            var startLine = index + 1;
+            var startIndex = GetLineStartIndex(source, startLine);
+            var bodyRange = TryFindMemberBodyRange(source, startIndex);
+            if (bodyRange is null)
+            {
+                return null;
+            }
+
+            return new MethodDefinition(
+                methodName,
+                lines[index],
+                source.Substring(bodyRange.Value.BodyStartIndex, bodyRange.Value.EndIndex - bodyRange.Value.BodyStartIndex + 1),
+                new SourceSpan(startLine, GetLineNumberAt(source, bodyRange.Value.EndIndex)));
+        }
+
+        return null;
+    }
+
     private static int GetLineStartIndex(string source, int lineNumber)
     {
         if (lineNumber <= 1)
@@ -352,6 +516,20 @@ internal sealed class CommandImpactAnalyzer
         }
 
         return -1;
+    }
+
+    private static int GetLineNumberAt(string source, int index)
+    {
+        var lineNumber = 1;
+        for (var currentIndex = 0; currentIndex < index && currentIndex < source.Length; currentIndex++)
+        {
+            if (source[currentIndex] == '\n')
+            {
+                lineNumber++;
+            }
+        }
+
+        return lineNumber;
     }
 
     private static (int BodyStartIndex, int EndIndex)? TryFindMemberBodyRange(string source, int startIndex)
@@ -392,17 +570,30 @@ internal sealed class CommandImpactAnalyzer
 
         return null;
     }
+
+    private sealed record MethodDefinition(
+        string Name,
+        string DeclarationLine,
+        string Body,
+        SourceSpan SourceSpan);
 }
 
 internal sealed record CommandImpactDetails(
     CommandBinding Command,
     IReadOnlyList<DirectCommandImpact> DirectImpacts,
+    IReadOnlyList<HelperInvocation> HelperInvocations,
     string? ViewModelFilePath);
+
+internal sealed record HelperInvocation(
+    string HelperMethodName,
+    string SourceFilePath,
+    SourceSpan BodyRange);
 
 internal sealed record DirectCommandImpact(
     string DisplaySymbol,
     string? SourceFilePath,
     string MethodName,
+    string OriginMethodName,
     string? DialogWindowSymbol,
     string? ActivationKind,
     string? OwnerKind);

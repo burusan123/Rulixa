@@ -10,19 +10,21 @@ internal static class CommandPackSectionBuilder
 {
     private const int CommandSummaryThreshold = 6;
     private const int MaxDetailedCommandsWhenSummarized = 3;
+
     private static readonly IReadOnlyDictionary<string, string[]> GoalAliases = new Dictionary<string, string[]>
     {
-        ["setting"] = ["setting", "settings", "設定"],
-        ["drafting"] = ["drafting", "作図"],
-        ["license"] = ["license", "ライセンス"],
-        ["import"] = ["import", "インポート"],
-        ["export"] = ["export", "エクスポート"],
-        ["share"] = ["share", "共有"],
-        ["result"] = ["result", "results", "結果", "出力"],
-        ["project"] = ["project", "projects", "プロジェクト"],
-        ["open"] = ["open", "起動", "開く"],
-        ["save"] = ["save", "保存"],
-        ["reset"] = ["reset", "初期化", "リセット"]
+        ["setting"] = ["setting", "settings", "\u8A2D\u5B9A"],
+        ["drafting"] = ["drafting", "\u4F5C\u56F3"],
+        ["license"] = ["license", "\u30E9\u30A4\u30BB\u30F3\u30B9"],
+        ["import"] = ["import", "\u30A4\u30F3\u30DD\u30FC\u30C8"],
+        ["export"] = ["export", "\u30A8\u30AF\u30B9\u30DD\u30FC\u30C8"],
+        ["share"] = ["share", "\u5171\u6709"],
+        ["result"] = ["result", "results", "output", "\u7D50\u679C", "\u51FA\u529B"],
+        ["project"] = ["project", "projects", "\u30D7\u30ED\u30B8\u30A7\u30AF\u30C8"],
+        ["open"] = ["open", "\u958B\u304F", "\u8D77\u52D5"],
+        ["save"] = ["save", "\u4FDD\u5B58"],
+        ["reset"] = ["reset", "\u521D\u671F\u5316", "\u30EA\u30BB\u30C3\u30C8"],
+        ["new"] = ["new", "\u65B0\u898F"]
     };
 
     internal static async Task AddContractsAsync(
@@ -117,13 +119,16 @@ internal static class CommandPackSectionBuilder
                 .Select(static command => command.PropertyName)
                 .Take(3)
                 .ToArray();
-            var lines = new List<string> { $"{commands.Length}件のコマンド導線 (例: {string.Join(", ", sampleNames)})" };
+            var lines = new List<string>
+            {
+                $"{commands.Length} \u4EF6\u306E\u30B3\u30DE\u30F3\u30C9\u5B9A\u7FA9 (\u4F8B: {string.Join(", ", sampleNames)})"
+            };
             lines.AddRange(detailedCommands.Select(BuildDetailedIndexLine));
-            return new IndexSection("コマンド", lines);
+            return new IndexSection("\u30B3\u30DE\u30F3\u30C9", lines);
         }
 
         return new IndexSection(
-            "コマンド",
+            "\u30B3\u30DE\u30F3\u30C9",
             commandDetails.Select(BuildDetailedIndexLine).ToArray());
     }
 
@@ -133,10 +138,10 @@ internal static class CommandPackSectionBuilder
             .Select(static command => command.PropertyName)
             .Take(3)
             .ToArray();
-        var summary = $"{commands[0].ViewModelSymbol} には {commands.Count} 件のコマンド導線があります。例: {string.Join(", ", sampleNames)}。";
+        var summary = $"{commands[0].ViewModelSymbol} \u306B\u306F {commands.Count} \u4EF6\u306E\u30B3\u30DE\u30F3\u30C9\u5B9A\u7FA9\u304C\u3042\u308A\u307E\u3059\u3002\u4F8B: {string.Join(", ", sampleNames)}\u3002";
         return new Contract(
             ContractKind.Command,
-            "コマンド導線の要約",
+            "\u30B3\u30DE\u30F3\u30C9\u8981\u7D04",
             summary,
             commands.SelectMany(static command => command.BoundViews).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             commands.Select(static command => command.ExecuteSymbol).ToArray());
@@ -145,28 +150,29 @@ internal static class CommandPackSectionBuilder
     private static Contract BuildDetailedContract(CommandImpactDetails commandDetails)
     {
         var command = commandDetails.Command;
-        var summary = $"{command.PropertyName} は {command.ExecuteSymbol}(...) を実行します。";
-        if (commandDetails.DirectImpacts.Count == 0)
+        var summaryParts = new List<string>
         {
-            return new Contract(
-                ContractKind.Command,
-                command.PropertyName,
-                summary,
-                command.BoundViews,
-                [command.ViewModelSymbol, command.ExecuteSymbol]);
+            $"{command.PropertyName} \u306F {BuildExecuteDisplay(commandDetails)} \u3092\u5B9F\u884C\u3057\u307E\u3059\u3002"
+        };
+
+        var routeSummaries = BuildRouteSummaries(commandDetails);
+        if (routeSummaries.Count > 0)
+        {
+            summaryParts.AddRange(routeSummaries);
         }
 
-        var impactsSummary = string.Join("、", commandDetails.DirectImpacts.Select(FormatImpactSummary));
         return new Contract(
             ContractKind.Command,
             command.PropertyName,
-            $"{summary} {impactsSummary}",
+            string.Join(" ", summaryParts),
             command.BoundViews,
             BuildRelatedSymbols(commandDetails));
     }
 
     private static string[] BuildRelatedSymbols(CommandImpactDetails commandDetails) =>
         new[] { commandDetails.Command.ViewModelSymbol, commandDetails.Command.ExecuteSymbol }
+            .Concat(commandDetails.HelperInvocations.Select(helper =>
+                $"{commandDetails.Command.ViewModelSymbol}.{helper.HelperMethodName}"))
             .Concat(commandDetails.DirectImpacts.Select(static impact => impact.DisplaySymbol))
             .Concat(commandDetails.DirectImpacts
                 .Where(static impact => !string.IsNullOrWhiteSpace(impact.DialogWindowSymbol))
@@ -174,26 +180,88 @@ internal static class CommandPackSectionBuilder
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-    private static string FormatImpactSummary(DirectCommandImpact impact)
+    private static IReadOnlyList<string> BuildRouteSummaries(CommandImpactDetails commandDetails)
     {
-        var summary = $"{impact.DisplaySymbol} を呼び出します。";
-        if (string.IsNullOrWhiteSpace(impact.DialogWindowSymbol) || string.IsNullOrWhiteSpace(impact.ActivationKind))
+        var executeMethodName = GetExecuteMethodName(commandDetails.Command);
+        var routeSummaries = new List<string>();
+
+        var directRouteImpacts = GetRouteImpacts(commandDetails, executeMethodName);
+        if (directRouteImpacts.Count > 0)
         {
-            return summary;
+            routeSummaries.Add(BuildRouteSummary(null, directRouteImpacts, commandDetails.Command.ViewModelSymbol));
         }
 
-        return $"{impact.DisplaySymbol} を呼び出し、最終的に {impact.DialogWindowSymbol} が {impact.ActivationKind} で起動されます。";
+        foreach (var helperInvocation in commandDetails.HelperInvocations.OrderBy(static helper => helper.HelperMethodName, StringComparer.OrdinalIgnoreCase))
+        {
+            var helperImpacts = GetRouteImpacts(commandDetails, helperInvocation.HelperMethodName);
+            if (helperImpacts.Count == 0)
+            {
+                continue;
+            }
+
+            routeSummaries.Add(BuildRouteSummary(helperInvocation.HelperMethodName, helperImpacts, commandDetails.Command.ViewModelSymbol));
+        }
+
+        return routeSummaries;
+    }
+
+    private static string BuildRouteSummary(
+        string? helperMethodName,
+        IReadOnlyList<DirectCommandImpact> impacts,
+        string viewModelSymbol)
+    {
+        var callSummary = $"{string.Join(" / ", impacts.Select(static impact => impact.DisplaySymbol))} \u3092\u547C\u3073\u51FA\u3057\u307E\u3059\u3002";
+        var prefix = string.IsNullOrWhiteSpace(helperMethodName)
+            ? string.Empty
+            : $"{PackExtractionConventions.GetSimpleTypeName(viewModelSymbol)}.{helperMethodName}(...) \u3092\u7D4C\u7531\u3057\u3066 ";
+        var dialogSummary = BuildDialogSummary(impacts);
+        return string.IsNullOrWhiteSpace(dialogSummary)
+            ? $"{prefix}{callSummary}"
+            : $"{prefix}{callSummary} {dialogSummary}";
+    }
+
+    private static string BuildDialogSummary(IReadOnlyList<DirectCommandImpact> impacts)
+    {
+        var dialogs = impacts
+            .Where(static impact => !string.IsNullOrWhiteSpace(impact.DialogWindowSymbol) && !string.IsNullOrWhiteSpace(impact.ActivationKind))
+            .Select(static impact => $"{impact.DialogWindowSymbol}({impact.ActivationKind})")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return dialogs.Length == 0
+            ? string.Empty
+            : $"\u6700\u7D42\u7684\u306B {string.Join(" / ", dialogs)} \u304C\u8D77\u52D5\u3055\u308C\u307E\u3059\u3002";
     }
 
     private static string BuildDetailedIndexLine(CommandImpactDetails commandDetails)
     {
-        if (commandDetails.DirectImpacts.Count == 0)
+        var executeDisplay = BuildExecuteDisplay(commandDetails);
+        var routeSegments = new List<string>();
+        var executeMethodName = GetExecuteMethodName(commandDetails.Command);
+
+        var directRouteImpacts = GetRouteImpacts(commandDetails, executeMethodName);
+        if (directRouteImpacts.Count > 0)
         {
-            return $"{commandDetails.Command.PropertyName} -> {commandDetails.Command.ExecuteSymbol}(...)";
+            routeSegments.Add($"{executeDisplay} -> {string.Join(" / ", directRouteImpacts.Select(FormatImpactIndexPart))}");
         }
 
-        var impacts = string.Join(" / ", commandDetails.DirectImpacts.Select(FormatImpactIndexPart));
-        return $"{commandDetails.Command.PropertyName} -> {commandDetails.Command.ExecuteSymbol}(...) -> {impacts}";
+        foreach (var helperInvocation in commandDetails.HelperInvocations.OrderBy(static helper => helper.HelperMethodName, StringComparer.OrdinalIgnoreCase))
+        {
+            var helperImpacts = GetRouteImpacts(commandDetails, helperInvocation.HelperMethodName);
+            if (helperImpacts.Count == 0)
+            {
+                continue;
+            }
+
+            routeSegments.Add(
+                $"{executeDisplay} -> {PackExtractionConventions.GetSimpleTypeName(commandDetails.Command.ViewModelSymbol)}.{helperInvocation.HelperMethodName}(...) -> {string.Join(" / ", helperImpacts.Select(FormatImpactIndexPart))}");
+        }
+
+        if (routeSegments.Count == 0)
+        {
+            routeSegments.Add(executeDisplay);
+        }
+
+        return $"{commandDetails.Command.PropertyName} -> {string.Join(" / ", routeSegments)}";
     }
 
     private static string FormatImpactIndexPart(DirectCommandImpact impact) =>
@@ -217,22 +285,43 @@ internal static class CommandPackSectionBuilder
                 continue;
             }
 
-            var methodName = details.Command.ExecuteSymbol.Split('.').Last();
+            var executeMethodName = GetExecuteMethodName(details.Command);
             var executeSnippet = await snippetFactory
                 .CreateMethodSnippetAsync(
                     workspaceRoot,
                     details.ViewModelFilePath,
-                    methodName,
+                    executeMethodName,
                     "command-viewmodel",
                     20,
                     false,
-                    $"{methodName}(...)",
+                    $"{executeMethodName}(...)",
                     null,
                     cancellationToken)
                 .ConfigureAwait(false);
             if (executeSnippet is not null)
             {
                 snippetCandidates.Add(executeSnippet);
+            }
+
+            foreach (var helperInvocation in details.HelperInvocations
+                         .DistinctBy(static helper => helper.HelperMethodName, StringComparer.OrdinalIgnoreCase))
+            {
+                var helperSnippet = await snippetFactory
+                    .CreateMethodSnippetAsync(
+                        workspaceRoot,
+                        helperInvocation.SourceFilePath,
+                        helperInvocation.HelperMethodName,
+                        "command-viewmodel",
+                        21,
+                        false,
+                        $"{helperInvocation.HelperMethodName}(...)",
+                        helperInvocation.BodyRange,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                if (helperSnippet is not null)
+                {
+                    snippetCandidates.Add(helperSnippet);
+                }
             }
 
             foreach (var impact in details.DirectImpacts
@@ -250,7 +339,7 @@ internal static class CommandPackSectionBuilder
                         impact.SourceFilePath!,
                         impact.MethodName,
                         "command-impact",
-                        21,
+                        22,
                         false,
                         $"{impact.MethodName}(...)",
                         null,
@@ -293,7 +382,8 @@ internal static class CommandPackSectionBuilder
 
         var score = 0;
         score += CountMatches(goalTerms, ExtractIdentifierTerms(details.Command.PropertyName)) * 3;
-        score += CountMatches(goalTerms, ExtractIdentifierTerms(details.Command.ExecuteSymbol.Split('.').Last())) * 2;
+        score += CountMatches(goalTerms, ExtractIdentifierTerms(GetExecuteMethodName(details.Command))) * 2;
+        score += CountMatches(goalTerms, details.HelperInvocations.SelectMany(static helper => ExtractIdentifierTerms(helper.HelperMethodName))) * 2;
         score += CountMatches(goalTerms, details.DirectImpacts.SelectMany(static impact => ExtractIdentifierTerms(impact.DisplaySymbol))) * 2;
         score += CountMatches(goalTerms, details.DirectImpacts
             .Where(static impact => !string.IsNullOrWhiteSpace(impact.DialogWindowSymbol))
@@ -349,6 +439,19 @@ internal static class CommandPackSectionBuilder
         var goalTermSet = goalTerms.ToHashSet(StringComparer.OrdinalIgnoreCase);
         return candidateTerms.Count(goalTermSet.Contains);
     }
+
+    private static IReadOnlyList<DirectCommandImpact> GetRouteImpacts(
+        CommandImpactDetails details,
+        string originMethodName) =>
+        details.DirectImpacts
+            .Where(impact => string.Equals(impact.OriginMethodName, originMethodName, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+    private static string BuildExecuteDisplay(CommandImpactDetails details) =>
+        $"{PackExtractionConventions.GetSimpleTypeName(details.Command.ViewModelSymbol)}.{GetExecuteMethodName(details.Command)}(...)";
+
+    private static string GetExecuteMethodName(CommandBinding command) =>
+        command.ExecuteSymbol.Split('.').Last();
 
     private static CommandBinding[] FindCommands(WorkspaceScanResult scanResult, ResolvedEntry resolvedEntry) =>
         scanResult.Commands
