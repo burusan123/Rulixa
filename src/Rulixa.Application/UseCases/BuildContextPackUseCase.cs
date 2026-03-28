@@ -31,7 +31,7 @@ public sealed class BuildContextPackUseCase
         ArgumentNullException.ThrowIfNull(budget);
 
         var ingredients = await contractExtractor
-            .ExtractAsync(workspaceRoot, scanResult, resolvedEntry, cancellationToken)
+            .ExtractAsync(workspaceRoot, scanResult, resolvedEntry, goal, cancellationToken)
             .ConfigureAwait(false);
 
         return ContextPackFactory.Create(goal, entry, resolvedEntry, ingredients, scanResult, budget);

@@ -8,6 +8,7 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 public sealed class WpfNet8ContractExtractor : IContractExtractor
 {
+    private readonly IWorkspaceFileSystem workspaceFileSystem;
     private readonly DependencyInjectionPackSectionBuilder dependencyInjectionBuilder;
     private readonly NavigationPackSectionBuilder navigationBuilder;
     private readonly DialogPackSectionBuilder dialogBuilder;
@@ -17,6 +18,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
     {
         ArgumentNullException.ThrowIfNull(workspaceFileSystem);
 
+        this.workspaceFileSystem = workspaceFileSystem;
         snippetFactory = new CSharpSnippetCandidateFactory(workspaceFileSystem);
         var xamlSnippetFactory = new XamlSnippetCandidateFactory(workspaceFileSystem);
         dependencyInjectionBuilder = new DependencyInjectionPackSectionBuilder(workspaceFileSystem, snippetFactory);
@@ -28,11 +30,13 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         string workspaceRoot,
         WorkspaceScanResult scanResult,
         ResolvedEntry resolvedEntry,
+        string goal,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspaceRoot);
         ArgumentNullException.ThrowIfNull(scanResult);
         ArgumentNullException.ThrowIfNull(resolvedEntry);
+        ArgumentException.ThrowIfNullOrWhiteSpace(goal);
 
         var contracts = new List<Contract>();
         var indexes = new List<IndexSection>();
@@ -75,6 +79,8 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 workspaceRoot,
                 scanResult,
                 resolvedEntry,
+                goal,
+                workspaceFileSystem,
                 snippetFactory,
                 contracts,
                 snippetCandidates,
@@ -87,7 +93,13 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
 
         indexes.Add(BuildStartupIndex(scanResult));
         indexes.Add(ViewBindingPackSectionBuilder.BuildViewModelIndex(relevantContext.PrimaryBindings, relevantContext.SecondaryBindings));
-        indexes.Add(CommandPackSectionBuilder.BuildIndex(scanResult, resolvedEntry));
+        indexes.Add(await CommandPackSectionBuilder.BuildIndexAsync(
+            workspaceRoot,
+            scanResult,
+            resolvedEntry,
+            goal,
+            workspaceFileSystem,
+            cancellationToken).ConfigureAwait(false));
 
         return new PackIngredients(
             Contracts: contracts.Distinct().ToArray(),

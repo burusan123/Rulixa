@@ -263,33 +263,281 @@ public sealed class WpfNet8WorkspaceScannerTests
 
         var scanResult = await scanner.ScanAsync(FixtureRoot);
         var baseCommand = Assert.Single(scanResult.Commands);
-        var expandedCommands = Enumerable.Range(1, 7)
-            .Select(index => new CommandBinding(
-                baseCommand.ViewModelSymbol,
-                $"SampleCommand{index}",
-                baseCommand.CommandType,
-                $"{baseCommand.ViewModelSymbol}.ExecuteSample{index}",
-                baseCommand.CanExecuteSymbol,
-                baseCommand.BoundViews))
+        var expandedCommands = new[]
+            {
+                baseCommand
+            }
+            .Concat(Enumerable.Range(1, 6)
+                .Select(index => new CommandBinding(
+                    baseCommand.ViewModelSymbol,
+                    $"SampleCommand{index}",
+                    baseCommand.CommandType,
+                    $"{baseCommand.ViewModelSymbol}.ExecuteSample{index}",
+                    baseCommand.CanExecuteSymbol,
+                    baseCommand.BoundViews)))
             .ToArray();
-        var expandedScanResult = scanResult with { Commands = expandedCommands };
+        var expandedScanResult = scanResult with
+        {
+            Commands = expandedCommands,
+            Files = scanResult.Files
+                .Select(file =>
+                    file.Path is "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+                        or "src/AssessMeister.Presentation.Wpf/Services/SettingWindowService.cs"
+                        ? file with { LineCount = 300 }
+                        : file)
+                .ToArray()
+        };
         var entry = new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
         var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
 
-        var ingredients = await extractor.ExtractAsync(FixtureRoot, expandedScanResult, resolvedEntry);
+        var ingredients = await extractor.ExtractAsync(
+            FixtureRoot,
+            expandedScanResult,
+            resolvedEntry,
+            "\u8A2D\u5B9A\u753B\u9762\u3092\u958B\u304D\u305F\u3044");
 
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Command
             && contract.Summary.Contains("7", StringComparison.Ordinal)
-            && contract.Summary.Contains("SampleCommand1", StringComparison.Ordinal));
+            && contract.Summary.Contains("OpenSettingsCommand", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.Command
+            && contract.Title == "OpenSettingsCommand"
+            && contract.Summary.Contains("OpenSettings(...)", StringComparison.Ordinal)
+            && contract.Summary.Contains("ISettingWindowService.Show(...)", StringComparison.Ordinal)
+            && contract.Summary.Contains("SettingWindow", StringComparison.Ordinal)
+            && contract.Summary.Contains("show-dialog", StringComparison.Ordinal));
         Assert.DoesNotContain(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Command
             && contract.Title == "SampleCommand1");
         Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
             line.Contains("7", StringComparison.Ordinal)
-            && line.Contains("SampleCommand1", StringComparison.Ordinal));
+            && line.Contains("OpenSettingsCommand", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("OpenSettingsCommand", StringComparison.Ordinal)
+            && line.Contains("ISettingWindowService.Show(...)", StringComparison.Ordinal)
+            && line.Contains("SettingWindow", StringComparison.Ordinal)
+            && line.Contains("show-dialog", StringComparison.Ordinal));
         Assert.DoesNotContain(ingredients.SnippetCandidates, snippet =>
             snippet.Anchor.Contains("ExecuteSample1", StringComparison.Ordinal));
+        Assert.Contains(ingredients.SnippetCandidates, snippet =>
+            snippet.Anchor.Contains("OpenSettings(...)", StringComparison.Ordinal));
+        Assert.Contains(ingredients.SnippetCandidates, snippet =>
+            snippet.Anchor.Contains("Show(...)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_WhenCommandsAreManyAndGoalDoesNotMatch_UsesSummaryOnly()
+    {
+        var fileSystem = new WorkspaceFileSystem();
+        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+        var resolver = new ScanBackedEntryResolver();
+        var extractor = new WpfNet8ContractExtractor(fileSystem);
+
+        var scanResult = await scanner.ScanAsync(FixtureRoot);
+        var baseCommand = Assert.Single(scanResult.Commands);
+        var expandedCommands = new[]
+            {
+                baseCommand
+            }
+            .Concat(Enumerable.Range(1, 6)
+                .Select(index => new CommandBinding(
+                    baseCommand.ViewModelSymbol,
+                    $"SampleCommand{index}",
+                    baseCommand.CommandType,
+                    $"{baseCommand.ViewModelSymbol}.ExecuteSample{index}",
+                    baseCommand.CanExecuteSymbol,
+                    baseCommand.BoundViews)))
+            .ToArray();
+        var expandedScanResult = scanResult with { Commands = expandedCommands };
+        var entry = new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
+        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
+
+        var ingredients = await extractor.ExtractAsync(
+            FixtureRoot,
+            expandedScanResult,
+            resolvedEntry,
+            "\u30E9\u30A4\u30BB\u30F3\u30B9\u901A\u77E5\u3092\u78BA\u8A8D\u3057\u305F\u3044");
+
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.Command
+            && contract.Summary.Contains("7", StringComparison.Ordinal));
+        Assert.DoesNotContain(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.Command
+            && contract.Title == "OpenSettingsCommand");
+        Assert.DoesNotContain(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("OpenSettingsCommand", StringComparison.Ordinal)
+            && line.Contains("ISettingWindowService.Show(...)", StringComparison.Ordinal));
+        Assert.DoesNotContain(ingredients.SnippetCandidates, snippet =>
+            snippet.Anchor.Contains("OpenSettings(...)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_ForDirectServiceCallWithoutDialog_DoesNotInventWindowActivation()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-command-impact-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ViewModels"));
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Services"));
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views"));
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Common"));
+
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "Sample.sln"), string.Empty);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Sample.Presentation.Wpf.csproj"),
+                """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net8.0-windows</TargetFramework>
+                    <UseWPF>true</UseWPF>
+                  </PropertyGroup>
+                </Project>
+                """);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Services", "ExportService.cs"),
+                """
+                namespace Sample.Presentation.Wpf.Services;
+
+                public interface IExportService
+                {
+                    void Save();
+                }
+
+                public sealed class ExportService : IExportService
+                {
+                    public void Save()
+                    {
+                    }
+                }
+                """);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ViewModels", "ShellViewModel.cs"),
+                """
+                using Sample.Presentation.Wpf.Common;
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf.ViewModels;
+
+                public sealed class ShellViewModel
+                {
+                    private readonly IExportService exportService;
+
+                    public DelegateCommand ExportCommand { get; }
+
+                    public ShellViewModel(IExportService exportService)
+                    {
+                        this.exportService = exportService;
+                        ExportCommand = new DelegateCommand(Export);
+                    }
+
+                    private void Export()
+                    {
+                        exportService.Save();
+                    }
+                }
+                """);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views", "ShellView.xaml"),
+                """
+                <Window
+                    x:Class="Sample.Presentation.Wpf.Views.ShellView"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                </Window>
+                """);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views", "ShellView.xaml.cs"),
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+
+                namespace Sample.Presentation.Wpf.Views;
+
+                public partial class ShellView
+                {
+                    public ShellView(ShellViewModel shellViewModel)
+                    {
+                        DataContext = shellViewModel;
+                    }
+                }
+                """);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Common", "DelegateCommand.cs"),
+                """
+                using System;
+                using System.Windows.Input;
+
+                namespace Sample.Presentation.Wpf.Common;
+
+                public sealed class DelegateCommand : ICommand
+                {
+                    private readonly Action execute;
+
+                    public DelegateCommand(Action execute)
+                    {
+                        this.execute = execute;
+                    }
+
+                    public event EventHandler? CanExecuteChanged;
+
+                    public bool CanExecute(object? parameter) => true;
+
+                    public void Execute(object? parameter) => execute();
+                }
+                """);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ServiceRegistration.cs"),
+                """
+                using Microsoft.Extensions.DependencyInjection;
+                using Sample.Presentation.Wpf.Services;
+                using Sample.Presentation.Wpf.ViewModels;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static IServiceCollection AddPresentation(this IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                        services.AddTransient<IExportService, ExportService>();
+                        return services;
+                    }
+                }
+                """);
+
+            var fileSystem = new WorkspaceFileSystem();
+            var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+            var resolver = new ScanBackedEntryResolver();
+            var extractor = new WpfNet8ContractExtractor(fileSystem);
+
+            var scanResult = await scanner.ScanAsync(workspaceRoot);
+            var entry = new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel");
+            var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
+
+            var ingredients = await extractor.ExtractAsync(
+                workspaceRoot,
+                scanResult,
+                resolvedEntry,
+                "\u30A8\u30AF\u30B9\u30DD\u30FC\u30C8\u3057\u305F\u3044");
+
+            Assert.Contains(ingredients.Contracts, contract =>
+                contract.Kind == ContractKind.Command
+                && contract.Title == "ExportCommand"
+                && contract.Summary.Contains("IExportService.Save(...)", StringComparison.Ordinal));
+            Assert.DoesNotContain(ingredients.Contracts, contract =>
+                contract.Kind == ContractKind.Command
+                && contract.Title == "ExportCommand"
+                && contract.Summary.Contains("show-dialog", StringComparison.Ordinal));
+            Assert.DoesNotContain(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+                line.Contains("show-dialog", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -562,7 +810,8 @@ public sealed class WpfNet8WorkspaceScannerTests
     private static async Task<(WorkspaceScanResult ScanResult, PackIngredients Ingredients, ContextPack Pack)> BuildPackAsync(
         Entry entry,
         Budget budget,
-        Func<WorkspaceScanResult, WorkspaceScanResult>? transform = null)
+        Func<WorkspaceScanResult, WorkspaceScanResult>? transform = null,
+        string goal = "Add a new page to the shell.")
     {
         var fileSystem = new WorkspaceFileSystem();
         var scanner = new WpfNet8WorkspaceScanner(fileSystem);
@@ -576,9 +825,9 @@ public sealed class WpfNet8WorkspaceScannerTests
         }
 
         var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
-        var ingredients = await extractor.ExtractAsync(FixtureRoot, scanResult, resolvedEntry);
+        var ingredients = await extractor.ExtractAsync(FixtureRoot, scanResult, resolvedEntry, goal);
         var pack = ContextPackFactory.Create(
-            "Add a new page to the shell.",
+            goal,
             entry,
             resolvedEntry,
             ingredients,

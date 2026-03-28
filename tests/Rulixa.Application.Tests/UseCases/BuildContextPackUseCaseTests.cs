@@ -84,6 +84,7 @@ public sealed class BuildContextPackUseCaseTests
             string workspaceRoot,
             WorkspaceScanResult scanResult,
             ResolvedEntry resolvedEntry,
+            string goal,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(ingredients);
     }

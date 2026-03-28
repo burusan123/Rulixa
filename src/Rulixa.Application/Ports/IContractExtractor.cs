@@ -10,5 +10,6 @@ public interface IContractExtractor
         string workspaceRoot,
         WorkspaceScanResult scanResult,
         ResolvedEntry resolvedEntry,
+        string goal,
         CancellationToken cancellationToken = default);
 }

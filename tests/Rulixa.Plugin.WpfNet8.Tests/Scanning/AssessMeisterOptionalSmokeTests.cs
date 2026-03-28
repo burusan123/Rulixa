@@ -36,7 +36,7 @@ public sealed class AssessMeisterOptionalSmokeTests
             scanResult,
             entry,
             resolvedEntry,
-            "Shell 画面に新しいページを追加したい",
+            "\u8A2D\u5B9A\u753B\u9762\u3092\u958B\u304D\u305F\u3044",
             Budget.Default);
         var markdown = renderer.Render(pack);
 
@@ -47,13 +47,18 @@ public sealed class AssessMeisterOptionalSmokeTests
             && contract.Summary.Contains("SelectedItem", StringComparison.Ordinal)
             && contract.Summary.Contains("CurrentPage", StringComparison.Ordinal));
         Assert.Contains(pack.Contracts, contract =>
-            contract.Kind == ContractKind.DependencyInjection
-            && contract.Title == "直接依存のライフタイム");
+            contract.Kind == ContractKind.DependencyInjection);
         Assert.Contains(pack.Contracts, contract =>
             contract.Kind == ContractKind.DialogActivation);
+        Assert.Contains(pack.Contracts, contract =>
+            contract.Kind == ContractKind.Command
+            && contract.Summary.Contains("OpenSetting", StringComparison.Ordinal)
+            && (contract.Summary.Contains("OpenSettingWindow", StringComparison.Ordinal)
+                || contract.Summary.Contains("show-dialog", StringComparison.Ordinal)));
         Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Reason is "root-binding-source" or "dependency-injection" or "navigation-update");
-        Assert.Contains("## 契約", markdown, StringComparison.Ordinal);
+        Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Reason == "command-impact" || snippet.Anchor.Contains("OpenSetting", StringComparison.Ordinal));
         Assert.Contains("SelectedItem", markdown, StringComparison.Ordinal);
         Assert.Contains("CurrentPage", markdown, StringComparison.Ordinal);
         Assert.Contains("show-dialog", markdown, StringComparison.Ordinal);
@@ -66,20 +71,20 @@ public sealed class OptionalAssessMeisterFactAttribute : FactAttribute
     {
         if (!OperatingSystem.IsWindows())
         {
-            Skip = "AssessMeister スモーク検証は Windows 環境でのみ実行します。";
+            Skip = "AssessMeister smoke test runs only on Windows.";
             return;
         }
 
         if (!Directory.Exists(AssessMeisterOptionalSmokeTests.WorkspaceRoot))
         {
-            Skip = $"AssessMeister ワークスペースが見つかりません: {AssessMeisterOptionalSmokeTests.WorkspaceRoot}";
+            Skip = $"AssessMeister workspace was not found: {AssessMeisterOptionalSmokeTests.WorkspaceRoot}";
             return;
         }
 
         var flag = Environment.GetEnvironmentVariable(AssessMeisterOptionalSmokeTests.EnableEnvironmentVariableName);
         if (!string.Equals(flag, "1", StringComparison.Ordinal))
         {
-            Skip = $"{AssessMeisterOptionalSmokeTests.EnableEnvironmentVariableName}=1 のときだけ AssessMeister スモーク検証を実行します。";
+            Skip = $"{AssessMeisterOptionalSmokeTests.EnableEnvironmentVariableName}=1 is required to run the optional smoke test.";
         }
     }
 }

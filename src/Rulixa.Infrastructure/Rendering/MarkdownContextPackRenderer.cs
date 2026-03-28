@@ -143,6 +143,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "conventional-view" => "規約ベースの対応 View",
         "code-behind" => "対応する code-behind",
         "command-viewmodel" => "コマンド定義元 ViewModel",
+        "command-impact" => "コマンド影響先",
         "command-bound-view" => "コマンドが使われる View",
         "command-support" => "コマンド実装支援",
         "dialog-service" => "ダイアログ起動サービス",

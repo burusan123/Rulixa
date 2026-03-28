@@ -51,6 +51,6 @@ public sealed class ShellViewModel
     private void OpenSettings()
     {
         _ = projectWorkspaceService;
-        _ = settingWindowService;
+        settingWindowService.Show();
     }
 }
