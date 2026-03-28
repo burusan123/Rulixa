@@ -30,6 +30,18 @@ public sealed class MarkdownContextPackRendererTests
                     ["App.xaml.cs"],
                     ["App.ViewModels.ShellViewModel"]),
                 new Contract(
+                    ContractKind.DependencyInjection,
+                    "主要 ViewModel の登録",
+                    "ShellViewModel は Singleton として DI 登録されます。",
+                    ["ServiceRegistration.cs"],
+                    ["App.ViewModels.ShellViewModel"]),
+                new Contract(
+                    ContractKind.DependencyInjection,
+                    "直接依存のライフタイム",
+                    "ShellViewModel の直接依存 3 件は Singleton 2、Transient 1 です。例: IProjectWorkspaceService, ISettingWindowService, ILicenseService。",
+                    ["ServiceRegistration.cs"],
+                    ["IProjectWorkspaceService", "ISettingWindowService", "ILicenseService"]),
+                new Contract(
                     ContractKind.Navigation,
                     "一覧・選択・表示の対応",
                     "src/App/Views/ShellView.xaml では 一覧を Items にバインド、選択状態を SelectedItem にバインド、表示コンテンツを CurrentPage にバインド してページ切り替えを表現します。",
@@ -67,6 +79,7 @@ public sealed class MarkdownContextPackRendererTests
                 new IndexSection("ナビゲーション更新点", ["App.ViewModels.ShellViewModel.Select(...) -> CurrentPage = item.PageViewModel (line: 42)"]),
                 new IndexSection("View-ViewModel", ["MainWindow.xaml <-> App.ViewModels.ShellViewModel (ルート DataContext: MainWindow.xaml.cs)", "src/App/Views/ShellView.xaml <-> DataTemplate 二次文脈 13件 (例: CeilingPageViewModel, ConstructionPageViewModel, EquipmentPageViewModel)"]),
                 new IndexSection("起動経路", ["App.xaml.cs -> App.ViewModels.ShellViewModel"]),
+                new IndexSection("DI", ["ShellViewModel (Singleton)", "直接依存 3件: Singleton 2、Transient 1 (例: IProjectWorkspaceService, ISettingWindowService, ILicenseService)"]),
                 new IndexSection("コマンド", ["OpenSettingsCommand -> App.ViewModels.ShellViewModel.OpenSettings"])
             ],
             SelectedFiles:
@@ -97,15 +110,22 @@ public sealed class MarkdownContextPackRendererTests
         Assert.Contains("### ナビゲーション更新点", markdown);
         Assert.Contains("### 選択から表示への因果", markdown);
         Assert.Contains("CurrentPage = item.PageViewModel (line: 42)", markdown);
+        Assert.Contains("### DI", markdown);
+        Assert.Contains("ShellViewModel (Singleton)", markdown);
+        Assert.Contains("直接依存のライフタイム", markdown);
         Assert.Contains("DataTemplate 二次文脈", markdown);
         Assert.DoesNotContain("向けの DataTemplate", markdown);
         Assert.Contains("[警告] entry.unresolved", markdown);
 
         var rootBindingPosition = markdown.IndexOf("[View と ViewModel の対応] ルート DataContext", StringComparison.Ordinal);
+        var diViewModelPosition = markdown.IndexOf("[依存関係の構成] 主要 ViewModel の登録", StringComparison.Ordinal);
+        var diDependencyPosition = markdown.IndexOf("[依存関係の構成] 直接依存のライフタイム", StringComparison.Ordinal);
         var causePosition = markdown.IndexOf("[ナビゲーション] 選択から表示への因果", StringComparison.Ordinal);
         var navigationPosition = markdown.IndexOf("[ナビゲーション] 一覧・選択・表示の対応", StringComparison.Ordinal);
         var dataTemplatePosition = markdown.IndexOf("[View と ViewModel の対応] DataTemplate 二次文脈", StringComparison.Ordinal);
         Assert.True(rootBindingPosition >= 0);
+        Assert.True(diViewModelPosition > rootBindingPosition);
+        Assert.True(diDependencyPosition > diViewModelPosition);
         Assert.True(causePosition > rootBindingPosition);
         Assert.True(navigationPosition > causePosition);
         Assert.True(dataTemplatePosition > navigationPosition);
@@ -115,11 +135,15 @@ public sealed class MarkdownContextPackRendererTests
         var navigationUpdateIndexPosition = markdown.IndexOf("### ナビゲーション更新点", StringComparison.Ordinal);
         var viewModelIndexPosition = markdown.IndexOf("### View-ViewModel", StringComparison.Ordinal);
         var startupIndexPosition = markdown.IndexOf("### 起動経路", StringComparison.Ordinal);
+        var diIndexPosition = markdown.IndexOf("### DI", StringComparison.Ordinal);
+        var commandIndexPosition = markdown.IndexOf("### コマンド", StringComparison.Ordinal);
         Assert.True(navigationIndexPosition >= 0);
         Assert.True(causeIndexPosition > navigationIndexPosition);
         Assert.True(navigationUpdateIndexPosition > causeIndexPosition);
         Assert.True(viewModelIndexPosition > navigationUpdateIndexPosition);
         Assert.True(startupIndexPosition > viewModelIndexPosition);
+        Assert.True(diIndexPosition > startupIndexPosition);
+        Assert.True(commandIndexPosition > diIndexPosition);
     }
 
     [Fact]

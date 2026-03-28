@@ -130,7 +130,9 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
     {
         ContractKind.ViewModelBinding when !contract.Title.Contains("DataTemplate", StringComparison.Ordinal) => 0,
         ContractKind.Startup => 10,
-        ContractKind.DependencyInjection => 20,
+        ContractKind.DependencyInjection when contract.Title == "主要 ViewModel の登録" => 20,
+        ContractKind.DependencyInjection when contract.Title == "直接依存のライフタイム" => 21,
+        ContractKind.DependencyInjection => 22,
         ContractKind.Navigation when contract.Title == "選択から表示への因果" => 25,
         ContractKind.Navigation => 30,
         ContractKind.ViewModelBinding => 40,
@@ -146,6 +148,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "ナビゲーション更新点" => 20,
         "View-ViewModel" => 30,
         "起動経路" => 40,
+        "DI" => 45,
         "コマンド" => 50,
         _ => 100
     };

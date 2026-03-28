@@ -39,6 +39,12 @@ public sealed class WpfNet8WorkspaceScannerTests
             && transition.StartLine > 0);
         Assert.Contains(result.Commands, command => command.PropertyName == "OpenSettingsCommand");
         Assert.Contains(result.ServiceRegistrations, registration => registration.ServiceType == "ShellViewModel");
+        Assert.Contains(result.ServiceRegistrations, registration =>
+            registration.ServiceType == "IProjectWorkspaceService"
+            && registration.Lifetime == ServiceRegistrationLifetime.Singleton);
+        Assert.Contains(result.ServiceRegistrations, registration =>
+            registration.ServiceType == "ISettingWindowService"
+            && registration.Lifetime == ServiceRegistrationLifetime.Transient);
         Assert.Contains(result.WindowActivations, activation => activation.WindowSymbol == "SettingWindow");
     }
 
@@ -102,6 +108,25 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains(ingredients.Indexes, index =>
             index.Title == "ナビゲーション更新点"
             && index.Lines.Any(line => line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal)));
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.DependencyInjection
+            && contract.Title == "主要 ViewModel の登録"
+            && contract.Summary.Contains("ShellViewModel は Singleton", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.DependencyInjection
+            && contract.Title == "直接依存のライフタイム"
+            && contract.Summary.Contains("ShellViewModel の直接依存 2 件", StringComparison.Ordinal)
+            && contract.Summary.Contains("Singleton 1", StringComparison.Ordinal)
+            && contract.Summary.Contains("Transient 1", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "DI"
+            && index.Lines.Any(line => line.Contains("ShellViewModel (Singleton)", StringComparison.Ordinal)));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "DI"
+            && index.Lines.Any(line =>
+                line.Contains("直接依存 2件", StringComparison.Ordinal)
+                && line.Contains("IProjectWorkspaceService", StringComparison.Ordinal)
+                && line.Contains("ISettingWindowService", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -139,6 +164,15 @@ public sealed class WpfNet8WorkspaceScannerTests
             file.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
             && file.Reason == "navigation-update");
         Assert.True(pack.SelectedFiles.Count <= 8);
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.DependencyInjection
+            && contract.Title == "主要 ViewModel の登録"
+            && contract.Summary.Contains("ShellViewModel は Singleton", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "DI"
+            && index.Lines.Any(line =>
+                line.Contains("直接依存 2件", StringComparison.Ordinal)
+                && !line.Contains("ShellViewModel", StringComparison.Ordinal)));
     }
 
     [Fact]

@@ -1,11 +1,15 @@
 using System.Collections.ObjectModel;
 using System.Linq;
 using AssessMeister.Presentation.Wpf.Common;
+using AssessMeister.Presentation.Wpf.Services;
 
 namespace AssessMeister.Presentation.Wpf.ViewModels;
 
 public sealed class ShellViewModel
 {
+    private readonly IProjectWorkspaceService projectWorkspaceService;
+    private readonly ISettingWindowService settingWindowService;
+
     public DelegateCommand OpenSettingsCommand { get; }
 
     public ObservableCollection<NavItemViewModel> Items { get; } = [];
@@ -14,8 +18,12 @@ public sealed class ShellViewModel
 
     public object? CurrentPage { get; private set; }
 
-    public ShellViewModel()
+    public ShellViewModel(
+        IProjectWorkspaceService projectWorkspaceService,
+        ISettingWindowService settingWindowService)
     {
+        this.projectWorkspaceService = projectWorkspaceService;
+        this.settingWindowService = settingWindowService;
         OpenSettingsCommand = new DelegateCommand(OpenSettings);
         var dashboardPage = new DashboardPageViewModel();
         var item = new NavItemViewModel("Dashboard", dashboardPage);
@@ -42,5 +50,7 @@ public sealed class ShellViewModel
 
     private void OpenSettings()
     {
+        _ = projectWorkspaceService;
+        _ = settingWindowService;
     }
 }
