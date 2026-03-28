@@ -88,6 +88,31 @@ internal sealed class EvidenceBundleWriter(JsonSerializerOptions jsonOptions)
                 ResolvedPath: NormalizePath(resolvedEntry.ResolvedPath),
                 Symbol: resolvedEntry.Symbol,
                 Confidence: resolvedEntry.Confidence.ToString().ToLowerInvariant()),
+            SelectionSummary: new EvidenceSelectionSummaryDto(
+                contextPack.Contracts
+                    .OrderBy(static contract => contract.Kind.ToString(), StringComparer.Ordinal)
+                    .ThenBy(static contract => contract.Title, StringComparer.Ordinal)
+                    .Select(static contract => new EvidenceContractDto(
+                        contract.Kind.ToString().ToLowerInvariant(),
+                        contract.Title,
+                        contract.Summary))
+                    .ToArray(),
+                contextPack.SelectedFiles
+                    .Select(static file => new EvidenceSelectedFileDto(
+                        NormalizePath(file.Path)!,
+                        file.Reason,
+                        file.IsRequired,
+                        file.LineCount))
+                    .ToArray(),
+                contextPack.SelectedSnippets
+                    .Select(static snippet => new EvidenceSelectedSnippetDto(
+                        NormalizePath(snippet.Path)!,
+                        snippet.Reason,
+                        snippet.Anchor,
+                        snippet.StartLine,
+                        snippet.EndLine,
+                        snippet.IsRequired))
+                    .ToArray()),
             Artifacts: new EvidenceArtifactsDto(
                 ManifestFileName,
                 ScanFileName,
@@ -203,6 +228,7 @@ internal sealed class EvidenceBundleWriter(JsonSerializerOptions jsonOptions)
         string Goal,
         EvidenceBudgetDto Budget,
         EvidenceResolvedEntryDto ResolvedEntry,
+        EvidenceSelectionSummaryDto SelectionSummary,
         EvidenceArtifactsDto Artifacts);
 
     internal sealed record EvidenceBudgetDto(
@@ -215,6 +241,30 @@ internal sealed class EvidenceBundleWriter(JsonSerializerOptions jsonOptions)
         string? ResolvedPath,
         string? Symbol,
         string Confidence);
+
+    internal sealed record EvidenceSelectionSummaryDto(
+        IReadOnlyList<EvidenceContractDto> Contracts,
+        IReadOnlyList<EvidenceSelectedFileDto> SelectedFiles,
+        IReadOnlyList<EvidenceSelectedSnippetDto> SelectedSnippets);
+
+    internal sealed record EvidenceContractDto(
+        string Kind,
+        string Title,
+        string Summary);
+
+    internal sealed record EvidenceSelectedFileDto(
+        string Path,
+        string Reason,
+        bool IsRequired,
+        int LineCount);
+
+    internal sealed record EvidenceSelectedSnippetDto(
+        string Path,
+        string Reason,
+        string Anchor,
+        int StartLine,
+        int EndLine,
+        bool IsRequired);
 
     internal sealed record EvidenceArtifactsDto(
         string Manifest,

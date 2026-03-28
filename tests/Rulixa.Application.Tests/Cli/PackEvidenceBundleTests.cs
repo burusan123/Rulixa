@@ -59,10 +59,23 @@ public sealed class PackEvidenceBundleTests
 
             var manifest = await File.ReadAllTextAsync(Path.Combine(firstDirectory, "manifest.json"));
             var writtenPack = await File.ReadAllTextAsync(packOutputPath);
+            using var manifestDocument = JsonDocument.Parse(manifest);
+            var selectionSummary = manifestDocument.RootElement.GetProperty("selectionSummary");
+            var contracts = selectionSummary.GetProperty("contracts");
+            var selectedFiles = selectionSummary.GetProperty("selectedFiles");
+            var selectedSnippets = selectionSummary.GetProperty("selectedSnippets");
 
             Assert.Equal(writtenPack, firstPack);
             Assert.Contains("\"entry\": \"symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel\"", manifest, StringComparison.Ordinal);
             Assert.Contains("\"goal\": \"project\"", manifest, StringComparison.Ordinal);
+            Assert.Contains(contracts.EnumerateArray(), element =>
+                element.GetProperty("title").GetString() == "OpenSettingsCommand");
+            Assert.Contains(selectedFiles.EnumerateArray(), element =>
+                element.GetProperty("reason").GetString() == "conventional-view"
+                || element.GetProperty("reason").GetString() == "code-behind");
+            Assert.Contains(selectedSnippets.EnumerateArray(), element =>
+                element.GetProperty("reason").GetString() == "dependency-injection"
+                || element.GetProperty("reason").GetString() == "navigation-xaml-binding");
         }
         finally
         {
