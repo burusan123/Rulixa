@@ -168,6 +168,8 @@ public sealed class CompareEvidenceBundleTests
             Assert.Equal(0, exitCode);
             Assert.Contains("## システム地図の差分", diff, StringComparison.Ordinal);
             Assert.Contains("Shell / Settings / Report/Export", diff, StringComparison.Ordinal);
+            Assert.Contains("## 未解決ガイド差分", diff, StringComparison.Ordinal);
+            Assert.Contains("workflow-selection: 既知の範囲: DraftingWorkflowPort", diff, StringComparison.Ordinal);
             Assert.Contains("## メタデータ差分", diff, StringComparison.Ordinal);
             Assert.Contains("goal: `project` -> `settings`", diff, StringComparison.Ordinal);
             Assert.Contains("## 契約差分", diff, StringComparison.Ordinal);

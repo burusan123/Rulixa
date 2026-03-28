@@ -194,11 +194,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             SnippetCandidates: OrderSnippetCandidates(snippetCandidates),
             FileCandidates: OrderFileCandidates(fileCandidates),
             DecisionTraces: decisionTraces,
-            Unknowns: unknowns
-                .Distinct()
-                .OrderBy(static diagnostic => diagnostic.Code, StringComparer.Ordinal)
-                .ThenBy(static diagnostic => diagnostic.FilePath, StringComparer.OrdinalIgnoreCase)
-                .ToArray());
+            Unknowns: SystemUnknownAggregationSupport.Aggregate(scanResult, relevantContext, unknowns));
     }
 
     private static Diagnostic BuildUnresolvedDiagnostic(ResolvedEntry resolvedEntry) =>

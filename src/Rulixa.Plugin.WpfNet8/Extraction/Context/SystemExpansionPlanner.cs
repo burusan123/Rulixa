@@ -43,24 +43,27 @@ internal sealed class SystemExpansionPlanner
         {
             [rootSymbol] = PackAnalysisHelpers.ClassifySystemFamily(rootSymbol)
         };
+        var familyCandidatesBySymbol = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            [rootSymbol] = ["Shell"]
+        };
 
-        foreach (var symbol in await DiscoverReferencedSymbolsAsync(
+        foreach (var candidate in await DiscoverReferencedSymbolsAsync(
                      workspaceRoot,
                      scanResult,
                      rootSymbol,
                      aggregate.FilePaths,
                      cancellationToken).ConfigureAwait(false))
         {
-            relatedSymbols.Add(symbol);
-            familyBySymbol[symbol] = PackAnalysisHelpers.ClassifySystemFamily(symbol);
-            if (PackAnalysisHelpers.IsViewModelLikeName(PackExtractionConventions.GetSimpleTypeName(symbol)))
+            RegisterRouteCandidate(candidate.Symbol, candidate.FirstHopSymbol, relatedSymbols, familyBySymbol, familyCandidatesBySymbol);
+            if (PackAnalysisHelpers.IsViewModelLikeName(PackExtractionConventions.GetSimpleTypeName(candidate.Symbol)))
             {
-                explorationRootSymbols.Add(symbol);
+                explorationRootSymbols.Add(candidate.Symbol);
             }
         }
 
-        AddDialogSymbols(scanResult, relatedSymbols, explorationRootSymbols, familyBySymbol);
-        AddArchitectureSignals(scanResult, relatedSymbols, familyBySymbol);
+        AddDialogSymbols(scanResult, relatedSymbols, explorationRootSymbols, familyBySymbol, familyCandidatesBySymbol);
+        AddArchitectureSignals(scanResult, relatedSymbols, familyBySymbol, familyCandidatesBySymbol);
 
         var subMaps = BuildSubMaps(scanResult, rootSymbol, relatedSymbols, familyBySymbol);
         return new SystemPackContext(
@@ -68,6 +71,7 @@ internal sealed class SystemExpansionPlanner
             ExplorationRootSymbols: explorationRootSymbols,
             RelatedSymbols: relatedSymbols,
             FamilyBySymbol: familyBySymbol,
+            FamilyCandidatesBySymbol: familyCandidatesBySymbol,
             SubMaps: subMaps);
     }
 
@@ -112,14 +116,14 @@ internal sealed class SystemExpansionPlanner
         return null;
     }
 
-    private async Task<IReadOnlyList<string>> DiscoverReferencedSymbolsAsync(
+    private async Task<IReadOnlyList<SystemRouteCandidate>> DiscoverReferencedSymbolsAsync(
         string workspaceRoot,
         WorkspaceScanResult scanResult,
         string rootSymbol,
         IReadOnlyList<string> rootFilePaths,
         CancellationToken cancellationToken)
     {
-        var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var symbols = new Dictionary<string, SystemRouteCandidate>(StringComparer.OrdinalIgnoreCase);
         var rootTypeName = PackExtractionConventions.GetSimpleTypeName(rootSymbol);
 
         foreach (var filePath in rootFilePaths)
@@ -133,7 +137,7 @@ internal sealed class SystemExpansionPlanner
                 if (!string.IsNullOrWhiteSpace(resolved)
                     && PackAnalysisHelpers.IsSystemExpansionRelevantName(PackExtractionConventions.GetSimpleTypeName(resolved)))
                 {
-                    symbols.Add(resolved);
+                    symbols[resolved] = new SystemRouteCandidate(resolved, resolved);
                 }
             }
 
@@ -144,14 +148,14 @@ internal sealed class SystemExpansionPlanner
             {
                 if (!string.IsNullOrWhiteSpace(referenced.ResolvedSymbol))
                 {
-                    symbols.Add(referenced.ResolvedSymbol);
+                    symbols[referenced.ResolvedSymbol] = new SystemRouteCandidate(referenced.ResolvedSymbol, referenced.ResolvedSymbol);
                 }
             }
         }
 
-        return symbols
-            .OrderBy(static symbol => PackAnalysisHelpers.GetSystemFamilyPriority(PackAnalysisHelpers.ClassifySystemFamily(symbol)))
-            .ThenBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase)
+        return symbols.Values
+            .OrderBy(candidate => PackAnalysisHelpers.GetSystemFamilyPriority(SystemFamilyRoutingSupport.ResolveFamily(candidate.FirstHopSymbol, candidate.Symbol)))
+            .ThenBy(static candidate => candidate.Symbol, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
@@ -159,7 +163,8 @@ internal sealed class SystemExpansionPlanner
         WorkspaceScanResult scanResult,
         ISet<string> relatedSymbols,
         ISet<string> explorationRootSymbols,
-        IDictionary<string, string> familyBySymbol)
+        IDictionary<string, string> familyBySymbol,
+        IDictionary<string, IReadOnlyList<string>> familyCandidatesBySymbol)
     {
         var referencedServiceSymbols = relatedSymbols
             .SelectMany(symbol => scanResult.ServiceRegistrations
@@ -174,27 +179,40 @@ internal sealed class SystemExpansionPlanner
                      relatedSymbols.Contains(activation.ServiceSymbol)
                      || referencedServiceSymbols.Contains(activation.ServiceSymbol, StringComparer.OrdinalIgnoreCase)))
         {
-            relatedSymbols.Add(activation.ServiceSymbol);
-            familyBySymbol[activation.ServiceSymbol] = PackAnalysisHelpers.ClassifySystemFamily(activation.ServiceSymbol);
+            RegisterRouteCandidate(
+                activation.ServiceSymbol,
+                activation.ServiceSymbol,
+                relatedSymbols,
+                familyBySymbol,
+                familyCandidatesBySymbol);
 
-            relatedSymbols.Add(activation.WindowSymbol);
-            familyBySymbol[activation.WindowSymbol] = PackAnalysisHelpers.ClassifySystemFamily(activation.WindowSymbol);
+            RegisterRouteCandidate(
+                activation.WindowSymbol,
+                activation.ServiceSymbol,
+                relatedSymbols,
+                familyBySymbol,
+                familyCandidatesBySymbol);
 
             if (string.IsNullOrWhiteSpace(activation.WindowViewModelSymbol))
             {
                 continue;
             }
 
-            relatedSymbols.Add(activation.WindowViewModelSymbol);
+            RegisterRouteCandidate(
+                activation.WindowViewModelSymbol,
+                activation.ServiceSymbol,
+                relatedSymbols,
+                familyBySymbol,
+                familyCandidatesBySymbol);
             explorationRootSymbols.Add(activation.WindowViewModelSymbol);
-            familyBySymbol[activation.WindowViewModelSymbol] = PackAnalysisHelpers.ClassifySystemFamily(activation.WindowViewModelSymbol);
         }
     }
 
     private static void AddArchitectureSignals(
         WorkspaceScanResult scanResult,
         ISet<string> relatedSymbols,
-        IDictionary<string, string> familyBySymbol)
+        IDictionary<string, string> familyBySymbol,
+        IDictionary<string, IReadOnlyList<string>> familyCandidatesBySymbol)
     {
         if (!scanResult.Files.Any(static file =>
                 file.Path.StartsWith("tests/", StringComparison.OrdinalIgnoreCase)
@@ -206,6 +224,7 @@ internal sealed class SystemExpansionPlanner
         const string architectureMarker = "__architecture__";
         relatedSymbols.Add(architectureMarker);
         familyBySymbol[architectureMarker] = "Architecture";
+        familyCandidatesBySymbol[architectureMarker] = ["Architecture"];
     }
 
     private static IReadOnlyList<SystemSubMap> BuildSubMaps(
@@ -258,6 +277,26 @@ internal sealed class SystemExpansionPlanner
             .First();
     }
 
+    private static void RegisterRouteCandidate(
+        string targetSymbol,
+        string? firstHopSymbol,
+        ISet<string> relatedSymbols,
+        IDictionary<string, string> familyBySymbol,
+        IDictionary<string, IReadOnlyList<string>> familyCandidatesBySymbol)
+    {
+        relatedSymbols.Add(targetSymbol);
+        var candidateFamilies = SystemFamilyRoutingSupport.ResolveCandidateFamilies(firstHopSymbol, targetSymbol);
+        familyCandidatesBySymbol[targetSymbol] = familyCandidatesBySymbol.TryGetValue(targetSymbol, out var existingFamilies)
+            ? existingFamilies
+                .Concat(candidateFamilies)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(SystemFamilyRoutingSupport.GetResolutionPriority)
+                .ThenBy(static family => family, StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : candidateFamilies;
+        familyBySymbol[targetSymbol] = SystemFamilyRoutingSupport.SelectPreferredFamily(familyCandidatesBySymbol[targetSymbol]);
+    }
+
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,
         string relativePath,
@@ -266,4 +305,8 @@ internal sealed class SystemExpansionPlanner
         var absolutePath = Path.Combine(workspaceRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
         return await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
     }
+
+    private sealed record SystemRouteCandidate(
+        string Symbol,
+        string? FirstHopSymbol);
 }

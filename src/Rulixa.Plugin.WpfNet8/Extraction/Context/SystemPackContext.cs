@@ -5,12 +5,18 @@ internal sealed record SystemPackContext(
     IReadOnlySet<string> ExplorationRootSymbols,
     IReadOnlySet<string> RelatedSymbols,
     IReadOnlyDictionary<string, string> FamilyBySymbol,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> FamilyCandidatesBySymbol,
     IReadOnlyList<SystemSubMap> SubMaps)
 {
     internal bool IsEnabled => !string.IsNullOrWhiteSpace(RootSymbol);
 
     internal string? TryGetFamily(string symbol) =>
         FamilyBySymbol.TryGetValue(symbol, out var family) ? family : null;
+
+    internal IReadOnlyList<string> GetFamilyCandidates(string symbol) =>
+        FamilyCandidatesBySymbol.TryGetValue(symbol, out var families)
+            ? families
+            : [];
 }
 
 internal sealed record SystemSubMap(

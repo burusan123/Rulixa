@@ -56,7 +56,7 @@ internal sealed class WorkflowPackSectionBuilder
         contracts.Add(new Contract(
             ContractKind.Command,
             "Workflow",
-            BuildSummary(selected),
+            BuildSummary(relevantContext, selected),
             selected.SelectMany(static analysis => analysis.Candidate.FilePaths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             selected.SelectMany(static analysis => analysis.Candidate.RelatedSymbols).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()));
 
@@ -317,6 +317,8 @@ internal sealed class WorkflowPackSectionBuilder
     {
         var involvedSymbols = candidate.RelatedSymbols;
         var goalCategoryMatches = 0;
+        var rootFamily = PackAnalysisHelpers.GetSystemFamily(relevantContext, candidate.RootSymbol);
+        var routeFamily = GetRouteFamily(relevantContext, candidate);
         if ((relevantContext.GoalProfile.HasCategory("system") || relevantContext.GoalProfile.HasCategory("project"))
             && candidate.NextSymbols.Any(static symbol =>
                 PackAnalysisHelpers.IsPersistenceLikeName(PackExtractionConventions.GetSimpleTypeName(symbol))
@@ -342,6 +344,12 @@ internal sealed class WorkflowPackSectionBuilder
             && candidate.NextSymbols.Any(static symbol =>
                 PackAnalysisHelpers.IsAlgorithmLikeName(PackExtractionConventions.GetSimpleTypeName(symbol))
                 || PackAnalysisHelpers.IsAnalyzerLikeName(PackExtractionConventions.GetSimpleTypeName(symbol))))
+        {
+            goalCategoryMatches += 2;
+        }
+
+        if (relevantContext.SystemPack is not null
+            && !string.Equals(rootFamily, routeFamily, StringComparison.OrdinalIgnoreCase))
         {
             goalCategoryMatches += 2;
         }
@@ -517,10 +525,12 @@ internal sealed class WorkflowPackSectionBuilder
         }
     }
 
-    private static string BuildSummary(IReadOnlyList<WorkflowAnalysis> analyses)
+    private static string BuildSummary(
+        RelevantPackContext relevantContext,
+        IReadOnlyList<WorkflowAnalysis> analyses)
     {
         var downstreamFamilies = analyses
-            .Select(static analysis => PackAnalysisHelpers.ClassifyDownstreamFamily(analysis.Candidate.NextSymbols))
+            .Select(analysis => GetRouteFamily(relevantContext, analysis.Candidate))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(static family => family, StringComparer.Ordinal)
             .ToArray();
@@ -531,6 +541,7 @@ internal sealed class WorkflowPackSectionBuilder
         string.Join(
             "|",
             PackAnalysisHelpers.GetSystemCanonicalRoot(relevantContext, candidate.RootSymbol),
+            GetRouteFamily(relevantContext, candidate),
             PackAnalysisHelpers.ClassifyWorkflowFamily(candidate.FirstHopSymbol),
             PackAnalysisHelpers.ClassifyDownstreamFamily(candidate.NextSymbols));
 
@@ -548,6 +559,16 @@ internal sealed class WorkflowPackSectionBuilder
     private static bool IsSelfLoopCandidate(WorkflowCandidate candidate) =>
         PackAnalysisHelpers.HasSameTypeIdentity(candidate.RootSymbol, candidate.FirstHopSymbol)
         || candidate.NextSymbols.Any(symbol => PackAnalysisHelpers.HasSameTypeIdentity(candidate.FirstHopSymbol, symbol));
+
+    private static string GetRouteFamily(
+        RelevantPackContext relevantContext,
+        WorkflowCandidate candidate)
+    {
+        var families = candidate.NextSymbols
+            .Select(symbol => PackAnalysisHelpers.GetSystemFamily(relevantContext, symbol))
+            .Concat([PackAnalysisHelpers.GetSystemFamily(relevantContext, candidate.FirstHopSymbol)]);
+        return SystemFamilyRoutingSupport.SelectPreferredFamily(families);
+    }
 
     private static string? TryExtractTypeSymbol(DirectCommandImpact impact)
     {

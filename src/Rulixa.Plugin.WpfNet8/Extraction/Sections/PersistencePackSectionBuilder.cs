@@ -47,7 +47,7 @@ internal sealed class PersistencePackSectionBuilder
         contracts.Add(new Contract(
             ContractKind.DependencyInjection,
             "Persistence",
-            BuildSummary(selected),
+            BuildSummary(relevantContext, selected),
             selected.SelectMany(static analysis => analysis.Link.FilePaths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             selected.SelectMany(static analysis => analysis.Link.RelatedSymbols).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()));
 
@@ -286,6 +286,15 @@ internal sealed class PersistencePackSectionBuilder
             relevantContext.GoalProfile.HasCategory("project") || relevantContext.GoalProfile.HasCategory("system")
                 ? 1
                 : 0;
+        if (relevantContext.SystemPack is not null)
+        {
+            var rootFamily = PackAnalysisHelpers.GetSystemFamily(relevantContext, link.RootSymbol);
+            var routeFamily = GetRouteFamily(relevantContext, link);
+            if (!string.Equals(rootFamily, routeFamily, StringComparison.OrdinalIgnoreCase))
+            {
+                goalCategoryMatches++;
+            }
+        }
 
         return new SectionSignalEvidence(
             ConstructorDependencyMatches: link.IsConstructorMatch ? 1 : 0,
@@ -401,10 +410,12 @@ internal sealed class PersistencePackSectionBuilder
         }
     }
 
-    private static string BuildSummary(IReadOnlyList<PersistenceAnalysis> analyses)
+    private static string BuildSummary(
+        RelevantPackContext relevantContext,
+        IReadOnlyList<PersistenceAnalysis> analyses)
     {
         var families = analyses
-            .Select(static analysis => PackAnalysisHelpers.ClassifyPersistenceFamily(analysis.Link.PersistenceSymbol))
+            .Select(analysis => GetRouteFamily(relevantContext, analysis.Link))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(static family => family, StringComparer.Ordinal)
             .ToArray();
@@ -415,6 +426,7 @@ internal sealed class PersistencePackSectionBuilder
         string.Join(
             "|",
             PackAnalysisHelpers.GetSystemCanonicalRoot(relevantContext, link.RootSymbol),
+            GetRouteFamily(relevantContext, link),
             PackAnalysisHelpers.ClassifyWorkflowFamily(link.OwnerSymbol),
             PackAnalysisHelpers.ClassifyPersistenceFamily(link.PersistenceSymbol));
 
@@ -424,6 +436,18 @@ internal sealed class PersistencePackSectionBuilder
 
     private static bool IsSelfLoopCandidate(PersistenceLink link) =>
         PackAnalysisHelpers.HasSameTypeIdentity(link.OwnerSymbol, link.PersistenceSymbol);
+
+    private static string GetRouteFamily(
+        RelevantPackContext relevantContext,
+        PersistenceLink link)
+    {
+        var families = new[]
+        {
+            PackAnalysisHelpers.GetSystemFamily(relevantContext, link.PersistenceSymbol),
+            PackAnalysisHelpers.GetSystemFamily(relevantContext, link.OwnerSymbol)
+        };
+        return SystemFamilyRoutingSupport.SelectPreferredFamily(families);
+    }
 
     private static string BuildKnownRange(IEnumerable<string> symbols)
     {

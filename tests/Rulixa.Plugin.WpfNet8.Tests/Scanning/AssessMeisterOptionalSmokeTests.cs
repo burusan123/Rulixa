@@ -52,6 +52,8 @@ public sealed class AssessMeisterOptionalSmokeTests
         Assert.Contains(pack.Contracts, contract =>
             contract.Title == "System Pack"
             && contract.Summary.Contains("Drafting", StringComparison.Ordinal)
+            && contract.Summary.Contains("Settings", StringComparison.Ordinal)
+            && contract.Summary.Contains("Report/Export", StringComparison.Ordinal)
             && contract.Summary.Contains("Architecture", StringComparison.Ordinal));
         Assert.Contains(pack.Contracts, contract =>
             contract.Kind == ContractKind.DialogActivation);

@@ -165,6 +165,7 @@ internal sealed class ExternalAssetPackSectionBuilder
         ExternalAssetUsage usage)
     {
         var goalCategoryMatches = 0;
+        var ownerFamily = PackAnalysisHelpers.GetSystemFamily(relevantContext, usage.OwnerSymbol);
         if (relevantContext.GoalProfile.HasCategory("system") || relevantContext.GoalProfile.HasCategory("project"))
         {
             goalCategoryMatches++;
@@ -174,6 +175,17 @@ internal sealed class ExternalAssetPackSectionBuilder
             && usage.Descriptors.Any(static descriptor => descriptor.Contains(".onnx", StringComparison.OrdinalIgnoreCase)))
         {
             goalCategoryMatches++;
+        }
+
+        if (relevantContext.SystemPack is not null)
+        {
+            goalCategoryMatches += usage.AssetFamily switch
+            {
+                "excel" when string.Equals(ownerFamily, "Settings", StringComparison.OrdinalIgnoreCase) => 2,
+                "template" when string.Equals(ownerFamily, "Report/Export", StringComparison.OrdinalIgnoreCase) => 2,
+                "onnx-model" when string.Equals(ownerFamily, "Drafting", StringComparison.OrdinalIgnoreCase) => 2,
+                _ => 0
+            };
         }
 
         return new SectionSignalEvidence(

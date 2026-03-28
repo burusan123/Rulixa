@@ -72,6 +72,7 @@ internal sealed class HubObjectPackSectionBuilder
         CancellationToken cancellationToken)
     {
         var candidates = new Dictionary<string, HubObjectCandidate>(StringComparer.OrdinalIgnoreCase);
+        var ownerReferences = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var symbolsToInspect = new HashSet<string>(relevantContext.ExplorationRootSymbols, StringComparer.OrdinalIgnoreCase);
 
         foreach (var viewModelSymbol in relevantContext.ExplorationRootSymbols)
@@ -100,6 +101,13 @@ internal sealed class HubObjectPackSectionBuilder
                          symbol,
                          cancellationToken))
             {
+                if (!ownerReferences.TryGetValue(referenced, out var owners))
+                {
+                    owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    ownerReferences[referenced] = owners;
+                }
+
+                owners.Add(symbol);
                 var hubFiles = PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, referenced);
                 if (hubFiles.Count == 0)
                 {
@@ -122,7 +130,8 @@ internal sealed class HubObjectPackSectionBuilder
                     referenced,
                     signals.OrderBy(static signal => signal, StringComparer.OrdinalIgnoreCase).ToArray(),
                     hubFiles,
-                    allSources.Count(source => PackAnalysisHelpers.HasHubObjectSignals(source)));
+                    allSources.Count(source => PackAnalysisHelpers.HasHubObjectSignals(source)),
+                    ownerReferences.TryGetValue(referenced, out var candidateOwners) ? candidateOwners.Count : 0);
             }
         }
 
@@ -197,8 +206,8 @@ internal sealed class HubObjectPackSectionBuilder
         return new SectionSignalEvidence(
             PartialSymbolMatches: PackAnalysisHelpers.ResolveAggregate(scanResult, relevantContext, candidate.Symbol)?.FilePaths.Count > 1 ? 1 : 0,
             FileKindMatches: PackAnalysisHelpers.CountFileKindMatches(scanResult, candidate.FilePaths, ScanFileKind.CSharp, ScanFileKind.ViewModel, ScanFileKind.Service),
-            GoalCategoryMatches: goalCategoryMatches,
-            SemanticSignalCount: candidate.Signals.Count,
+            GoalCategoryMatches: goalCategoryMatches + (candidate.OwnerReferenceCount > 1 ? 1 : 0),
+            SemanticSignalCount: candidate.Signals.Count + candidate.OwnerReferenceCount,
             DownstreamCount: candidate.SignalSourceCount);
     }
 
@@ -380,7 +389,8 @@ internal sealed class HubObjectPackSectionBuilder
         string Symbol,
         IReadOnlyList<string> Signals,
         IReadOnlyList<string> FilePaths,
-        int SignalSourceCount)
+        int SignalSourceCount,
+        int OwnerReferenceCount)
     {
         internal string DisplayName => PackExtractionConventions.GetSimpleTypeName(Symbol);
     }

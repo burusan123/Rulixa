@@ -20,6 +20,7 @@ internal sealed class EvidenceBundleDiffRenderer
         builder.AppendLine();
 
         AppendSystemPackDiff(builder, before.SelectionSummary.Contracts, after.SelectionSummary.Contracts);
+        AppendUnknownGuidanceDiff(builder, before.DecisionTraces, after.DecisionTraces);
         AppendMetadataDiff(builder, before, after);
         AppendContractDiff(builder, before.SelectionSummary.Contracts, after.SelectionSummary.Contracts);
         AppendSelectedFileDiff(builder, before.SelectionSummary.SelectedFiles, after.SelectionSummary.SelectedFiles);
@@ -44,6 +45,34 @@ internal sealed class EvidenceBundleDiffRenderer
         builder.AppendLine("## システム地図の差分");
         builder.AppendLine($"- before: {beforeSystem?.Summary ?? "なし"}");
         builder.AppendLine($"- after: {afterSystem?.Summary ?? "なし"}");
+        builder.AppendLine();
+    }
+
+    private static void AppendUnknownGuidanceDiff(
+        StringBuilder builder,
+        IReadOnlyList<EvidenceDecisionTraceDto> beforeTraces,
+        IReadOnlyList<EvidenceDecisionTraceDto> afterTraces)
+    {
+        var beforeGuidance = beforeTraces
+            .Where(static trace => string.Equals(trace.DecisionKind, "unknown-raised", StringComparison.Ordinal))
+            .OrderBy(static trace => trace.Category, StringComparer.Ordinal)
+            .ThenBy(static trace => trace.ItemKey, StringComparer.Ordinal)
+            .ToArray();
+        var afterGuidance = afterTraces
+            .Where(static trace => string.Equals(trace.DecisionKind, "unknown-raised", StringComparison.Ordinal))
+            .OrderBy(static trace => trace.Category, StringComparer.Ordinal)
+            .ThenBy(static trace => trace.ItemKey, StringComparer.Ordinal)
+            .ToArray();
+        if (beforeGuidance.Length == 0 && afterGuidance.Length == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine("## 未解決ガイド差分");
+        builder.AppendLine("### before");
+        AppendDifferenceList(builder, beforeGuidance.Select(static trace => $"{trace.Category}: {trace.Summary}"));
+        builder.AppendLine("### after");
+        AppendDifferenceList(builder, afterGuidance.Select(static trace => $"{trace.Category}: {trace.Summary}"));
         builder.AppendLine();
     }
 
