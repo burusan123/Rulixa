@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Rulixa.Application\Rulixa.Application.csproj" />
+    <ProjectReference Include="..\..\src\Rulixa.Domain\Rulixa.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Rulixa.Infrastructure\Rulixa.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Rulixa.Plugin.WpfNet8\Rulixa.Plugin.WpfNet8.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Fixtures\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

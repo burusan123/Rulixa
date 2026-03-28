@@ -1,37 +1,56 @@
-## Rulixa
+# Rulixa
 
-`Rulixa` は、AI駆動開発における **トークン不足／暗黙仕様／巨大コードベース**の問題を、**契約（Contracts）＋索引（Index）＋Context Pack** に変換して解決するためのローカルツールです。
+`Rulixa` は、大規模コードベースや複雑な設定を AI が扱いやすい最小文脈に圧縮し、再現可能な作業単位として取り出すためのローカルツールです。  
+Phase 1 では `Windows` 上の `WPF + .NET 8` アプリケーションを対象に、`Contracts`、`Index`、`Context Pack` を生成することを目的にしています。
 
-### ドキュメント（まずここ）
+## 現在の実装状況
 
-- `docs/project_full_spec.md`（完全版の正本）
-- `docs/polaris.md`（北極星）
-- `docs/spec/phase1/README.md`（Phase 1 仕様の入口）
-- `docs/spec/phase1/scope.md`（Phase 1 スコープ）
-- `docs/spec/phase1/architecture.md`（Frontend / Core 分離とプロジェクト分割）
-- `docs/spec/phase1/ir.md`（Phase 1 IR）
-- `docs/spec/phase1/entry_resolution.md`（entry 解決仕様）
-- `docs/spec/phase1/wpf_net8_extraction_targets.md`（WPF + .NET 8 抽出対象）
-- `docs/spec/phase1/context_pack_rules.md`（Context Pack ルール）
-- `docs/spec/phase1/implementation_plan.md`（実装順と scan pipeline）
-- `docs/spec/phase1/examples/assessmeister_shell_pack_example.md`（Pack 具体例）
+- `entry=file` と `entry=symbol` の両方で Context Pack を生成できます。
+- 主対象は `AssessMeister` の Shell 導線です。
+- `symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` から、`ShellView.xaml` 周辺の必須文脈を既定 budget 内で選定できます。
+- `DataTemplate` 配下の PageViewModel は、既定では二次文脈として扱います。
 
-### ソース構成（概要）
+## プロジェクト構成
 
-- `src/Rulixa.Core`：解析・契約抽出・索引・pack生成・セキュリティ・ライセンスチェック
-- `src/Rulixa.Cli`：CLI入口（デバッグ/手動運用）
-- `src/Rulixa.Mcp`：MCP入口（将来、Cursor/VS Codeから利用）
+- `src/Rulixa.Domain`
+  ドメインモデル、IR、Context Pack 選定ルール
+- `src/Rulixa.Application`
+  ユースケースとポート
+- `src/Rulixa.Infrastructure`
+  ファイルシステム、entry 解決、Markdown 出力
+- `src/Rulixa.Plugin.WpfNet8`
+  `WPF + .NET 8` 向けの解析実装
+- `src/Rulixa.Cli`
+  `scan`、`resolve-entry`、`pack` を提供する CLI
 
-### 生成物
+## CLI
 
-生成物は `artifacts/` 配下を既定とし、Git管理外です（`.gitignore`）。
+現在実装済みのコマンドは次の 3 つです。
 
-Doc Pack（`docs/_generated/`）も生成物としてGit管理しません（CI artifact＋PRコメント運用）。  
-CI定義は `/.github/workflows/docpack-ci.yml` を参照してください。
+- `scan`
+- `resolve-entry`
+- `pack`
 
-### Windowsでの文字化けについて（CLI）
+### 例: file entry
 
-Windowsのターミナル設定によっては、`--goal` に日本語を直接渡すと文字化けする可能性があります。  
-その場合は **`--goalStdin`（推奨）** または **`--goalFile`** を使用してください。
+```powershell
+dotnet run --project src\Rulixa.Cli -- pack `
+  --workspace D:\C#\AssessMeister `
+  --entry file:src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml `
+  --goal "Shell 画面に新しいページを追加したい"
+```
 
+### 例: symbol entry
 
+```powershell
+dotnet run --project src\Rulixa.Cli -- pack `
+  --workspace D:\C#\AssessMeister `
+  --entry symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel `
+  --goal "Shell 画面に新しいページを追加したい"
+```
+
+## 関連ドキュメント
+
+- [全体仕様](D:/C#/Rulixa/docs/project_full_spec.md)
+- [課題整理](D:/C#/Rulixa/docs/polaris.md)
+- [Phase 1 仕様の入口](D:/C#/Rulixa/docs/spec/phase1/README.md)

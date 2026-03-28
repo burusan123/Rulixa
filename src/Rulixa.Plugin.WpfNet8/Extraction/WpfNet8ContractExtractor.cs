@@ -1,0 +1,401 @@
+using Rulixa.Application.Ports;
+using Rulixa.Domain.Diagnostics;
+using Rulixa.Domain.Entries;
+using Rulixa.Domain.Packs;
+using Rulixa.Domain.Scanning;
+
+namespace Rulixa.Plugin.WpfNet8.Extraction;
+
+public sealed class WpfNet8ContractExtractor : IContractExtractor
+{
+    private readonly IWorkspaceFileSystem workspaceFileSystem;
+
+    public WpfNet8ContractExtractor(IWorkspaceFileSystem workspaceFileSystem)
+    {
+        this.workspaceFileSystem = workspaceFileSystem ?? throw new ArgumentNullException(nameof(workspaceFileSystem));
+    }
+
+    public async Task<PackIngredients> ExtractAsync(
+        string workspaceRoot,
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry,
+        CancellationToken cancellationToken = default)
+    {
+        var contracts = new List<Contract>();
+        var indexes = new List<IndexSection>();
+        var fileCandidates = new List<FileSelectionCandidate>();
+        var unknowns = new List<Diagnostic>();
+
+        if (resolvedEntry.ResolvedKind == ResolvedEntryKind.Unresolved)
+        {
+            unknowns.Add(new Diagnostic(
+                "entry.unresolved",
+                "エントリを一意に解決できませんでした。",
+                null,
+                DiagnosticSeverity.Warning,
+                resolvedEntry.Candidates
+                    .Select(static candidate => candidate.Path ?? candidate.Symbol ?? string.Empty)
+                    .Where(static candidate => !string.IsNullOrWhiteSpace(candidate))
+                    .ToArray()));
+
+            return new PackIngredients(contracts, indexes, fileCandidates, unknowns);
+        }
+
+        if (!string.IsNullOrWhiteSpace(resolvedEntry.ResolvedPath))
+        {
+            fileCandidates.Add(new FileSelectionCandidate(resolvedEntry.ResolvedPath, "entry", 0, true));
+        }
+
+        var relevantBindings = FindRelevantBindings(scanResult, resolvedEntry);
+        var primaryBindings = relevantBindings
+            .Where(static binding => binding.BindingKind is ViewModelBindingKind.RootDataContext or ViewModelBindingKind.ViewDataContext)
+            .ToArray();
+        var secondaryBindings = relevantBindings
+            .Where(static binding => binding.BindingKind == ViewModelBindingKind.DataTemplate)
+            .ToArray();
+
+        AddStartupContracts(scanResult, contracts, fileCandidates);
+        AddDependencyInjectionContracts(scanResult, contracts, fileCandidates);
+        AddBindingContracts(scanResult, primaryBindings, true, contracts, fileCandidates);
+        AddBindingContracts(scanResult, secondaryBindings, false, contracts, fileCandidates);
+        AddConventionalViewFiles(scanResult, resolvedEntry, fileCandidates);
+        AddCommandContracts(scanResult, resolvedEntry, contracts, fileCandidates);
+        await AddReachableDialogContractsAsync(workspaceRoot, scanResult, resolvedEntry, contracts, fileCandidates, cancellationToken).ConfigureAwait(false);
+
+        indexes.Add(BuildStartupIndex(scanResult));
+        indexes.Add(BuildViewModelIndex(relevantBindings));
+        indexes.Add(BuildCommandIndex(scanResult, resolvedEntry));
+
+        return new PackIngredients(
+            Contracts: contracts.Distinct().ToArray(),
+            Indexes: indexes.Where(static index => index.Lines.Count > 0).ToArray(),
+            FileCandidates: fileCandidates
+                .GroupBy(static candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+                .Select(static group => group
+                    .OrderByDescending(static candidate => candidate.IsRequired)
+                    .ThenBy(static candidate => candidate.Priority)
+                    .First())
+                .OrderByDescending(static candidate => candidate.IsRequired)
+                .ThenBy(static candidate => candidate.Priority)
+                .ThenBy(static candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            Unknowns: unknowns);
+    }
+
+    private static IReadOnlyList<ViewModelBinding> FindRelevantBindings(
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry)
+    {
+        return scanResult.ViewModelBindings
+            .Where(binding =>
+                string.Equals(binding.ViewPath, resolvedEntry.ResolvedPath, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(binding.ViewModelSymbol, resolvedEntry.Symbol, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static binding => binding.BindingKind)
+            .ThenBy(static binding => binding.ViewPath, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static void AddStartupContracts(
+        WorkspaceScanResult scanResult,
+        ICollection<Contract> contracts,
+        ICollection<FileSelectionCandidate> fileCandidates)
+    {
+        var startupFiles = scanResult.Files
+            .Where(static file => file.Kind == ScanFileKind.Startup)
+            .OrderBy(static file => file.Path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (startupFiles.Length == 0)
+        {
+            return;
+        }
+
+        contracts.Add(new Contract(
+            ContractKind.Startup,
+            "起動経路",
+            "App と MainWindow がルート ViewModel を構成します。",
+            startupFiles.Select(static file => file.Path).ToArray(),
+            scanResult.ProjectSummary.RootViewModels));
+
+        foreach (var startupFile in startupFiles)
+        {
+            fileCandidates.Add(new FileSelectionCandidate(startupFile.Path, "startup", 10, true));
+        }
+    }
+
+    private static void AddDependencyInjectionContracts(
+        WorkspaceScanResult scanResult,
+        ICollection<Contract> contracts,
+        ICollection<FileSelectionCandidate> fileCandidates)
+    {
+        var registrationFiles = scanResult.ServiceRegistrations
+            .Select(static registration => registration.RegistrationFile)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (registrationFiles.Length == 0)
+        {
+            return;
+        }
+
+        contracts.Add(new Contract(
+            ContractKind.DependencyInjection,
+            "DI 登録",
+            "ViewModel と Service は DI 登録を通じて構成されます。",
+            registrationFiles,
+            scanResult.ServiceRegistrations.Select(static registration => registration.ServiceType).ToArray()));
+
+        foreach (var registrationFile in registrationFiles)
+        {
+            fileCandidates.Add(new FileSelectionCandidate(registrationFile, "dependency-injection", 20, true));
+        }
+    }
+
+    private static void AddBindingContracts(
+        WorkspaceScanResult scanResult,
+        IReadOnlyList<ViewModelBinding> bindings,
+        bool required,
+        ICollection<Contract> contracts,
+        ICollection<FileSelectionCandidate> fileCandidates)
+    {
+        foreach (var binding in bindings)
+        {
+            var priority = binding.BindingKind == ViewModelBindingKind.DataTemplate ? 40 : 5;
+            var title = binding.BindingKind switch
+            {
+                ViewModelBindingKind.RootDataContext => "ルート DataContext",
+                ViewModelBindingKind.ViewDataContext => "View の DataContext",
+                ViewModelBindingKind.DataTemplate => "DataTemplate",
+                _ => binding.BindingKind.ToString()
+            };
+
+            var summary = binding.BindingKind switch
+            {
+                ViewModelBindingKind.RootDataContext => $"{binding.ViewPath} が {binding.ViewModelSymbol} をルート ViewModel として利用します。",
+                ViewModelBindingKind.ViewDataContext => $"{binding.ViewPath} が {binding.ViewModelSymbol} を DataContext として利用します。",
+                ViewModelBindingKind.DataTemplate => $"{binding.ViewPath} から {binding.ViewModelSymbol} への DataTemplate が定義されています。",
+                _ => $"{binding.ViewPath} が {binding.ViewModelSymbol} に対応します。"
+            };
+
+            contracts.Add(new Contract(
+                ContractKind.ViewModelBinding,
+                title,
+                summary,
+                [binding.ViewPath, binding.SourcePath],
+                [binding.ViewSymbol, binding.ViewModelSymbol]));
+
+            var reason = binding.BindingKind switch
+            {
+                ViewModelBindingKind.RootDataContext => "root-binding",
+                ViewModelBindingKind.ViewDataContext => "view-binding",
+                ViewModelBindingKind.DataTemplate => "data-template",
+                _ => "view-binding"
+            };
+            var sourceReason = binding.BindingKind switch
+            {
+                ViewModelBindingKind.RootDataContext => "root-binding-source",
+                ViewModelBindingKind.ViewDataContext => "view-binding-source",
+                ViewModelBindingKind.DataTemplate => "data-template-source",
+                _ => "view-binding-source"
+            };
+
+            fileCandidates.Add(new FileSelectionCandidate(binding.ViewPath, reason, priority, required));
+            fileCandidates.Add(new FileSelectionCandidate(binding.SourcePath, sourceReason, priority + 5, required && binding.BindingKind != ViewModelBindingKind.RootDataContext));
+
+            var viewModelFile = scanResult.Symbols.FirstOrDefault(symbol =>
+                string.Equals(symbol.QualifiedName, binding.ViewModelSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
+            if (!string.IsNullOrWhiteSpace(viewModelFile))
+            {
+                fileCandidates.Add(new FileSelectionCandidate(viewModelFile, reason, priority, required));
+            }
+        }
+    }
+
+    private static void AddConventionalViewFiles(
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry,
+        ICollection<FileSelectionCandidate> fileCandidates)
+    {
+        if (resolvedEntry.ResolvedKind != ResolvedEntryKind.Symbol || string.IsNullOrWhiteSpace(resolvedEntry.Symbol))
+        {
+            if (!string.IsNullOrWhiteSpace(resolvedEntry.ResolvedPath)
+                && resolvedEntry.ResolvedPath.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))
+            {
+                AddCodeBehindIfPresent(scanResult, resolvedEntry.ResolvedPath, fileCandidates, 1, true);
+            }
+
+            return;
+        }
+
+        var viewName = BuildConventionalViewName(resolvedEntry.Symbol);
+        if (string.IsNullOrWhiteSpace(viewName))
+        {
+            return;
+        }
+
+        var viewPath = scanResult.Files
+            .Where(static file => file.Kind == ScanFileKind.Xaml)
+            .Select(static file => file.Path)
+            .FirstOrDefault(path => Path.GetFileNameWithoutExtension(path).Equals(viewName, StringComparison.OrdinalIgnoreCase));
+
+        if (string.IsNullOrWhiteSpace(viewPath))
+        {
+            return;
+        }
+
+        fileCandidates.Add(new FileSelectionCandidate(viewPath, "conventional-view", 2, true));
+        AddCodeBehindIfPresent(scanResult, viewPath, fileCandidates, 3, true);
+    }
+
+    private static string? BuildConventionalViewName(string symbol)
+    {
+        var displayName = symbol.Split('.').Last();
+        return displayName.EndsWith("ViewModel", StringComparison.Ordinal)
+            ? $"{displayName[..^"ViewModel".Length]}View"
+            : null;
+    }
+
+    private static void AddCodeBehindIfPresent(
+        WorkspaceScanResult scanResult,
+        string viewPath,
+        ICollection<FileSelectionCandidate> fileCandidates,
+        int priority,
+        bool required)
+    {
+        var codeBehindPath = $"{viewPath}.cs";
+        if (scanResult.Files.Any(file => string.Equals(file.Path, codeBehindPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            fileCandidates.Add(new FileSelectionCandidate(codeBehindPath, "code-behind", priority, required));
+        }
+    }
+
+    private static void AddCommandContracts(
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry,
+        ICollection<Contract> contracts,
+        ICollection<FileSelectionCandidate> fileCandidates)
+    {
+        var commands = scanResult.Commands
+            .Where(command =>
+                string.Equals(command.ViewModelSymbol, resolvedEntry.Symbol, StringComparison.OrdinalIgnoreCase)
+                || command.BoundViews.Any(view => string.Equals(view, resolvedEntry.ResolvedPath, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(static command => command.PropertyName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        foreach (var command in commands)
+        {
+            contracts.Add(new Contract(
+                ContractKind.Command,
+                command.PropertyName,
+                $"{command.PropertyName} が {command.ExecuteSymbol} を実行します。",
+                command.BoundViews,
+                [command.ViewModelSymbol, command.ExecuteSymbol]));
+
+            var viewModelFile = scanResult.Symbols.FirstOrDefault(symbol =>
+                string.Equals(symbol.QualifiedName, command.ViewModelSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
+            if (!string.IsNullOrWhiteSpace(viewModelFile))
+            {
+                fileCandidates.Add(new FileSelectionCandidate(viewModelFile, "command-viewmodel", 6, true));
+            }
+
+            foreach (var boundView in command.BoundViews)
+            {
+                fileCandidates.Add(new FileSelectionCandidate(boundView, "command-bound-view", 4, true));
+                AddCodeBehindIfPresent(scanResult, boundView, fileCandidates, 5, true);
+            }
+        }
+
+        var delegateCommandFile = scanResult.Files.FirstOrDefault(file =>
+            Path.GetFileName(file.Path).Equals("DelegateCommand.cs", StringComparison.OrdinalIgnoreCase));
+        if (delegateCommandFile is not null && commands.Length > 0)
+        {
+            fileCandidates.Add(new FileSelectionCandidate(delegateCommandFile.Path, "command-support", 30, true));
+        }
+    }
+
+    private async Task AddReachableDialogContractsAsync(
+        string workspaceRoot,
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry,
+        ICollection<Contract> contracts,
+        ICollection<FileSelectionCandidate> fileCandidates,
+        CancellationToken cancellationToken)
+    {
+        if (resolvedEntry.ResolvedKind != ResolvedEntryKind.Symbol || string.IsNullOrWhiteSpace(resolvedEntry.ResolvedPath))
+        {
+            return;
+        }
+
+        var absolutePath = Path.Combine(workspaceRoot, resolvedEntry.ResolvedPath.Replace('/', Path.DirectorySeparatorChar));
+        var source = await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
+
+        var reachableImplementations = scanResult.ServiceRegistrations
+            .Where(registration =>
+                SourceContainsIdentifier(source, registration.ServiceType)
+                || SourceContainsIdentifier(source, registration.ImplementationType))
+            .Select(static registration => registration.ImplementationType)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var activations = scanResult.WindowActivations
+            .Where(activation => reachableImplementations.Any(implementation =>
+                activation.ServiceSymbol.EndsWith($".{implementation}", StringComparison.OrdinalIgnoreCase)
+                || activation.CallerSymbol.Contains(implementation, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(static activation => activation.WindowSymbol, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        foreach (var activation in activations)
+        {
+            contracts.Add(new Contract(
+                ContractKind.DialogActivation,
+                activation.WindowSymbol,
+                $"{activation.CallerSymbol} から {activation.WindowSymbol} が起動されます。",
+                [],
+                [activation.CallerSymbol, activation.ServiceSymbol, activation.WindowSymbol]));
+
+            var serviceFile = scanResult.Symbols.FirstOrDefault(symbol =>
+                string.Equals(symbol.QualifiedName, activation.ServiceSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
+            if (!string.IsNullOrWhiteSpace(serviceFile))
+            {
+                fileCandidates.Add(new FileSelectionCandidate(serviceFile, "dialog-service", 12, false));
+            }
+        }
+    }
+
+    private static bool SourceContainsIdentifier(string source, string identifier)
+    {
+        var simpleName = identifier.Split('.').Last();
+        return source.Contains(simpleName, StringComparison.Ordinal);
+    }
+
+    private static IndexSection BuildStartupIndex(WorkspaceScanResult scanResult) =>
+        new(
+            "起動経路",
+            scanResult.ProjectSummary.EntryPoints
+                .Select(entryPoint => $"{entryPoint} -> {string.Join(", ", scanResult.ProjectSummary.RootViewModels)}")
+                .ToArray());
+
+    private static IndexSection BuildViewModelIndex(IReadOnlyList<ViewModelBinding> bindings) =>
+        new(
+            "View-ViewModel",
+            bindings.Select(binding => $"{binding.ViewPath} <-> {binding.ViewModelSymbol} ({DescribeBindingKind(binding.BindingKind)})").ToArray());
+
+    private static IndexSection BuildCommandIndex(WorkspaceScanResult scanResult, ResolvedEntry resolvedEntry) =>
+        new(
+            "コマンド",
+            scanResult.Commands
+                .Where(command =>
+                    string.Equals(command.ViewModelSymbol, resolvedEntry.Symbol, StringComparison.OrdinalIgnoreCase)
+                    || command.BoundViews.Any(view => string.Equals(view, resolvedEntry.ResolvedPath, StringComparison.OrdinalIgnoreCase)))
+                .Select(command => $"{command.PropertyName} -> {command.ExecuteSymbol}")
+                .ToArray());
+
+    private static string DescribeBindingKind(ViewModelBindingKind bindingKind) => bindingKind switch
+    {
+        ViewModelBindingKind.RootDataContext => "ルート DataContext",
+        ViewModelBindingKind.ViewDataContext => "View の DataContext",
+        ViewModelBindingKind.DataTemplate => "DataTemplate",
+        _ => bindingKind.ToString()
+    };
+}
