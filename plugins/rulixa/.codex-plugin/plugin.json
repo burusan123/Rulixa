@@ -26,7 +26,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "AssessMeister の ShellViewModel から Context Pack を作って。",
+      "プロジェクト の ShellViewModel から Context Pack を作って。",
       "ShellView.xaml を entry=file で解析する pack コマンドを組み立てて。",
       "Rulixa.Cli の pack 引数を確認して。"
     ],
