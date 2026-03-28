@@ -1,188 +1,97 @@
-# アーキテクチャ
+# Phase 1 アーキテクチャ
 
-## 目的
+## 位置づけ
 
-Phase 1 のアーキテクチャは、**フロントエンドとコアを明確に分離**しつつ、`WPF + .NET 8` 向けの解析を最小コストで拡張可能にすることを目的とする。
+この文書は Phase 1 の具体アーキテクチャ仕様です。
+Rulixa 全体の正本ではなく、`WPF + .NET 8` を攻略対象にしたときのプロジェクト分割と責務分離を定義します。
 
-ここでいう分離は次を意味する。
+## 基本方針
 
-- UI/入口は Pack を「表示・要求」するだけ
-- 解析、契約抽出、entry 解決、Pack 組み立ては Core が担う
-- `WPF + .NET 8` 固有の解析はプラグインとして外側に置く
+- Frontend と Core を分離する
+- 入口の都合を Domain / Application に持ち込まない
+- `WPF + .NET 8` 固有解析は Plugin に閉じ込める
+- Infrastructure にドメインルールを置かない
 
-## 依存方向
-
-依存方向は常に外側から内側に向ける。
+## 層構造
 
 1. Frontend
 2. Plugin / Infrastructure
 3. Application
 4. Domain
 
-禁止事項:
+依存方向は外側から内側だけに向けます。
 
-- Frontend から Domain を直接読んでロジックを組むこと
-- Plugin が Frontend 型に依存すること
-- Domain が Roslyn、WPF、CLI、MCP に依存すること
+## プロジェクト分割
 
-## レイヤ責務
+### `Rulixa.Domain`
 
-### Domain
+- `Entry`
+- `ResolvedEntry`
+- `Budget`
+- `ContextPack`
+- `Contract`
+- `IndexSection`
+- `NavigationTransition`
+- Pack 選定ルール
 
-役割:
+禁止:
 
-- `Entry`, `ResolvedEntry`, `Budget`, `ContextPack`, `Contract`, `Index` などの中核概念
-- 不変条件
-- 決定性を守るための並び順ルールや優先順位ルール
-
-置くべきでないもの:
-
-- Roslyn
+- Roslyn 依存
+- WPF 依存
 - ファイル I/O
-- JSON シリアライズ
-- CLI/MCP 用 DTO
+- CLI 都合の型
 
-### Application
-
-役割:
-
-- `scan`
-- `resolve entry`
-- `extract contracts`
-- `build context pack`
-
-特徴:
-
-- ユースケース単位で組み立てる
-- 外部 I/O はインターフェース越しに使う
-- 対象技術固有の実装詳細は持たない
-
-### Plugin / Infrastructure
-
-役割:
-
-- ファイルシステム走査
-- ハッシュ計算
-- JSON 出力
-- `WPF + .NET 8` 向け解析
-- Roslyn / XML / csproj 読み取り
-
-特徴:
-
-- Application のポートを実装する
-- 対象技術ごとの差分を吸収する
-
-### Frontend
-
-役割:
-
-- ユーザー入力受付
-- `entry`, `goal`, `budget` の受け渡し
-- Pack 表示
-- 候補解決 UI
-
-Phase 1 では次を想定する。
-
-- CLI
-- MCP
-- 将来の VS Code 拡張
-
-## 推奨プロジェクト分割
-
-Phase 1 での分割は、細かくし過ぎず次の粒度を推奨する。
-
-### 1. `Rulixa.Domain`
-
-含むもの:
-
-- 中核モデル
-- Pack 組み立てルール
-- 契約・索引の値オブジェクト
-
-### 2. `Rulixa.Application`
-
-含むもの:
+### `Rulixa.Application`
 
 - `ScanWorkspaceUseCase`
 - `ResolveEntryUseCase`
 - `BuildContextPackUseCase`
-- Application ポート
+- ポート定義
 
-### 3. `Rulixa.Plugin.WpfNet8`
+役割:
 
-含むもの:
+- Domain を使ってユースケースを組み立てる
+- 外部 I/O は抽象に依存する
+
+### `Rulixa.Plugin.WpfNet8`
 
 - XAML 解析
-- View-ViewModel 対応抽出
+- View-ViewModel 抽出
+- NavigationTransition 抽出
 - Command 抽出
-- Dialog 起動抽出
-- DI 登録抽出
+- Dialog 抽出
+- DI 抽出
 
-理由:
+役割:
 
-- `WPF + .NET 8` 固有ロジックを Core から隔離するため
+- Phase 1 の具体攻略対象を Core から分離する
 
-### 4. `Rulixa.Infrastructure`
-
-含むもの:
+### `Rulixa.Infrastructure`
 
 - ファイルシステム
-- キャッシュ
 - ハッシュ
-- JSON シリアライザ
-- ログ実装
+- Markdown renderer
+- entry 解決補助
 
-### 5. `Rulixa.Cli`
+役割:
 
-含むもの:
+- Application のポートを実装する
 
-- コマンドライン入口
-- 引数パース
-- Pack 出力
+### `Rulixa.Cli`
 
-### 6. `Rulixa.Mcp`
+- `scan`
+- `resolve-entry`
+- `pack`
 
-含むもの:
+役割:
 
-- MCP 入口
-- リクエスト/レスポンス変換
+- ユーザー入力を受けて UseCase を呼ぶ
+- 出力を整形する
 
-## 分け過ぎないための基準
+## 判断基準
 
-次のような目的だけで新規プロジェクトを作らない。
+迷ったら次で判断します。
 
-- Utility を分けたいだけ
-- Model を別けたいだけ
-- 将来使うかもしれないから
-
-新規プロジェクト化の条件は、少なくとも次のどちらかを満たすときとする。
-
-- 依存方向を明確に守るために物理分割が必要
-- 変更理由が明確に異なる
-
-## Phase 1 の処理フロー
-
-1. Frontend が `entry + goal + budget` を受け取る
-2. Application が workspace scan を要求する
-3. Plugin が `WPF + .NET 8` 向け IR を構築する
-4. Application が `entry` を解決する
-5. Application が Pack 選定ルールで最小ファイル束を作る
-6. Frontend が Pack を表示する
-
-## `AssessMeister` を前提にした設計上の示唆
-
-`AssessMeister` では次が主要論点だった。
-
-- `App -> MainWindow -> ShellViewModel` の起動経路
-- `ShellView.xaml` の `DataTemplate`
-- `ShellViewModel` の `CurrentPage` 切り替え
-- `ServiceRegistration.cs` の DI
-- `ShowDialog()` 系サービス
-
-したがって `Rulixa.Plugin.WpfNet8` は、まずこの5系統の抽出に集中する。
-
-## Phase 1 の非目標
-
-- 入口ごとに別 Core を作ること
-- WPF 解析を Domain/Application に埋め込むこと
-- 技術要素ごとに過剰に細かいプロジェクトへ分解すること
+- 製品全体で再利用されるルールは Core
+- `WPF + .NET 8` に閉じる事実抽出は Plugin
+- 入出力、表示、実行環境依存は Frontend / Infrastructure

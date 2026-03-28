@@ -2,7 +2,10 @@
 
 このフォルダは `Rulixa` の Phase 1 仕様をまとめた入口です。
 
-Phase 1 は `Windows` 上の `WPF + .NET 8` アプリケーションを対象に、AI が変更作業を始めるための最小 Context Pack をローカルで生成することを目的にします。
+この配下の文書は、Rulixa 全体の正本ではありません。
+上位方針は [polaris.md](/D:/C#/Rulixa/docs/polaris.md) と [project_full_spec.md](/D:/C#/Rulixa/docs/project_full_spec.md) を参照してください。
+
+Phase 1 は、その上位方針を `Windows` 上の `WPF + .NET 8` という具体攻略対象で実装するための仕様です。
 
 ## 現在の実装範囲
 
@@ -17,7 +20,7 @@ Phase 1 は `Windows` 上の `WPF + .NET 8` アプリケーションを対象に
 - [scope.md](scope.md)
   Phase 1 の対象と非対象
 - [architecture.md](architecture.md)
-  Frontend / Core 分離とプロジェクト分割
+  Phase 1 用の Frontend / Core 分離とプロジェクト分割
 - [ir.md](ir.md)
   Phase 1 の IR 定義
 - [entry_resolution.md](entry_resolution.md)

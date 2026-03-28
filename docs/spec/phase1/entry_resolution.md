@@ -1,19 +1,19 @@
 # Entry 解決仕様
 
-## 目的
+## 位置づけ
 
-`entry` は、ユーザーが「どこから文脈を集め始めたいか」を指定する入口である。  
-Phase 1 では、`WPF + .NET 8` に必要な入口を、曖昧さを残したままではなく、**解決結果つき**で扱う。
+この文書は Phase 1 の `entry` 解決仕様です。
+Rulixa 全体の一般仕様ではなく、`WPF + .NET 8` を具体攻略対象にしたときの優先解決ルールを定義します。
 
-## 入力形式
+## 対応する入口
 
 - `file:<path>`
 - `symbol:<qualifiedName>`
 - `auto:<text>`
 
-## file 解決
+## `file` 解決
 
-### 対象
+対象:
 
 - `*.xaml`
 - `*.xaml.cs`
@@ -22,158 +22,62 @@ Phase 1 では、`WPF + .NET 8` に必要な入口を、曖昧さを残したま
 - `*.sln`
 - `Directory.Build.props`
 
-### 解決ルール
+ルール:
 
 1. ワークスペース相対パスと絶対パスの両方を受ける
-2. 大文字小文字は Windows では無視して一致させる
+2. Windows では大文字小文字を区別しない
 3. 同名ファイルが複数ある場合は候補を返す
-4. 存在しない場合は `unresolved` とする
+4. 一意に定まらない場合は `unresolved` にする
 
-### 解決結果
+## `symbol` 解決
 
-```json
-{
-  "input": "file:src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml",
-  "resolvedKind": "file",
-  "resolvedPath": "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml",
-  "symbol": null,
-  "confidence": "high",
-  "candidates": []
-}
-```
-
-## symbol 解決
-
-### 対象
+対象:
 
 - クラス
 - メソッド
 - プロパティ
-- `ICommand` プロパティ
+- `ICommand` 公開プロパティ
 
-### 解決ルール
+ルール:
 
 1. 完全修飾名を優先する
-2. クラス名のみの場合は候補を返す
-3. ネストした型や partial class は同一シンボルとして統合する
-4. メソッドは必要なら `Type.Method` まで扱う
+2. 同名クラスが複数ある場合は候補を返す
+3. `partial class` は 1 つのシンボルとして扱う
 
-### 解決結果
+## `auto` 解決
 
-```json
-{
-  "input": "symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
-  "resolvedKind": "symbol",
-  "resolvedPath": "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs",
-  "symbol": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
-  "confidence": "high",
-  "candidates": []
-}
-```
-
-## auto 解決
-
-`auto` は、ファイル名、型名、画面名、略称などを入力された場合に使う。
-
-例:
-
-- `auto:ShellView`
-- `auto:ShellViewModel`
-- `auto:設定画面`
-
-### 解決手順
+`auto` は補助入口です。Phase 1 では次の順で解決を試みます。
 
 1. ファイル名一致
 2. クラス名一致
 3. View と ViewModel の命名規約一致
-4. 部分一致
+4. Window 名一致
 
-### 候補提示ルール
+複数候補が出る場合は、自動確定せず候補を返します。
 
-- 1件なら自動採用
-- 2件以上なら候補一覧を返す
-- 候補は `kind`, `path`, `symbol`, `reason` を含める
+## Phase 1 の `WPF + .NET 8` 優先規則
 
-## WPF Phase 1 の優先的な解決対象
+### XAML 起点
 
-### 1. XAML
+補完対象:
 
-優先理由:
+- 対応する code-behind
+- 対応する ViewModel
+- 対応する DataTemplate
 
-- 変更入口として最も自然
-- ViewModel、Command、Dialog 契約に広がる
+### ViewModel 起点
 
-追加で解決すべきもの:
-
-- 対応 code-behind
-- 対応 ViewModel
-- 対応 DataTemplate
-
-### 2. ViewModel
-
-優先理由:
-
-- Command と依存サービスに到達しやすい
-
-追加で解決すべきもの:
+補完対象:
 
 - 対応 View
 - 注入サービス
-- 公開 `ICommand`
+- `ICommand`
+- `SelectedItem` / `CurrentPage` 更新点
 
-### 3. Dialog 起動サービス
+### Dialog 起点
 
-優先理由:
-
-- 文脈が別 Window に飛ぶため、Pack の品質差が大きい
-
-追加で解決すべきもの:
+補完対象:
 
 - 起動先 Window
 - 起動先 ViewModel
-- 呼び出し元 ViewModel
-
-## 曖昧性の扱い
-
-解決できない場合は勝手に決めず、次の形で保持する。
-
-```json
-{
-  "input": "auto:SettingWindow",
-  "resolvedKind": "unresolved",
-  "resolvedPath": null,
-  "symbol": null,
-  "confidence": "low",
-  "candidates": [
-    {
-      "kind": "window",
-      "path": "src/.../Views/Settings/SettingWindow.xaml",
-      "symbol": "AssessMeister.Presentation.Wpf.Views.Settings.SettingWindow",
-      "reason": "file-name-match"
-    },
-    {
-      "kind": "viewmodel",
-      "path": "src/.../ViewModels/Settings/SettingWindowViewModel.cs",
-      "symbol": "AssessMeister.Presentation.Wpf.ViewModels.Settings.SettingWindowViewModel",
-      "reason": "class-name-match"
-    }
-  ]
-}
-```
-
-## Pack 生成への橋渡し
-
-解決済み entry から、Phase 1 では次の初期セットを作る。
-
-- `file:xaml`
-  対象 XAML + code-behind + ViewModel
-- `symbol:viewmodel`
-  対象 ViewModel + View + DI 登録
-- `symbol:service`
-  対象 Service + 起動 Window + 呼び出し元
-
-## Phase 1 の非目標
-
-- 自然言語だけで正確に画面名を完全解決すること
-- 実行時のみ有効な ViewModel 差し替えの完全追跡
-- すべてのメソッドオーバーロードの完全識別
+- 呼び出し元サービス

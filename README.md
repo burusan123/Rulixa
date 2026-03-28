@@ -1,10 +1,17 @@
 # Rulixa
 
-`Rulixa` は、大規模な WPF / .NET ワークスペースから AI が変更作業を始めるための最小文脈を抽出するためのローカル Context Pack 生成ツールです。
+`Rulixa` は、設計知・依存・制約・安全要件を継続生成し、AI 入力を正規化し、PR レビューや監査に使える成果物へ変換するためのローカル基盤です。
 
-現時点の Phase 1 は `Windows` 上の `WPF + .NET 8` アプリケーションを対象にし、`Contracts`、`Index`、`Selected Files` を含む Context Pack を `CLI` と `Codex Plugin` から生成できます。
+現在の Phase 1 では、その具体攻略対象として `Windows` 上の `WPF + .NET 8` アプリケーションを扱い、`Contracts`、`Index`、`Selected Files` を含む Context Pack を `CLI` と `Codex Plugin` から生成できます。
 
-## 現在の到達点
+## 製品の中心価値
+
+- AI に渡す入力を決定的に正規化する
+- PR レビューに必要な契約と依存を差分で読めるようにする
+- 監査証跡として成果物を継続生成する
+- その一部として Context Pack を生成する
+
+## Phase 1 の到達点
 
 - `entry=file` と `entry=symbol` の両方で Context Pack を生成できます。
 - 主対象は `AssessMeister` の Shell 導線です。

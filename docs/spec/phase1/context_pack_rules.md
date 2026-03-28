@@ -1,5 +1,10 @@
 # Context Pack ルール
 
+## 位置づけ
+
+この文書は Phase 1 の `WPF + .NET 8` 向け Context Pack 選定ルールです。
+Rulixa 全体の一般規則ではなく、現在の具体攻略対象に最適化したルールとして扱います。
+
 ## 目的
 
 Phase 1 の Context Pack は、`WPF + .NET 8` アプリケーションの変更作業に必要な最小限のファイルと契約を AI に渡すための形式です。
