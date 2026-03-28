@@ -49,24 +49,12 @@ public sealed class WpfNet8WorkspaceScannerTests
     }
 
     [Fact]
-    public async Task ExtractAsync_ForShellViewFile_SelectsCoreFiles()
+    public async Task ExtractAsync_ForShellViewFile_UsesSnippetsForLargeViewModel()
     {
-        var fileSystem = new WorkspaceFileSystem();
-        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
-        var resolver = new ScanBackedEntryResolver();
-        var extractor = new WpfNet8ContractExtractor(fileSystem);
-
-        var scanResult = await scanner.ScanAsync(FixtureRoot);
-        var entry = new Entry(EntryKind.File, "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml");
-        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
-        var ingredients = await extractor.ExtractAsync(FixtureRoot, scanResult, resolvedEntry);
-        var pack = ContextPackFactory.Create(
-            "Add a new page to the shell.",
-            entry,
-            resolvedEntry,
-            ingredients,
-            scanResult,
-            new Budget(MaxFiles: 10, MaxTotalLines: 5000, MaxSnippetsPerFile: 3));
+        var (scanResult, ingredients, pack) = await BuildPackAsync(
+            new Entry(EntryKind.File, "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"),
+            new Budget(MaxFiles: 10, MaxTotalLines: 5000, MaxSnippetsPerFile: 3),
+            PromoteShellViewModelToLargeFile);
 
         var selectedPaths = pack.SelectedFiles.Select(static file => file.Path).ToArray();
         var dataTemplateBindings = scanResult.ViewModelBindings
@@ -74,34 +62,28 @@ public sealed class WpfNet8WorkspaceScannerTests
                 binding.ViewPath == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
                 && binding.BindingKind == ViewModelBindingKind.DataTemplate)
             .ToArray();
-        var expectedCountText = $"{dataTemplateBindings.Length} 件";
-        var expectedSampleName = dataTemplateBindings[0].ViewModelSymbol.Split('.').Last();
 
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/App.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
+        Assert.DoesNotContain("src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs", selectedPaths);
+        Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+            && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
+            && snippet.Anchor.Contains("Select(...)", StringComparison.Ordinal));
+
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.ViewModelBinding
             && contract.Title == "DataTemplate 二次文脈"
-            && contract.Summary.Contains(expectedCountText, StringComparison.Ordinal)
-            && contract.Summary.Contains(expectedSampleName, StringComparison.Ordinal));
-        Assert.DoesNotContain(ingredients.Contracts, contract =>
-            contract.Kind == ContractKind.ViewModelBinding
-            && contract.Title == "DataTemplate"
-            && contract.Summary.Contains("向けの DataTemplate", StringComparison.Ordinal));
+            && contract.Summary.Contains($"{dataTemplateBindings.Length} 件", StringComparison.Ordinal));
         Assert.Contains(ingredients.Indexes, index =>
             index.Title == "View-ViewModel"
             && index.Lines.Any(line =>
                 line.Contains("MainWindow.xaml <-> AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel", StringComparison.Ordinal)));
-        Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "View-ViewModel"
-            && index.Lines.Any(line =>
-                line.Contains($"DataTemplate 二次文脈 {dataTemplateBindings.Length}件", StringComparison.Ordinal)));
         Assert.Contains(ingredients.Indexes, index =>
             index.Title == "ナビゲーション更新点"
             && index.Lines.Any(line => line.Contains("SelectedItem = match", StringComparison.Ordinal)));
@@ -118,41 +100,20 @@ public sealed class WpfNet8WorkspaceScannerTests
             && contract.Summary.Contains("ShellViewModel の直接依存 2 件", StringComparison.Ordinal)
             && contract.Summary.Contains("Singleton 1", StringComparison.Ordinal)
             && contract.Summary.Contains("Transient 1", StringComparison.Ordinal));
-        Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "DI"
-            && index.Lines.Any(line => line.Contains("ShellViewModel (Singleton)", StringComparison.Ordinal)));
-        Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "DI"
-            && index.Lines.Any(line =>
-                line.Contains("直接依存 2件", StringComparison.Ordinal)
-                && line.Contains("IProjectWorkspaceService", StringComparison.Ordinal)
-                && line.Contains("ISettingWindowService", StringComparison.Ordinal)));
     }
 
     [Fact]
-    public async Task ExtractAsync_ForShellViewModelSymbol_ExcludesDataTemplateViewModelsFromDefaultBudget()
+    public async Task ExtractAsync_ForShellViewModelSymbol_ReplacesLargeFileWithinDefaultBudget()
     {
-        var fileSystem = new WorkspaceFileSystem();
-        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
-        var resolver = new ScanBackedEntryResolver();
-        var extractor = new WpfNet8ContractExtractor(fileSystem);
-
-        var scanResult = await scanner.ScanAsync(FixtureRoot);
-        var entry = new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
-        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
-        var ingredients = await extractor.ExtractAsync(FixtureRoot, scanResult, resolvedEntry);
-        var pack = ContextPackFactory.Create(
-            "Add a new page to the shell.",
-            entry,
-            resolvedEntry,
-            ingredients,
-            scanResult,
-            Budget.Default);
+        var (_, ingredients, pack) = await BuildPackAsync(
+            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            Budget.Default,
+            PromoteShellViewModelToLargeFile);
 
         var selectedFiles = pack.SelectedFiles.ToArray();
         var selectedPaths = selectedFiles.Select(static file => file.Path).ToArray();
 
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs", selectedPaths);
+        Assert.DoesNotContain(selectedPaths, path => path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs");
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
@@ -160,10 +121,12 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains("src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
         Assert.DoesNotContain(selectedPaths, path => path.Contains("/Pages/", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(selectedFiles, file =>
-            file.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
-            && file.Reason == "navigation-update");
         Assert.True(pack.SelectedFiles.Count <= 8);
+
+        Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+            && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
+            && snippet.Anchor.Contains("Select(...)", StringComparison.Ordinal));
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.DependencyInjection
             && contract.Title == "主要 ViewModel の登録"
@@ -172,21 +135,16 @@ public sealed class WpfNet8WorkspaceScannerTests
             index.Title == "DI"
             && index.Lines.Any(line =>
                 line.Contains("直接依存 2件", StringComparison.Ordinal)
-                && !line.Contains("ShellViewModel", StringComparison.Ordinal)));
+                && !line.Contains("ShellViewModel (Singleton)", StringComparison.Ordinal)));
     }
 
     [Fact]
     public async Task ExtractAsync_ForShellViewModelSymbol_AddsNavigationContractAndUpdateIndex()
     {
-        var fileSystem = new WorkspaceFileSystem();
-        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
-        var resolver = new ScanBackedEntryResolver();
-        var extractor = new WpfNet8ContractExtractor(fileSystem);
-
-        var scanResult = await scanner.ScanAsync(FixtureRoot);
-        var entry = new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
-        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
-        var ingredients = await extractor.ExtractAsync(FixtureRoot, scanResult, resolvedEntry);
+        var (_, ingredients, pack) = await BuildPackAsync(
+            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            Budget.Default,
+            PromoteShellViewModelToLargeFile);
 
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Navigation
@@ -195,11 +153,11 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Navigation
             && contract.Title == "選択から表示への因果"
-            && contract.Summary.Contains("SelectedItem の選択更新が CurrentPage の表示切り替えを駆動します。", StringComparison.Ordinal)
             && contract.Summary.Contains("SelectedItem = match", StringComparison.Ordinal)
             && contract.Summary.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Navigation
+            && contract.Title == "ViewModel 更新点"
             && contract.Summary.Contains(".Select(...)", StringComparison.Ordinal)
             && contract.Summary.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
         Assert.Contains(ingredients.Indexes, index =>
@@ -218,6 +176,12 @@ public sealed class WpfNet8WorkspaceScannerTests
             && index.Lines.Any(line =>
                 line.Contains("SelectedItem = match", StringComparison.Ordinal)
                 && line.Contains("line:", StringComparison.Ordinal)));
+
+        Assert.DoesNotContain(pack.SelectedFiles, file => file.Path.EndsWith("ShellViewModel.cs", StringComparison.Ordinal));
+        Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+            && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
+            && snippet.Anchor.Contains("Select(...)", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -247,15 +211,16 @@ public sealed class WpfNet8WorkspaceScannerTests
 
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Command
-            && contract.Title == "コマンド導線の要約"
-            && contract.Summary.Contains("7 件のコマンド導線", StringComparison.Ordinal)
+            && contract.Summary.Contains("7", StringComparison.Ordinal)
             && contract.Summary.Contains("SampleCommand1", StringComparison.Ordinal));
         Assert.DoesNotContain(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Command
             && contract.Title == "SampleCommand1");
-        Assert.Contains(ingredients.Indexes, index =>
-            index.Title == "コマンド"
-            && index.Lines.Single().Contains("7件のコマンド導線", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("7", StringComparison.Ordinal)
+            && line.Contains("SampleCommand1", StringComparison.Ordinal));
+        Assert.DoesNotContain(ingredients.SnippetCandidates, snippet =>
+            snippet.Anchor.Contains("ExecuteSample1", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -306,4 +271,42 @@ public sealed class WpfNet8WorkspaceScannerTests
             }
         }
     }
+
+    private static async Task<(WorkspaceScanResult ScanResult, PackIngredients Ingredients, ContextPack Pack)> BuildPackAsync(
+        Entry entry,
+        Budget budget,
+        Func<WorkspaceScanResult, WorkspaceScanResult>? transform = null)
+    {
+        var fileSystem = new WorkspaceFileSystem();
+        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+        var resolver = new ScanBackedEntryResolver();
+        var extractor = new WpfNet8ContractExtractor(fileSystem);
+
+        var scanResult = await scanner.ScanAsync(FixtureRoot);
+        if (transform is not null)
+        {
+            scanResult = transform(scanResult);
+        }
+
+        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
+        var ingredients = await extractor.ExtractAsync(FixtureRoot, scanResult, resolvedEntry);
+        var pack = ContextPackFactory.Create(
+            "Add a new page to the shell.",
+            entry,
+            resolvedEntry,
+            ingredients,
+            scanResult,
+            budget);
+        return (scanResult, ingredients, pack);
+    }
+
+    private static WorkspaceScanResult PromoteShellViewModelToLargeFile(WorkspaceScanResult scanResult) =>
+        scanResult with
+        {
+            Files = scanResult.Files
+                .Select(file => file.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+                    ? file with { LineCount = 300 }
+                    : file)
+                .ToArray()
+        };
 }

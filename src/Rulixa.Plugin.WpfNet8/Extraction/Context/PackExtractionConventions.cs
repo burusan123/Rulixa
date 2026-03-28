@@ -5,6 +5,8 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal static class PackExtractionConventions
 {
+    private const int LargeCSharpFileThreshold = 250;
+
     internal static string? BuildConventionalViewName(string symbol)
     {
         var displayName = GetSimpleTypeName(symbol);
@@ -47,6 +49,10 @@ internal static class PackExtractionConventions
             fileCandidates.Add(new FileSelectionCandidate(codeBehindPath, "code-behind", priority, required));
         }
     }
+
+    internal static bool ShouldCreateSnippet(WorkspaceScanResult scanResult, string path) =>
+        path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+        && scanResult.Files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase))?.LineCount > LargeCSharpFileThreshold;
 
     internal static string GetSimpleTypeName(string typeName) => typeName.Split('.').Last().TrimEnd('?');
 }

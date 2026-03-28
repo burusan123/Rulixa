@@ -50,6 +50,24 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         }
 
         builder.AppendLine();
+        builder.AppendLine("## 重要スニペット");
+        if (contextPack.SelectedSnippets.Count == 0)
+        {
+            builder.AppendLine("- なし");
+        }
+        else
+        {
+            foreach (var snippet in contextPack.SelectedSnippets)
+            {
+                builder.AppendLine($"### {NormalizePath(snippet.Path)}:{snippet.StartLine}-{snippet.EndLine}");
+                builder.AppendLine($"- 理由: {ToDisplayText(snippet.Reason)}, アンカー: `{snippet.Anchor}`");
+                builder.AppendLine($"```{GetCodeFenceLanguage(snippet.Path)}");
+                builder.AppendLine(snippet.Content);
+                builder.AppendLine("```");
+            }
+        }
+
+        builder.AppendLine();
         builder.AppendLine("## 選定ファイル");
         foreach (var selectedFile in contextPack.SelectedFiles)
         {
@@ -77,6 +95,13 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
     private static string NormalizePath(string path) =>
         path.Replace('\\', '/').TrimStart('.').TrimStart('/');
 
+    private static string GetCodeFenceLanguage(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".cs" => "csharp",
+        ".xaml" => "xml",
+        _ => string.Empty
+    };
+
     private static string ToDisplayText(ResolvedEntryKind resolvedEntryKind) => resolvedEntryKind switch
     {
         ResolvedEntryKind.File => "ファイル",
@@ -88,7 +113,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
     private static string ToDisplayText(ContractKind contractKind) => contractKind switch
     {
         ContractKind.Startup => "起動経路",
-        ContractKind.DependencyInjection => "依存関係の構成",
+        ContractKind.DependencyInjection => "DI 登録",
         ContractKind.ViewModelBinding => "View と ViewModel の対応",
         ContractKind.Navigation => "ナビゲーション",
         ContractKind.Command => "コマンド",
@@ -114,12 +139,12 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "view-binding" => "View DataContext",
         "view-binding-source" => "View DataContext の設定元",
         "data-template" => "DataTemplate による二次文脈",
-        "data-template-source" => "DataTemplate の定義元",
+        "data-template-source" => "DataTemplate の宣言元",
         "conventional-view" => "規約ベースの対応 View",
         "code-behind" => "対応する code-behind",
         "command-viewmodel" => "コマンド定義元 ViewModel",
         "command-bound-view" => "コマンドが使われる View",
-        "command-support" => "コマンド基盤",
+        "command-support" => "コマンド実装支援",
         "dialog-service" => "ダイアログ起動サービス",
         "navigation-view" => "ナビゲーション View",
         "navigation-update" => "ナビゲーション更新点",

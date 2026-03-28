@@ -8,10 +8,14 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 internal sealed class DependencyInjectionPackSectionBuilder
 {
     private readonly IWorkspaceFileSystem workspaceFileSystem;
+    private readonly CSharpSnippetCandidateFactory snippetFactory;
 
-    internal DependencyInjectionPackSectionBuilder(IWorkspaceFileSystem workspaceFileSystem)
+    internal DependencyInjectionPackSectionBuilder(
+        IWorkspaceFileSystem workspaceFileSystem,
+        CSharpSnippetCandidateFactory snippetFactory)
     {
         this.workspaceFileSystem = workspaceFileSystem ?? throw new ArgumentNullException(nameof(workspaceFileSystem));
+        this.snippetFactory = snippetFactory ?? throw new ArgumentNullException(nameof(snippetFactory));
     }
 
     internal async Task AddAsync(
@@ -20,6 +24,7 @@ internal sealed class DependencyInjectionPackSectionBuilder
         RelevantPackContext relevantContext,
         ICollection<Contract> contracts,
         ICollection<IndexSection> indexes,
+        ICollection<SnippetSelectionCandidate> snippetCandidates,
         ICollection<FileSelectionCandidate> fileCandidates,
         CancellationToken cancellationToken)
     {
@@ -84,6 +89,13 @@ internal sealed class DependencyInjectionPackSectionBuilder
         }
 
         indexes.Add(BuildIndex(summary.Value));
+        await AddConstructorSnippetsAsync(
+                workspaceRoot,
+                scanResult,
+                summary.Value.ViewModelSymbols,
+                snippetCandidates,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task<DependencyInjectionSummary?> BuildSummaryAsync(
@@ -389,4 +401,40 @@ internal sealed class DependencyInjectionPackSectionBuilder
         IReadOnlyList<string> ViewModelSymbols,
         IReadOnlyList<ServiceRegistration> ViewModelRegistrations,
         IReadOnlyList<ServiceRegistration> DirectDependencyRegistrations);
+
+    private async Task AddConstructorSnippetsAsync(
+        string workspaceRoot,
+        WorkspaceScanResult scanResult,
+        IReadOnlyList<string> viewModelSymbols,
+        ICollection<SnippetSelectionCandidate> snippetCandidates,
+        CancellationToken cancellationToken)
+    {
+        foreach (var viewModelSymbol in viewModelSymbols)
+        {
+            var viewModelFilePath = scanResult.Symbols.FirstOrDefault(symbol =>
+                string.Equals(symbol.QualifiedName, viewModelSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
+            if (string.IsNullOrWhiteSpace(viewModelFilePath)
+                || !PackExtractionConventions.ShouldCreateSnippet(scanResult, viewModelFilePath))
+            {
+                continue;
+            }
+
+            var className = PackExtractionConventions.GetSimpleTypeName(viewModelSymbol);
+            var snippet = await snippetFactory
+                .CreateConstructorSnippetAsync(
+                    workspaceRoot,
+                    viewModelFilePath,
+                    className,
+                    "dependency-injection",
+                    0,
+                    true,
+                    $"{className}(...)",
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (snippet is not null)
+            {
+                snippetCandidates.Add(snippet);
+            }
+        }
+    }
 }

@@ -8,14 +8,19 @@ internal static class CommandPackSectionBuilder
 {
     private const int CommandSummaryThreshold = 6;
 
-    internal static void AddContracts(
+    internal static async Task AddContractsAsync(
+        string workspaceRoot,
         WorkspaceScanResult scanResult,
         ResolvedEntry resolvedEntry,
+        CSharpSnippetCandidateFactory snippetFactory,
         ICollection<Contract> contracts,
-        ICollection<FileSelectionCandidate> fileCandidates)
+        ICollection<SnippetSelectionCandidate> snippetCandidates,
+        ICollection<FileSelectionCandidate> fileCandidates,
+        CancellationToken cancellationToken)
     {
         var commands = FindCommands(scanResult, resolvedEntry);
-        if (commands.Length > CommandSummaryThreshold)
+        var summarized = commands.Length > CommandSummaryThreshold;
+        if (summarized)
         {
             var sampleNames = commands
                 .Select(static command => command.PropertyName)
@@ -36,10 +41,19 @@ internal static class CommandPackSectionBuilder
                 contracts.Add(new Contract(
                     ContractKind.Command,
                     command.PropertyName,
-                    $"{command.PropertyName} が {command.ExecuteSymbol} を実行します。",
+                    $"{command.PropertyName} は {command.ExecuteSymbol} を実行します。",
                     command.BoundViews,
                     [command.ViewModelSymbol, command.ExecuteSymbol]));
             }
+
+            await AddCommandSnippetsAsync(
+                    workspaceRoot,
+                    scanResult,
+                    commands,
+                    snippetFactory,
+                    snippetCandidates,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         foreach (var command in commands)
@@ -83,6 +97,44 @@ internal static class CommandPackSectionBuilder
         return new IndexSection(
             "コマンド",
             commands.Select(command => $"{command.PropertyName} -> {command.ExecuteSymbol}").ToArray());
+    }
+
+    private static async Task AddCommandSnippetsAsync(
+        string workspaceRoot,
+        WorkspaceScanResult scanResult,
+        IReadOnlyList<CommandBinding> commands,
+        CSharpSnippetCandidateFactory snippetFactory,
+        ICollection<SnippetSelectionCandidate> snippetCandidates,
+        CancellationToken cancellationToken)
+    {
+        foreach (var command in commands)
+        {
+            var viewModelFilePath = scanResult.Symbols.FirstOrDefault(symbol =>
+                string.Equals(symbol.QualifiedName, command.ViewModelSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
+            if (string.IsNullOrWhiteSpace(viewModelFilePath)
+                || !PackExtractionConventions.ShouldCreateSnippet(scanResult, viewModelFilePath))
+            {
+                continue;
+            }
+
+            var methodName = command.ExecuteSymbol.Split('.').Last();
+            var snippet = await snippetFactory
+                .CreateMethodSnippetAsync(
+                    workspaceRoot,
+                    viewModelFilePath,
+                    methodName,
+                    "command-viewmodel",
+                    20,
+                    false,
+                    $"{methodName}(...)",
+                    0,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (snippet is not null)
+            {
+                snippetCandidates.Add(snippet);
+            }
+        }
     }
 
     private static CommandBinding[] FindCommands(WorkspaceScanResult scanResult, ResolvedEntry resolvedEntry) =>

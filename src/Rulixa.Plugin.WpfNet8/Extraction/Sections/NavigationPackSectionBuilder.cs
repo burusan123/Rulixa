@@ -8,11 +8,15 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 internal sealed class NavigationPackSectionBuilder
 {
     private readonly IWorkspaceFileSystem workspaceFileSystem;
+    private readonly CSharpSnippetCandidateFactory snippetFactory;
     private readonly NavigationContractExtractor navigationContractExtractor = new();
 
-    internal NavigationPackSectionBuilder(IWorkspaceFileSystem workspaceFileSystem)
+    internal NavigationPackSectionBuilder(
+        IWorkspaceFileSystem workspaceFileSystem,
+        CSharpSnippetCandidateFactory snippetFactory)
     {
         this.workspaceFileSystem = workspaceFileSystem ?? throw new ArgumentNullException(nameof(workspaceFileSystem));
+        this.snippetFactory = snippetFactory ?? throw new ArgumentNullException(nameof(snippetFactory));
     }
 
     internal async Task AddAsync(
@@ -22,6 +26,7 @@ internal sealed class NavigationPackSectionBuilder
         RelevantPackContext relevantContext,
         ICollection<Contract> contracts,
         ICollection<IndexSection> indexes,
+        ICollection<SnippetSelectionCandidate> snippetCandidates,
         ICollection<FileSelectionCandidate> fileCandidates,
         CancellationToken cancellationToken)
     {
@@ -78,6 +83,16 @@ internal sealed class NavigationPackSectionBuilder
                 BuildTransitionSymbols(firstTransition, expressions)));
 
             fileCandidates.Add(new FileSelectionCandidate(firstTransition.SourceFilePath, "navigation-update", -1, true));
+            var snippet = await CreateTransitionSnippetAsync(
+                    workspaceRoot,
+                    scanResult,
+                    firstTransition,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (snippet is not null)
+            {
+                snippetCandidates.Add(snippet);
+            }
         }
 
         if (relevantContext.RelevantTransitions.Count > 0)
@@ -254,6 +269,31 @@ internal sealed class NavigationPackSectionBuilder
             transitions.Select(transition =>
                     $"{transition.ViewModelSymbol}.{transition.UpdateMethodName}(...) -> {transition.UpdateExpressionSummary} (line: {transition.StartLine})")
                 .ToArray());
+
+    private async Task<SnippetSelectionCandidate?> CreateTransitionSnippetAsync(
+        string workspaceRoot,
+        WorkspaceScanResult scanResult,
+        NavigationTransition transition,
+        CancellationToken cancellationToken)
+    {
+        if (!PackExtractionConventions.ShouldCreateSnippet(scanResult, transition.SourceFilePath))
+        {
+            return null;
+        }
+
+        return await snippetFactory
+            .CreateMethodSnippetAsync(
+                workspaceRoot,
+                transition.SourceFilePath,
+                transition.UpdateMethodName,
+                "navigation-update",
+                -1,
+                true,
+                $"{transition.UpdateMethodName}(...)",
+                transition.StartLine,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     private readonly record struct NavigationCauseSummary(Contract Contract, IndexSection Index);
 }

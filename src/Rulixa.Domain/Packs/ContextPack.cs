@@ -9,6 +9,7 @@ public sealed record ContextPack(
     ResolvedEntry ResolvedEntry,
     IReadOnlyList<Contract> Contracts,
     IReadOnlyList<IndexSection> Indexes,
+    IReadOnlyList<SelectedSnippet> SelectedSnippets,
     IReadOnlyList<SelectedFile> SelectedFiles,
     IReadOnlyList<Diagnostic> Unknowns);
 
@@ -30,15 +31,36 @@ public sealed record SelectedFile(
     bool IsRequired,
     int LineCount);
 
+public sealed record SelectedSnippet(
+    string Path,
+    string Reason,
+    int Priority,
+    bool IsRequired,
+    string Anchor,
+    int StartLine,
+    int EndLine,
+    string Content);
+
 public sealed record FileSelectionCandidate(
     string Path,
     string Reason,
     int Priority,
     bool IsRequired);
 
+public sealed record SnippetSelectionCandidate(
+    string Path,
+    string Reason,
+    int Priority,
+    bool IsRequired,
+    string Anchor,
+    int StartLine,
+    int EndLine,
+    string Content);
+
 public sealed record PackIngredients(
     IReadOnlyList<Contract> Contracts,
     IReadOnlyList<IndexSection> Indexes,
+    IReadOnlyList<SnippetSelectionCandidate> SnippetCandidates,
     IReadOnlyList<FileSelectionCandidate> FileCandidates,
     IReadOnlyList<Diagnostic> Unknowns);
 

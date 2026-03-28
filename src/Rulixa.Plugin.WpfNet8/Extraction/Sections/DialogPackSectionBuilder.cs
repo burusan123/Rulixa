@@ -8,10 +8,14 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 internal sealed class DialogPackSectionBuilder
 {
     private readonly IWorkspaceFileSystem workspaceFileSystem;
+    private readonly CSharpSnippetCandidateFactory snippetFactory;
 
-    internal DialogPackSectionBuilder(IWorkspaceFileSystem workspaceFileSystem)
+    internal DialogPackSectionBuilder(
+        IWorkspaceFileSystem workspaceFileSystem,
+        CSharpSnippetCandidateFactory snippetFactory)
     {
         this.workspaceFileSystem = workspaceFileSystem ?? throw new ArgumentNullException(nameof(workspaceFileSystem));
+        this.snippetFactory = snippetFactory ?? throw new ArgumentNullException(nameof(snippetFactory));
     }
 
     internal async Task AddAsync(
@@ -19,6 +23,7 @@ internal sealed class DialogPackSectionBuilder
         WorkspaceScanResult scanResult,
         ResolvedEntry resolvedEntry,
         ICollection<Contract> contracts,
+        ICollection<SnippetSelectionCandidate> snippetCandidates,
         ICollection<FileSelectionCandidate> fileCandidates,
         CancellationToken cancellationToken)
     {
@@ -59,6 +64,26 @@ internal sealed class DialogPackSectionBuilder
             if (!string.IsNullOrWhiteSpace(serviceFile))
             {
                 fileCandidates.Add(new FileSelectionCandidate(serviceFile, "dialog-service", 12, false));
+                if (PackExtractionConventions.ShouldCreateSnippet(scanResult, serviceFile))
+                {
+                    var methodName = activation.CallerSymbol.Split('.').Last();
+                    var snippet = await snippetFactory
+                        .CreateMethodSnippetAsync(
+                            workspaceRoot,
+                            serviceFile,
+                            methodName,
+                            "dialog-service",
+                            25,
+                            false,
+                            $"{methodName}(...)",
+                            0,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (snippet is not null)
+                    {
+                        snippetCandidates.Add(snippet);
+                    }
+                }
             }
         }
     }

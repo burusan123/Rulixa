@@ -11,14 +11,16 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
     private readonly DependencyInjectionPackSectionBuilder dependencyInjectionBuilder;
     private readonly NavigationPackSectionBuilder navigationBuilder;
     private readonly DialogPackSectionBuilder dialogBuilder;
+    private readonly CSharpSnippetCandidateFactory snippetFactory;
 
     public WpfNet8ContractExtractor(IWorkspaceFileSystem workspaceFileSystem)
     {
         ArgumentNullException.ThrowIfNull(workspaceFileSystem);
 
-        dependencyInjectionBuilder = new DependencyInjectionPackSectionBuilder(workspaceFileSystem);
-        navigationBuilder = new NavigationPackSectionBuilder(workspaceFileSystem);
-        dialogBuilder = new DialogPackSectionBuilder(workspaceFileSystem);
+        snippetFactory = new CSharpSnippetCandidateFactory(workspaceFileSystem);
+        dependencyInjectionBuilder = new DependencyInjectionPackSectionBuilder(workspaceFileSystem, snippetFactory);
+        navigationBuilder = new NavigationPackSectionBuilder(workspaceFileSystem, snippetFactory);
+        dialogBuilder = new DialogPackSectionBuilder(workspaceFileSystem, snippetFactory);
     }
 
     public async Task<PackIngredients> ExtractAsync(
@@ -33,13 +35,14 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
 
         var contracts = new List<Contract>();
         var indexes = new List<IndexSection>();
+        var snippetCandidates = new List<SnippetSelectionCandidate>();
         var fileCandidates = new List<FileSelectionCandidate>();
         var unknowns = new List<Diagnostic>();
 
         if (resolvedEntry.ResolvedKind == ResolvedEntryKind.Unresolved)
         {
             unknowns.Add(BuildUnresolvedDiagnostic(resolvedEntry));
-            return new PackIngredients(contracts, indexes, fileCandidates, unknowns);
+            return new PackIngredients(contracts, indexes, snippetCandidates, fileCandidates, unknowns);
         }
 
         AddResolvedEntryFileCandidate(resolvedEntry, fileCandidates);
@@ -48,17 +51,26 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
 
         AddStartupContracts(scanResult, contracts, fileCandidates);
         await dependencyInjectionBuilder
-            .AddAsync(workspaceRoot, scanResult, relevantContext, contracts, indexes, fileCandidates, cancellationToken)
+            .AddAsync(workspaceRoot, scanResult, relevantContext, contracts, indexes, snippetCandidates, fileCandidates, cancellationToken)
             .ConfigureAwait(false);
         ViewBindingPackSectionBuilder.AddBindingContracts(scanResult, relevantContext.PrimaryBindings, true, contracts, fileCandidates);
         ViewBindingPackSectionBuilder.AddConventionalViewFiles(scanResult, resolvedEntry, fileCandidates);
         await navigationBuilder
-            .AddAsync(workspaceRoot, scanResult, resolvedEntry, relevantContext, contracts, indexes, fileCandidates, cancellationToken)
+            .AddAsync(workspaceRoot, scanResult, resolvedEntry, relevantContext, contracts, indexes, snippetCandidates, fileCandidates, cancellationToken)
             .ConfigureAwait(false);
         ViewBindingPackSectionBuilder.AddDataTemplateSummaryContract(relevantContext.SecondaryBindings, contracts);
-        CommandPackSectionBuilder.AddContracts(scanResult, resolvedEntry, contracts, fileCandidates);
+        await CommandPackSectionBuilder.AddContractsAsync(
+                workspaceRoot,
+                scanResult,
+                resolvedEntry,
+                snippetFactory,
+                contracts,
+                snippetCandidates,
+                fileCandidates,
+                cancellationToken)
+            .ConfigureAwait(false);
         await dialogBuilder
-            .AddAsync(workspaceRoot, scanResult, resolvedEntry, contracts, fileCandidates, cancellationToken)
+            .AddAsync(workspaceRoot, scanResult, resolvedEntry, contracts, snippetCandidates, fileCandidates, cancellationToken)
             .ConfigureAwait(false);
 
         indexes.Add(BuildStartupIndex(scanResult));
@@ -68,6 +80,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         return new PackIngredients(
             Contracts: contracts.Distinct().ToArray(),
             Indexes: indexes.Where(static index => index.Lines.Count > 0).ToArray(),
+            SnippetCandidates: OrderSnippetCandidates(snippetCandidates),
             FileCandidates: OrderFileCandidates(fileCandidates),
             Unknowns: unknowns);
     }
@@ -137,5 +150,15 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             .OrderByDescending(static candidate => candidate.IsRequired)
             .ThenBy(static candidate => candidate.Priority)
             .ThenBy(static candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static IReadOnlyList<SnippetSelectionCandidate> OrderSnippetCandidates(
+        IReadOnlyList<SnippetSelectionCandidate> snippetCandidates) =>
+        snippetCandidates
+            .OrderByDescending(static candidate => candidate.IsRequired)
+            .ThenBy(static candidate => candidate.Priority)
+            .ThenBy(static candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(static candidate => candidate.StartLine)
+            .ThenBy(static candidate => candidate.Anchor, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 }

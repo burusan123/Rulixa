@@ -43,6 +43,7 @@ public sealed class BuildContextPackUseCaseTests
             [
                 new IndexSection("View-ViewModel", ["Views/ShellView.xaml <-> App.ShellViewModel"])
             ],
+            SnippetCandidates: [],
             FileCandidates:
             [
                 new FileSelectionCandidate("Views/ShellView.xaml", "entry", 0, true),
@@ -63,6 +64,7 @@ public sealed class BuildContextPackUseCaseTests
             Budget.Default);
 
         Assert.Equal("Shell 画面に新しいページを追加したい", pack.Goal);
+        Assert.Empty(pack.SelectedSnippets);
         Assert.Equal(2, pack.SelectedFiles.Count);
         Assert.Single(pack.Contracts);
         Assert.Single(pack.Indexes);
