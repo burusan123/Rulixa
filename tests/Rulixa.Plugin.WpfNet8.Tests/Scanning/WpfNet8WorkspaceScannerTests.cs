@@ -328,6 +328,20 @@ public sealed class WpfNet8WorkspaceScannerTests
             snippet.Anchor.Contains("OpenSettingsCore(...)", StringComparison.Ordinal));
         Assert.Contains(ingredients.SnippetCandidates, snippet =>
             snippet.Anchor.Contains("Show(...)", StringComparison.Ordinal));
+        Assert.Equal(7, ingredients.DecisionTraces.Count);
+        Assert.Contains(ingredients.DecisionTraces, trace =>
+            trace.Category == "command-selection"
+            && trace.ItemKey == "OpenSettingsCommand"
+            && trace.DecisionKind == "selected-by-goal"
+            && trace.GoalTerms.Contains("setting", StringComparer.Ordinal)
+            && trace.MatchedTerms.Contains("setting", StringComparer.Ordinal));
+        Assert.Contains(ingredients.DecisionTraces, trace =>
+            trace.Category == "command-selection"
+            && trace.DecisionKind == "omitted-low-score"
+            && trace.ItemKey == "SampleCommand1");
+        Assert.All(
+            ingredients.DecisionTraces,
+            trace => Assert.Equal(7, trace.CandidateCount));
     }
 
     [Fact]
@@ -361,6 +375,22 @@ public sealed class WpfNet8WorkspaceScannerTests
             && line.Contains("ISettingWindowService.Show(...)", StringComparison.Ordinal));
         Assert.Contains(ingredients.SnippetCandidates, snippet =>
             snippet.Anchor.Contains("OpenSettingsCore(...)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_WhenCommandCountIsBelowThreshold_EmitsSelectedAllDecisionTrace()
+    {
+        var (_, ingredients, _) = await BuildPackAsync(
+            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            Budget.Default,
+            goal: "ライセンス通知を確認したい");
+
+        var trace = Assert.Single(ingredients.DecisionTraces);
+        Assert.Equal("command-selection", trace.Category);
+        Assert.Equal("OpenSettingsCommand", trace.ItemKey);
+        Assert.Equal("selected-all", trace.DecisionKind);
+        Assert.Equal(1, trace.CandidateCount);
+        Assert.Contains("license", trace.GoalTerms, StringComparer.Ordinal);
     }
 
     [Fact]
@@ -407,6 +437,15 @@ public sealed class WpfNet8WorkspaceScannerTests
             && line.Contains("ISettingWindowService.Show(...)", StringComparison.Ordinal));
         Assert.DoesNotContain(ingredients.SnippetCandidates, snippet =>
             snippet.Anchor.Contains("OpenSettings(...)", StringComparison.Ordinal));
+        Assert.Equal(7, ingredients.DecisionTraces.Count);
+        Assert.All(
+            ingredients.DecisionTraces,
+            trace =>
+            {
+                Assert.Equal("command-selection", trace.Category);
+                Assert.Equal("omitted-low-score", trace.DecisionKind);
+                Assert.Empty(trace.MatchedTerms);
+            });
     }
 
     [Fact]

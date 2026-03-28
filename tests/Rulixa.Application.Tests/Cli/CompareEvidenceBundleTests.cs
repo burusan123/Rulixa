@@ -73,6 +73,20 @@ public sealed class CompareEvidenceBundleTests
                 [
                     new SelectedFile("src/Sample.App/Views/ShellView.xaml", "conventional-view", 0, true, 20)
                 ],
+                DecisionTraces:
+                [
+                    new PackDecisionTrace(
+                        "command-selection",
+                        "OpenProjectCommand",
+                        "selected-all",
+                        "OpenProjectCommand は command 数が閾値以下のため詳細化対象として採用されます。",
+                        0,
+                        1,
+                        1,
+                        ["project"],
+                        [],
+                        [])
+                ],
                 Unknowns: []);
             var afterPack = new ContextPack(
                 Goal: "settings",
@@ -123,6 +137,20 @@ public sealed class CompareEvidenceBundleTests
                     new SelectedFile("src/Sample.App/Views/ShellView.xaml", "conventional-view", 0, true, 24),
                     new SelectedFile("src/Sample.App/Views/SettingsWindow.xaml", "dialog-window", 10, true, 12)
                 ],
+                DecisionTraces:
+                [
+                    new PackDecisionTrace(
+                        "command-selection",
+                        "OpenSettingsCommand",
+                        "selected-by-goal",
+                        "OpenSettingsCommand は goal と一致する term により詳細化対象として採用されます。",
+                        5,
+                        1,
+                        7,
+                        ["setting"],
+                        ["setting"],
+                        [new PackDecisionMatchedSource("property-name", ["setting"])])
+                ],
                 Unknowns: []);
 
             var beforeDirectory = await writer.WriteAsync(root, beforeScan.WorkspaceRoot, budget, beforeScan, resolvedEntry, beforePack, "# before");
@@ -151,6 +179,8 @@ public sealed class CompareEvidenceBundleTests
             Assert.Contains("## 選定スニペット差分", diff, StringComparison.Ordinal);
             Assert.Contains("before: 4-12, reason=root-binding-source, required=required", diff, StringComparison.Ordinal);
             Assert.Contains("after: 4-14, reason=root-binding-source, required=required", diff, StringComparison.Ordinal);
+            Assert.Contains("## Goal 根拠差分", diff, StringComparison.Ordinal);
+            Assert.Contains("[command-selection] OpenSettingsCommand (selected-by-goal, score: 5, rank: 1, matched: setting)", diff, StringComparison.Ordinal);
         }
         finally
         {

@@ -23,6 +23,7 @@ public sealed class ContextPackFactoryTests
                 new FileSelectionCandidate("ViewModels/ShellViewModel.cs", "viewmodel", 1, true),
                 new FileSelectionCandidate("Services/SettingWindowService.cs", "optional", 10, false)
             ],
+            DecisionTraces: [],
             Unknowns: []);
 
         var pack = CreatePack(scanResult, ingredients, new Budget(MaxFiles: 2, MaxTotalLines: 450, MaxSnippetsPerFile: 3));
@@ -53,6 +54,7 @@ public sealed class ContextPackFactoryTests
                 new FileSelectionCandidate("ViewModels/ShellViewModel.cs", "primary-viewmodel", 5, false),
                 new FileSelectionCandidate("ViewModels/Pages/FloorPageViewModel.cs", "data-template", 40, false)
             ],
+            DecisionTraces: [],
             Unknowns: []);
 
         var pack = CreatePack(scanResult, ingredients, new Budget(MaxFiles: 3, MaxTotalLines: 300, MaxSnippetsPerFile: 3));
@@ -80,6 +82,7 @@ public sealed class ContextPackFactoryTests
                 new FileSelectionCandidate("Views/ShellView.xaml", "entry", 0, true),
                 new FileSelectionCandidate("ViewModels/ShellViewModel.cs", "navigation-update", -1, true)
             ],
+            DecisionTraces: [],
             Unknowns: []);
 
         var pack = CreatePack(scanResult, ingredients, Budget.Default);
@@ -111,6 +114,7 @@ public sealed class ContextPackFactoryTests
             [
                 new FileSelectionCandidate("ViewModels/ShellViewModel.cs", "navigation-update", -1, true)
             ],
+            DecisionTraces: [],
             Unknowns: []);
 
         var pack = CreatePack(scanResult, ingredients, new Budget(MaxFiles: 8, MaxTotalLines: 1600, MaxSnippetsPerFile: 2));

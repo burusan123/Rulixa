@@ -61,6 +61,7 @@ public sealed class PackEvidenceBundleTests
             var writtenPack = await File.ReadAllTextAsync(packOutputPath);
             using var manifestDocument = JsonDocument.Parse(manifest);
             var selectionSummary = manifestDocument.RootElement.GetProperty("selectionSummary");
+            var decisionTraces = manifestDocument.RootElement.GetProperty("decisionTraces");
             var contracts = selectionSummary.GetProperty("contracts");
             var selectedFiles = selectionSummary.GetProperty("selectedFiles");
             var selectedSnippets = selectionSummary.GetProperty("selectedSnippets");
@@ -76,6 +77,9 @@ public sealed class PackEvidenceBundleTests
             Assert.Contains(selectedSnippets.EnumerateArray(), element =>
                 element.GetProperty("reason").GetString() == "dependency-injection"
                 || element.GetProperty("reason").GetString() == "navigation-xaml-binding");
+            Assert.Contains(decisionTraces.EnumerateArray(), element =>
+                element.GetProperty("category").GetString() == "command-selection"
+                && element.GetProperty("goalTerms").EnumerateArray().Any(term => term.GetString() == "project"));
         }
         finally
         {
@@ -125,6 +129,7 @@ public sealed class PackEvidenceBundleTests
                 Indexes: [],
                 SelectedSnippets: [],
                 SelectedFiles: [],
+                DecisionTraces: [],
                 Unknowns: [new Diagnostic("diag.sample", "sample", null, DiagnosticSeverity.Info, [])]);
 
             var firstDirectory = await writer.WriteAsync(

@@ -92,6 +92,7 @@ public sealed class MarkdownContextPackRendererTests
                 new SelectedFile(@".\src\App\Views\ShellView.xaml", "entry", 0, true, 42),
                 new SelectedFile(@".\MainWindow.xaml.cs", "startup", 10, true, 10)
             ],
+            DecisionTraces: [],
             Unknowns:
             [
                 new Diagnostic("entry.unresolved", "候補が複数あります。", null, DiagnosticSeverity.Warning, [])
@@ -133,6 +134,7 @@ public sealed class MarkdownContextPackRendererTests
             Indexes: [],
             SelectedSnippets: [],
             SelectedFiles: [],
+            DecisionTraces: [],
             Unknowns: []);
 
         var markdown = renderer.Render(contextPack);

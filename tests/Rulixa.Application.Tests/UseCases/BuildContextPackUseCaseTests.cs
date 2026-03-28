@@ -49,6 +49,7 @@ public sealed class BuildContextPackUseCaseTests
                 new FileSelectionCandidate("Views/ShellView.xaml", "entry", 0, true),
                 new FileSelectionCandidate("ViewModels/ShellViewModel.cs", "viewmodel", 1, true)
             ],
+            DecisionTraces: [],
             Unknowns:
             [
                 new Diagnostic("sample", "sample", null, DiagnosticSeverity.Info, [])
@@ -68,6 +69,7 @@ public sealed class BuildContextPackUseCaseTests
         Assert.Equal(2, pack.SelectedFiles.Count);
         Assert.Single(pack.Contracts);
         Assert.Single(pack.Indexes);
+        Assert.Empty(pack.DecisionTraces);
         Assert.Single(pack.Unknowns);
     }
 

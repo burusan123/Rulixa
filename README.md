@@ -47,6 +47,7 @@
 例えば `bindingKind` は `root-data-context`、`lifetime` は `singleton`、`generatedAtUtc` は走査対象の最終更新時刻に基づく決定的な UTC 値です。
 `pack` は `--evidence-dir <path>` を付けると、`manifest.json`、`scan.json`、`resolved-entry.json`、`pack.md` を同一 bundle として保存できます。
 同じ `workspace + generatedAtUtc + entry + goal + budget` なら同じ bundle 名になり、内容差分がある場合だけ `__r2` 以降の revision directory に退避します。
+`manifest.json` には command 詳細化に対する `goal` 根拠を `decisionTraces` として保存し、`compare-evidence` でその差分を比較できます。
 
 ### 例: file entry
 

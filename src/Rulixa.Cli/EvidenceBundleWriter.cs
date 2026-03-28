@@ -108,6 +108,29 @@ internal sealed class EvidenceBundleWriter(JsonSerializerOptions jsonOptions)
                         snippet.EndLine,
                         snippet.IsRequired))
                     .ToArray()),
+            DecisionTraces: contextPack.DecisionTraces
+                .OrderBy(static trace => trace.Category, StringComparer.Ordinal)
+                .ThenBy(static trace => trace.ItemKey, StringComparer.Ordinal)
+                .ThenBy(static trace => trace.DecisionKind, StringComparer.Ordinal)
+                .ThenByDescending(static trace => trace.Score)
+                .ThenBy(static trace => trace.Rank)
+                .Select(static trace => new EvidenceDecisionTraceDto(
+                    trace.Category,
+                    trace.ItemKey,
+                    trace.DecisionKind,
+                    trace.Summary,
+                    trace.Score,
+                    trace.Rank,
+                    trace.CandidateCount,
+                    trace.GoalTerms.OrderBy(static term => term, StringComparer.Ordinal).ToArray(),
+                    trace.MatchedTerms.OrderBy(static term => term, StringComparer.Ordinal).ToArray(),
+                    trace.MatchedSources
+                        .OrderBy(static source => source.Source, StringComparer.Ordinal)
+                        .Select(static source => new EvidenceDecisionMatchedSourceDto(
+                            source.Source,
+                            source.Terms.OrderBy(static term => term, StringComparer.Ordinal).ToArray()))
+                        .ToArray()))
+                .ToArray(),
             Artifacts: new EvidenceArtifactsDto(
                 EvidenceBundleConventions.ManifestFileName,
                 EvidenceBundleConventions.ScanFileName,

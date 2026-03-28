@@ -19,6 +19,7 @@ internal sealed record EvidenceManifestDto(
     EvidenceBudgetDto Budget,
     EvidenceResolvedEntryDto ResolvedEntry,
     EvidenceSelectionSummaryDto SelectionSummary,
+    IReadOnlyList<EvidenceDecisionTraceDto> DecisionTraces,
     EvidenceArtifactsDto Artifacts);
 
 internal sealed record EvidenceBudgetDto(
@@ -55,6 +56,22 @@ internal sealed record EvidenceSelectedSnippetDto(
     int StartLine,
     int EndLine,
     bool IsRequired);
+
+internal sealed record EvidenceDecisionTraceDto(
+    string Category,
+    string ItemKey,
+    string DecisionKind,
+    string Summary,
+    int Score,
+    int Rank,
+    int CandidateCount,
+    IReadOnlyList<string> GoalTerms,
+    IReadOnlyList<string> MatchedTerms,
+    IReadOnlyList<EvidenceDecisionMatchedSourceDto> MatchedSources);
+
+internal sealed record EvidenceDecisionMatchedSourceDto(
+    string Source,
+    IReadOnlyList<string> Terms);
 
 internal sealed record EvidenceArtifactsDto(
     string Manifest,

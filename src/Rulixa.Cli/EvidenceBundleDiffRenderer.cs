@@ -23,6 +23,7 @@ internal sealed class EvidenceBundleDiffRenderer
         AppendContractDiff(builder, before.SelectionSummary.Contracts, after.SelectionSummary.Contracts);
         AppendSelectedFileDiff(builder, before.SelectionSummary.SelectedFiles, after.SelectionSummary.SelectedFiles);
         AppendSelectedSnippetDiff(builder, before.SelectionSummary.SelectedSnippets, after.SelectionSummary.SelectedSnippets);
+        AppendDecisionTraceDiff(builder, before.DecisionTraces, after.DecisionTraces);
 
         return builder.ToString();
     }
@@ -115,6 +116,31 @@ internal sealed class EvidenceBundleDiffRenderer
                     : $"{oldItem.Path}::{oldItem.Anchor}{Environment.NewLine}before: {oldItem.StartLine}-{oldItem.EndLine}, reason={oldItem.Reason}, required={ToFlag(oldItem.IsRequired)}{Environment.NewLine}after: {newItem.StartLine}-{newItem.EndLine}, reason={newItem.Reason}, required={ToFlag(newItem.IsRequired)}");
     }
 
+    private static void AppendDecisionTraceDiff(
+        StringBuilder builder,
+        IReadOnlyList<EvidenceDecisionTraceDto> before,
+        IReadOnlyList<EvidenceDecisionTraceDto> after)
+    {
+        builder.AppendLine();
+        builder.AppendLine("## Goal 根拠差分");
+        var beforeMap = BuildIndexedMap(
+            before,
+            static item => $"{item.Category}|{item.ItemKey}");
+        var afterMap = BuildIndexedMap(
+            after,
+            static item => $"{item.Category}|{item.ItemKey}");
+        AppendAddedRemovedChanged(
+            builder,
+            beforeMap,
+            afterMap,
+            static item =>
+                $"[{item.Category}] {item.ItemKey} ({item.DecisionKind}, score: {item.Score}, rank: {item.Rank}, matched: {FormatTerms(item.MatchedTerms)})",
+            static (oldItem, newItem) =>
+                oldItem == newItem
+                    ? null
+                    : $"[{oldItem.Category}] {oldItem.ItemKey}{Environment.NewLine}before: kind={oldItem.DecisionKind}, score={oldItem.Score}, rank={oldItem.Rank}, matched={FormatTerms(oldItem.MatchedTerms)}, sources={FormatSources(oldItem.MatchedSources)}{Environment.NewLine}after: kind={newItem.DecisionKind}, score={newItem.Score}, rank={newItem.Rank}, matched={FormatTerms(newItem.MatchedTerms)}, sources={FormatSources(newItem.MatchedSources)}{Environment.NewLine}before summary: {oldItem.Summary}{Environment.NewLine}after summary: {newItem.Summary}");
+    }
+
     private static void AppendAddedRemovedChanged<T>(
         StringBuilder builder,
         IReadOnlyDictionary<string, T> before,
@@ -185,4 +211,12 @@ internal sealed class EvidenceBundleDiffRenderer
     private static string NormalizePath(string path) => path.Replace('\\', '/');
 
     private static string ToFlag(bool value) => value ? "required" : "optional";
+
+    private static string FormatTerms(IReadOnlyList<string> terms) =>
+        terms.Count == 0 ? "(none)" : string.Join(", ", terms);
+
+    private static string FormatSources(IReadOnlyList<EvidenceDecisionMatchedSourceDto> sources) =>
+        sources.Count == 0
+            ? "(none)"
+            : string.Join(" / ", sources.Select(source => $"{source.Source}={string.Join(",", source.Terms)}"));
 }

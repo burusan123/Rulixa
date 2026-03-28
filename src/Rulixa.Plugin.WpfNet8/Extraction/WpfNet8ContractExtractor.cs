@@ -42,12 +42,13 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         var indexes = new List<IndexSection>();
         var snippetCandidates = new List<SnippetSelectionCandidate>();
         var fileCandidates = new List<FileSelectionCandidate>();
+        var decisionTraces = new List<PackDecisionTrace>();
         var unknowns = new List<Diagnostic>();
 
         if (resolvedEntry.ResolvedKind == ResolvedEntryKind.Unresolved)
         {
             unknowns.Add(BuildUnresolvedDiagnostic(resolvedEntry));
-            return new PackIngredients(contracts, indexes, snippetCandidates, fileCandidates, unknowns);
+            return new PackIngredients(contracts, indexes, snippetCandidates, fileCandidates, decisionTraces, unknowns);
         }
 
         AddResolvedEntryFileCandidate(resolvedEntry, fileCandidates);
@@ -85,6 +86,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 contracts,
                 snippetCandidates,
                 fileCandidates,
+                decisionTraces,
                 cancellationToken)
             .ConfigureAwait(false);
         await dialogBuilder
@@ -106,6 +108,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             Indexes: indexes.Where(static index => index.Lines.Count > 0).ToArray(),
             SnippetCandidates: OrderSnippetCandidates(snippetCandidates),
             FileCandidates: OrderFileCandidates(fileCandidates),
+            DecisionTraces: decisionTraces,
             Unknowns: unknowns);
     }
 

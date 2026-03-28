@@ -37,6 +37,7 @@ internal static class CommandPackSectionBuilder
         ICollection<Contract> contracts,
         ICollection<SnippetSelectionCandidate> snippetCandidates,
         ICollection<FileSelectionCandidate> fileCandidates,
+        ICollection<PackDecisionTrace> decisionTraces,
         CancellationToken cancellationToken)
     {
         var commands = FindCommands(scanResult, resolvedEntry);
@@ -44,15 +45,21 @@ internal static class CommandPackSectionBuilder
         var commandDetails = await impactAnalyzer
             .AnalyzeAsync(workspaceRoot, scanResult, commands, cancellationToken)
             .ConfigureAwait(false);
-        var detailedCommands = SelectDetailedCommands(commandDetails, goal);
         var summarized = commands.Length > CommandSummaryThreshold;
+        var selectionResult = AnalyzeCommandSelection(commandDetails, goal);
+        var detailedCommands = summarized ? selectionResult.SelectedCommandDetails : commandDetails.ToArray();
 
         if (summarized)
         {
             contracts.Add(BuildSummaryContract(commands));
         }
 
-        foreach (var commandDetailsItem in summarized ? detailedCommands : commandDetails)
+        foreach (var decisionTrace in selectionResult.DecisionTraces)
+        {
+            decisionTraces.Add(decisionTrace);
+        }
+
+        foreach (var commandDetailsItem in detailedCommands)
         {
             contracts.Add(BuildDetailedContract(commandDetailsItem));
         }
@@ -111,7 +118,9 @@ internal static class CommandPackSectionBuilder
         var commandDetails = await impactAnalyzer
             .AnalyzeAsync(workspaceRoot, scanResult, commands, cancellationToken)
             .ConfigureAwait(false);
-        var detailedCommands = SelectDetailedCommands(commandDetails, goal);
+        var detailedCommands = commandDetails.Count > CommandSummaryThreshold
+            ? AnalyzeCommandSelection(commandDetails, goal).SelectedCommandDetails
+            : commandDetails.ToArray();
 
         if (commands.Length > CommandSummaryThreshold)
         {
@@ -353,42 +362,132 @@ internal static class CommandPackSectionBuilder
         }
     }
 
-    private static CommandImpactDetails[] SelectDetailedCommands(
+    private static CommandSelectionResult AnalyzeCommandSelection(
         IReadOnlyList<CommandImpactDetails> commandDetails,
         string goal)
     {
+        var goalTerms = ExtractGoalTerms(goal)
+            .OrderBy(static term => term, StringComparer.Ordinal)
+            .ToArray();
+        var analyses = commandDetails
+            .Select(details => BuildSelectionAnalysis(details, goalTerms, commandDetails.Count))
+            .OrderByDescending(static analysis => analysis.Score)
+            .ThenBy(static analysis => analysis.Details.Command.PropertyName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        for (var index = 0; index < analyses.Length; index++)
+        {
+            analyses[index] = analyses[index] with { Rank = index + 1 };
+        }
+
         if (commandDetails.Count <= CommandSummaryThreshold)
         {
-            return commandDetails.ToArray();
+            return new CommandSelectionResult(
+                analyses.Select(BuildSelectedAllTrace).ToArray(),
+                analyses.Select(static analysis => analysis.Details).ToArray());
         }
 
-        return commandDetails
-            .Select(details => new ScoredCommandImpact(details, ScoreGoalRelevance(goal, details)))
-            .Where(static scored => scored.Score > 0)
-            .OrderByDescending(static scored => scored.Score)
-            .ThenBy(static scored => scored.Details.Command.PropertyName, StringComparer.OrdinalIgnoreCase)
+        var selectedAnalyses = analyses
+            .Where(static analysis => analysis.Score > 0)
             .Take(MaxDetailedCommandsWhenSummarized)
-            .Select(static scored => scored.Details)
             .ToArray();
+        var selectedKeys = selectedAnalyses
+            .Select(static analysis => analysis.Details.Command.PropertyName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var traces = analyses
+            .Select(analysis => BuildSummarizedTrace(
+                analysis,
+                selectedKeys.Contains(analysis.Details.Command.PropertyName)))
+            .ToArray();
+
+        return new CommandSelectionResult(
+            traces,
+            selectedAnalyses.Select(static analysis => analysis.Details).ToArray());
     }
 
-    private static int ScoreGoalRelevance(string goal, CommandImpactDetails details)
+    private static CommandSelectionAnalysis BuildSelectionAnalysis(
+        CommandImpactDetails details,
+        IReadOnlyList<string> goalTerms,
+        int candidateCount)
     {
-        var goalTerms = ExtractGoalTerms(goal);
-        if (goalTerms.Count == 0)
+        var sourceTerms = new[]
         {
-            return 0;
-        }
+            new WeightedTerms("property-name", 3, ExtractIdentifierTerms(details.Command.PropertyName).ToArray()),
+            new WeightedTerms("execute-method", 2, ExtractIdentifierTerms(GetExecuteMethodName(details.Command)).ToArray()),
+            new WeightedTerms("helper-method", 2, details.HelperInvocations.SelectMany(static helper => ExtractIdentifierTerms(helper.HelperMethodName)).ToArray()),
+            new WeightedTerms("impact-symbol", 2, details.DirectImpacts.SelectMany(static impact => ExtractIdentifierTerms(impact.DisplaySymbol)).ToArray()),
+            new WeightedTerms("dialog-window", 2, details.DirectImpacts
+                .Where(static impact => !string.IsNullOrWhiteSpace(impact.DialogWindowSymbol))
+                .SelectMany(static impact => ExtractIdentifierTerms(impact.DialogWindowSymbol!))
+                .ToArray())
+        };
 
-        var score = 0;
-        score += CountMatches(goalTerms, ExtractIdentifierTerms(details.Command.PropertyName)) * 3;
-        score += CountMatches(goalTerms, ExtractIdentifierTerms(GetExecuteMethodName(details.Command))) * 2;
-        score += CountMatches(goalTerms, details.HelperInvocations.SelectMany(static helper => ExtractIdentifierTerms(helper.HelperMethodName))) * 2;
-        score += CountMatches(goalTerms, details.DirectImpacts.SelectMany(static impact => ExtractIdentifierTerms(impact.DisplaySymbol))) * 2;
-        score += CountMatches(goalTerms, details.DirectImpacts
-            .Where(static impact => !string.IsNullOrWhiteSpace(impact.DialogWindowSymbol))
-            .SelectMany(static impact => ExtractIdentifierTerms(impact.DialogWindowSymbol!))) * 2;
-        return score;
+        var score = sourceTerms.Sum(source => CountMatches(goalTerms, source.Terms) * source.Weight);
+        var matchedSources = sourceTerms
+            .Select(source => new PackDecisionMatchedSource(
+                source.Source,
+                source.Terms
+                    .Where(goalTerms.Contains)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(static term => term, StringComparer.Ordinal)
+                    .ToArray()))
+            .Where(static source => source.Terms.Count > 0)
+            .OrderBy(static source => source.Source, StringComparer.Ordinal)
+            .ToArray();
+        var matchedTerms = matchedSources
+            .SelectMany(static source => source.Terms)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static term => term, StringComparer.Ordinal)
+            .ToArray();
+
+        return new CommandSelectionAnalysis(
+            details,
+            score,
+            0,
+            candidateCount,
+            goalTerms,
+            matchedTerms,
+            matchedSources);
+    }
+
+    private static PackDecisionTrace BuildSelectedAllTrace(CommandSelectionAnalysis analysis) =>
+        new(
+            Category: "command-selection",
+            ItemKey: analysis.Details.Command.PropertyName,
+            DecisionKind: "selected-all",
+            Summary: $"{analysis.Details.Command.PropertyName} は command 数が閾値以下のため詳細化対象として採用されます。",
+            Score: analysis.Score,
+            Rank: analysis.Rank,
+            CandidateCount: analysis.CandidateCount,
+            GoalTerms: analysis.GoalTerms,
+            MatchedTerms: analysis.MatchedTerms,
+            MatchedSources: analysis.MatchedSources);
+
+    private static PackDecisionTrace BuildSummarizedTrace(CommandSelectionAnalysis analysis, bool selected)
+    {
+        var decisionKind = selected
+            ? "selected-by-goal"
+            : analysis.Score == 0
+                ? "omitted-low-score"
+                : "omitted-rank";
+        var summary = decisionKind switch
+        {
+            "selected-by-goal" => $"{analysis.Details.Command.PropertyName} は goal と一致する term により詳細化対象として採用されます。",
+            "omitted-low-score" => $"{analysis.Details.Command.PropertyName} は goal 一致 term がないため詳細化対象から外れます。",
+            _ => $"{analysis.Details.Command.PropertyName} は goal 一致 term はありますが上位件数外のため詳細化対象から外れます。"
+        };
+
+        return new PackDecisionTrace(
+            Category: "command-selection",
+            ItemKey: analysis.Details.Command.PropertyName,
+            DecisionKind: decisionKind,
+            Summary: summary,
+            Score: analysis.Score,
+            Rank: analysis.Rank,
+            CandidateCount: analysis.CandidateCount,
+            GoalTerms: analysis.GoalTerms,
+            MatchedTerms: analysis.MatchedTerms,
+            MatchedSources: analysis.MatchedSources);
     }
 
     private static HashSet<string> ExtractGoalTerms(string goal)
@@ -461,5 +560,18 @@ internal static class CommandPackSectionBuilder
             .OrderBy(static command => command.PropertyName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-    private sealed record ScoredCommandImpact(CommandImpactDetails Details, int Score);
+    private sealed record WeightedTerms(string Source, int Weight, IReadOnlyList<string> Terms);
+
+    private sealed record CommandSelectionAnalysis(
+        CommandImpactDetails Details,
+        int Score,
+        int Rank,
+        int CandidateCount,
+        IReadOnlyList<string> GoalTerms,
+        IReadOnlyList<string> MatchedTerms,
+        IReadOnlyList<PackDecisionMatchedSource> MatchedSources);
+
+    private sealed record CommandSelectionResult(
+        IReadOnlyList<PackDecisionTrace> DecisionTraces,
+        IReadOnlyList<CommandImpactDetails> SelectedCommandDetails);
 }

@@ -11,6 +11,7 @@ public sealed record ContextPack(
     IReadOnlyList<IndexSection> Indexes,
     IReadOnlyList<SelectedSnippet> SelectedSnippets,
     IReadOnlyList<SelectedFile> SelectedFiles,
+    IReadOnlyList<PackDecisionTrace> DecisionTraces,
     IReadOnlyList<Diagnostic> Unknowns);
 
 public sealed record Contract(
@@ -41,6 +42,22 @@ public sealed record SelectedSnippet(
     int EndLine,
     string Content);
 
+public sealed record PackDecisionTrace(
+    string Category,
+    string ItemKey,
+    string DecisionKind,
+    string Summary,
+    int Score,
+    int Rank,
+    int CandidateCount,
+    IReadOnlyList<string> GoalTerms,
+    IReadOnlyList<string> MatchedTerms,
+    IReadOnlyList<PackDecisionMatchedSource> MatchedSources);
+
+public sealed record PackDecisionMatchedSource(
+    string Source,
+    IReadOnlyList<string> Terms);
+
 public sealed record FileSelectionCandidate(
     string Path,
     string Reason,
@@ -62,6 +79,7 @@ public sealed record PackIngredients(
     IReadOnlyList<IndexSection> Indexes,
     IReadOnlyList<SnippetSelectionCandidate> SnippetCandidates,
     IReadOnlyList<FileSelectionCandidate> FileCandidates,
+    IReadOnlyList<PackDecisionTrace> DecisionTraces,
     IReadOnlyList<Diagnostic> Unknowns);
 
 public enum ContractKind

@@ -30,6 +30,7 @@ public static class ContextPackFactory
 
         var selectedSnippets = SelectSnippets(ingredients.SnippetCandidates, budget);
         var selectedFiles = SelectFiles(ingredients.FileCandidates, fileLineCounts, selectedSnippets, budget);
+        var decisionTraces = OrderDecisionTraces(ingredients.DecisionTraces);
 
         return new ContextPack(
             Goal: goal,
@@ -39,6 +40,7 @@ public static class ContextPackFactory
             Indexes: ingredients.Indexes,
             SelectedSnippets: selectedSnippets,
             SelectedFiles: selectedFiles,
+            DecisionTraces: decisionTraces,
             Unknowns: ingredients.Unknowns);
     }
 
@@ -157,6 +159,16 @@ public static class ContextPackFactory
             .ThenBy(static snippet => snippet.StartLine)
             .ToArray();
     }
+
+    private static IReadOnlyList<PackDecisionTrace> OrderDecisionTraces(
+        IReadOnlyList<PackDecisionTrace> decisionTraces) =>
+        decisionTraces
+            .OrderBy(static trace => trace.Category, StringComparer.Ordinal)
+            .ThenBy(static trace => trace.ItemKey, StringComparer.Ordinal)
+            .ThenBy(static trace => trace.DecisionKind, StringComparer.Ordinal)
+            .ThenByDescending(static trace => trace.Score)
+            .ThenBy(static trace => trace.Rank)
+            .ToArray();
 
     private static bool TryMerge(IList<SelectedSnippet> selected, SelectedSnippet candidate)
     {
