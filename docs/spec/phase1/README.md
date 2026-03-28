@@ -10,7 +10,7 @@ Phase 1 は、その全体構想の最初の具体攻略対象として `Windows
 ## 現在の実装範囲
 
 - プロジェクト構成は `Rulixa.Domain`、`Rulixa.Application`、`Rulixa.Infrastructure`、`Rulixa.Plugin.WpfNet8`、`Rulixa.Cli`
-- CLI は `scan`、`resolve-entry`、`pack`
+- CLI は `scan`、`resolve-entry`、`pack`、`compare-evidence`
 - `entry=file`、`entry=symbol`、`entry=auto` を処理
 - `SelectedItem -> CurrentPage` の navigation 導線を抽出
 - root binding、view binding、`DataTemplate` 要約、DI、dialog activation を Pack に反映
@@ -19,6 +19,8 @@ Phase 1 は、その全体構想の最初の具体攻略対象として `Windows
 - command 詳細化では `execute -> direct service/dialog` に加えて、同一 ViewModel 内の `private helper 1 hop` を `execute -> helper -> service/dialog` として表示
 - dialog 抽出は invocation 単位で `show` / `show-dialog` / `owner kind` を判定
 - 大きい `*.cs` は全文ではなく snippet 優先で Pack に入れる
+- `pack --evidence-dir` で `manifest.json`、`scan.json`、`resolved-entry.json`、`pack.md` を決定的な bundle として保存する
+- `compare-evidence` で bundle 2 つの metadata / contracts / selected files / selected snippets の差分を確認する
 - optional smoke として `D:\C#\AssessMeister` を使う実ワークスペース検証を用意
 
 ## 読む順番
@@ -70,3 +72,21 @@ dotnet run --project src\Rulixa.Cli -- pack `
 ```
 
 この場合、Pack の `Command` 契約と index で `execute -> helper -> service/dialog` の経路が詳細化されます。
+
+### evidence bundle を残したい場合
+
+```powershell
+dotnet run --project src\Rulixa.Cli -- pack `
+  --workspace D:\C#\AssessMeister `
+  --entry symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel `
+  --goal "project" `
+  --evidence-dir artifacts\evidence
+```
+
+### evidence bundle を比較したい場合
+
+```powershell
+dotnet run --project src\Rulixa.Cli -- compare-evidence `
+  --base artifacts\evidence\20260328T0820594860279Z-symbol-assessmeister-presentati-1147cb49a974 `
+  --target artifacts\evidence\20260328T0820594860279Z-symbol-assessmeister-presentati-579ae2573c32
+```

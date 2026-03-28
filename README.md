@@ -36,14 +36,17 @@
 
 ## CLI
 
-現在の主要コマンドは次の 3 つです。
+現在の主要コマンドは次の 4 つです。
 
 - `scan`
 - `resolve-entry`
 - `pack`
+- `compare-evidence`
 
 `scan` と `resolve-entry` の JSON 出力は、Phase 1 仕様に合わせて lower camel のプロパティ名と仕様トークンを使います。
 例えば `bindingKind` は `root-data-context`、`lifetime` は `singleton`、`generatedAtUtc` は走査対象の最終更新時刻に基づく決定的な UTC 値です。
+`pack` は `--evidence-dir <path>` を付けると、`manifest.json`、`scan.json`、`resolved-entry.json`、`pack.md` を同一 bundle として保存できます。
+同じ `workspace + generatedAtUtc + entry + goal + budget` なら同じ bundle 名になり、内容差分がある場合だけ `__r2` 以降の revision directory に退避します。
 
 ### 例: file entry
 
@@ -61,6 +64,24 @@ dotnet run --project src\Rulixa.Cli -- pack `
   --workspace D:\C#\AssessMeister `
   --entry symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel `
   --goal "Shell 画面に新しいページを追加したい"
+```
+
+### 例: evidence bundle を残しながら pack する
+
+```powershell
+dotnet run --project src\Rulixa.Cli -- pack `
+  --workspace D:\C#\AssessMeister `
+  --entry symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel `
+  --goal "project" `
+  --evidence-dir artifacts\evidence
+```
+
+### 例: 2 つの evidence bundle を比較する
+
+```powershell
+dotnet run --project src\Rulixa.Cli -- compare-evidence `
+  --base artifacts\evidence\20260328T0820594860279Z-symbol-assessmeister-presentati-1147cb49a974 `
+  --target artifacts\evidence\20260328T0820594860279Z-symbol-assessmeister-presentati-579ae2573c32
 ```
 
 ## Codex Plugin
