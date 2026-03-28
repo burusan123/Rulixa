@@ -147,6 +147,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "command-support" => "コマンド実装支援",
         "dialog-service" => "ダイアログ起動サービス",
         "navigation-view" => "ナビゲーション View",
+        "navigation-xaml-binding" => "XAML のナビゲーション binding",
         "navigation-update" => "ナビゲーション更新点",
         _ => reason
     };

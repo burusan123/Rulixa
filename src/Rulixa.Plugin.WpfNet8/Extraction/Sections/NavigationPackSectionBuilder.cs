@@ -9,14 +9,17 @@ internal sealed class NavigationPackSectionBuilder
 {
     private readonly IWorkspaceFileSystem workspaceFileSystem;
     private readonly CSharpSnippetCandidateFactory snippetFactory;
+    private readonly XamlSnippetCandidateFactory xamlSnippetFactory;
     private readonly NavigationContractExtractor navigationContractExtractor = new();
 
     internal NavigationPackSectionBuilder(
         IWorkspaceFileSystem workspaceFileSystem,
-        CSharpSnippetCandidateFactory snippetFactory)
+        CSharpSnippetCandidateFactory snippetFactory,
+        XamlSnippetCandidateFactory xamlSnippetFactory)
     {
         this.workspaceFileSystem = workspaceFileSystem ?? throw new ArgumentNullException(nameof(workspaceFileSystem));
         this.snippetFactory = snippetFactory ?? throw new ArgumentNullException(nameof(snippetFactory));
+        this.xamlSnippetFactory = xamlSnippetFactory ?? throw new ArgumentNullException(nameof(xamlSnippetFactory));
     }
 
     internal async Task AddAsync(
@@ -46,6 +49,12 @@ internal sealed class NavigationPackSectionBuilder
             navigationBindings.Add(navigationBinding);
             contracts.Add(BuildNavigationBindingContract(resolvedEntry, navigationBinding));
             fileCandidates.Add(new FileSelectionCandidate(viewPath, "navigation-view", 8, true));
+            await AddXamlBindingSnippetsAsync(
+                    workspaceRoot,
+                    navigationBinding,
+                    snippetCandidates,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         if (navigationBindings.Count > 0)
@@ -234,6 +243,11 @@ internal sealed class NavigationPackSectionBuilder
             symbols.Add(binding.ContentProperty);
         }
 
+        if (!string.IsNullOrWhiteSpace(binding.CommandProperty))
+        {
+            symbols.Add(binding.CommandProperty);
+        }
+
         return symbols;
     }
 
@@ -293,6 +307,40 @@ internal sealed class NavigationPackSectionBuilder
                 transition.SourceSpan,
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private async Task AddXamlBindingSnippetsAsync(
+        string workspaceRoot,
+        NavigationBinding binding,
+        ICollection<SnippetSelectionCandidate> snippetCandidates,
+        CancellationToken cancellationToken)
+    {
+        var xamlBindings = new[]
+        {
+            (Binding: binding.ItemsSourceBinding, Anchor: "Items"),
+            (Binding: binding.SelectedItemBinding, Anchor: "SelectedItem"),
+            (Binding: binding.ContentBinding, Anchor: "CurrentPage"),
+            (Binding: binding.CommandBinding, Anchor: "Command")
+        };
+
+        foreach (var entry in xamlBindings.Where(static entry => entry.Binding is not null))
+        {
+            var snippet = await xamlSnippetFactory
+                .CreateLineWindowSnippetAsync(
+                    workspaceRoot,
+                    binding.ViewPath,
+                    "navigation-xaml-binding",
+                    8,
+                    true,
+                    entry.Anchor,
+                    entry.Binding!.SourceSpan,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (snippet is not null)
+            {
+                snippetCandidates.Add(snippet);
+            }
+        }
     }
 
     private readonly record struct NavigationCauseSummary(Contract Contract, IndexSection Index);

@@ -96,6 +96,10 @@ public sealed class WpfNet8WorkspaceScannerTests
             && snippet.Reason == "dependency-injection"
             && snippet.Content.Contains("AddSingleton<ShellViewModel>()", StringComparison.Ordinal));
         Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
+            && snippet.Reason == "navigation-xaml-binding"
+            && snippet.Content.Contains("SelectedItem=\"{Binding SelectedItem", StringComparison.Ordinal));
+        Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
             && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
             && snippet.Anchor.Contains("Select(...)", StringComparison.Ordinal));
@@ -138,6 +142,9 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.DoesNotContain(selectedPaths, path => path.Contains("/Pages/", StringComparison.OrdinalIgnoreCase));
         Assert.True(pack.SelectedFiles.Count <= 8);
 
+        Assert.Contains(pack.SelectedSnippets, snippet =>
+            snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
+            && snippet.Reason == "navigation-xaml-binding");
         Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs"
             && snippet.Reason == "root-binding-source");
@@ -196,11 +203,15 @@ public sealed class WpfNet8WorkspaceScannerTests
 
         var orderedSnippetPaths = pack.SelectedSnippets.Select(static snippet => snippet.Path).ToArray();
         var bindingIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs");
+        var viewBindingIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs");
+        var xamlIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml");
         var registrationIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs");
         var navigationIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs");
 
         Assert.True(bindingIndex >= 0);
-        Assert.True(registrationIndex > bindingIndex);
+        Assert.True(viewBindingIndex > bindingIndex);
+        Assert.True(registrationIndex > viewBindingIndex);
+        Assert.True(xamlIndex > registrationIndex);
         Assert.True(navigationIndex > registrationIndex);
     }
 

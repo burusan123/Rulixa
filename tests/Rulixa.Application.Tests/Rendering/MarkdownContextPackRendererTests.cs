@@ -51,6 +51,15 @@ public sealed class MarkdownContextPackRendererTests
             SelectedSnippets:
             [
                 new SelectedSnippet(
+                    @".\src\App\Views\ShellView.xaml",
+                    "navigation-xaml-binding",
+                    8,
+                    true,
+                    "SelectedItem",
+                    12,
+                    18,
+                    "<ListBox ItemsSource=\"{Binding Items}\"\n         SelectedItem=\"{Binding SelectedItem}\" />"),
+                new SelectedSnippet(
                     @".\src\App\ViewModels\ShellViewModel.cs",
                     "navigation-update",
                     10,
@@ -91,18 +100,22 @@ public sealed class MarkdownContextPackRendererTests
         var markdown = renderer.Render(contextPack);
 
         Assert.Contains("### src/App/Views/MainWindow.xaml.cs:6-9", markdown);
+        Assert.Contains("### src/App/Views/ShellView.xaml:12-18", markdown);
         Assert.Contains("### src/App/ServiceRegistration.cs:8-10", markdown);
         Assert.Contains("### src/App/ViewModels/ShellViewModel.cs:40-48", markdown);
         Assert.Contains("```csharp", markdown);
+        Assert.Contains("```xml", markdown);
+        Assert.Contains("XAML のナビゲーション binding", markdown);
         Assert.DoesNotContain(@".\", markdown);
 
-        var snippetsHeaderPosition = markdown.IndexOf("### src/App/Views/MainWindow.xaml.cs:6-9", StringComparison.Ordinal);
         var bindingPosition = markdown.IndexOf("### src/App/Views/MainWindow.xaml.cs:6-9", StringComparison.Ordinal);
+        var xamlPosition = markdown.IndexOf("### src/App/Views/ShellView.xaml:12-18", StringComparison.Ordinal);
         var registrationPosition = markdown.IndexOf("### src/App/ServiceRegistration.cs:8-10", StringComparison.Ordinal);
         var navigationPosition = markdown.IndexOf("### src/App/ViewModels/ShellViewModel.cs:40-48", StringComparison.Ordinal);
         var filePathPosition = markdown.LastIndexOf("`src/App/Views/ShellView.xaml`", StringComparison.Ordinal);
 
-        Assert.True(snippetsHeaderPosition >= 0);
+        Assert.True(bindingPosition >= 0);
+        Assert.True(xamlPosition > bindingPosition);
         Assert.True(registrationPosition > bindingPosition);
         Assert.True(navigationPosition > registrationPosition);
         Assert.True(filePathPosition > navigationPosition);

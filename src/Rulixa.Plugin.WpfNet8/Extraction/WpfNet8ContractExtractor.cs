@@ -18,8 +18,9 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         ArgumentNullException.ThrowIfNull(workspaceFileSystem);
 
         snippetFactory = new CSharpSnippetCandidateFactory(workspaceFileSystem);
+        var xamlSnippetFactory = new XamlSnippetCandidateFactory(workspaceFileSystem);
         dependencyInjectionBuilder = new DependencyInjectionPackSectionBuilder(workspaceFileSystem, snippetFactory);
-        navigationBuilder = new NavigationPackSectionBuilder(workspaceFileSystem, snippetFactory);
+        navigationBuilder = new NavigationPackSectionBuilder(workspaceFileSystem, snippetFactory, xamlSnippetFactory);
         dialogBuilder = new DialogPackSectionBuilder(workspaceFileSystem, snippetFactory);
     }
 

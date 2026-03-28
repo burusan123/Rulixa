@@ -17,6 +17,7 @@ Phase 1 の実装は `WPF + .NET 8` ワークスペースを対象に、`scan ->
 - 巨大 `*.cs` を `SelectedSnippets` へ置き換える
 - `ViewModelBinding` / `NavigationTransition` / `ServiceRegistration` に `SourceSpan` を持たせる
 - `MainWindow.xaml.cs` の root binding と `ServiceRegistration.cs` の登録行も snippet 化する
+- `ShellView.xaml` など entry XAML の binding 根拠を `selected snippets` に line-range で含める
 
 ## 現在の構成
 
@@ -71,13 +72,13 @@ Phase 1 の実装は `WPF + .NET 8` ワークスペースを対象に、`scan ->
 - command summary
 - DI summary
 - root binding / registration snippet
+- XAML navigation snippet
 - generated / temp file 除外
 
 ## 次の候補
 
 ### P1
 
-- XAML 本体の line-range snippet 化
 - `ServiceRegistration` の複数行登録への span 拡張
 - snippet reason の粒度整理
 
