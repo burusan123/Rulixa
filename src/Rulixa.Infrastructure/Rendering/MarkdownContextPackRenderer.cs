@@ -90,7 +90,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         ContractKind.Startup => "起動経路",
         ContractKind.DependencyInjection => "依存関係の構成",
         ContractKind.ViewModelBinding => "View と ViewModel の対応",
-        ContractKind.Navigation => "画面遷移",
+        ContractKind.Navigation => "ナビゲーション",
         ContractKind.Command => "コマンド",
         ContractKind.DialogActivation => "ダイアログ起動",
         _ => contractKind.ToString()
@@ -110,17 +110,18 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "startup" => "起動経路",
         "dependency-injection" => "DI 登録",
         "root-binding" => "ルート DataContext",
-        "root-binding-source" => "ルート DataContext の根拠",
-        "view-binding" => "View と ViewModel の対応",
-        "view-binding-source" => "View と ViewModel の対応根拠",
+        "root-binding-source" => "ルート DataContext の設定元",
+        "view-binding" => "View DataContext",
+        "view-binding-source" => "View DataContext の設定元",
         "data-template" => "DataTemplate による二次文脈",
-        "data-template-source" => "DataTemplate の定義",
+        "data-template-source" => "DataTemplate の定義元",
         "conventional-view" => "規約ベースの対応 View",
         "code-behind" => "対応する code-behind",
         "command-viewmodel" => "コマンド実装",
         "command-bound-view" => "コマンド関連 View",
         "command-support" => "コマンド基盤",
-        "dialog-service" => "ダイアログ起動元",
+        "dialog-service" => "ダイアログ起動サービス",
+        "navigation-view" => "ナビゲーション View",
         _ => reason
     };
 }

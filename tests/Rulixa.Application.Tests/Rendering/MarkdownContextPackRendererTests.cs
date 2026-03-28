@@ -23,16 +23,29 @@ public sealed class MarkdownContextPackRendererTests
                 []),
             Contracts:
             [
-                new Contract(ContractKind.Startup, "起動経路", "App と MainWindow がルート ViewModel を構成します。", ["App.xaml.cs"], ["App.ViewModels.ShellViewModel"])
+                new Contract(
+                    ContractKind.Startup,
+                    "起動経路",
+                    "App と MainWindow がルート ViewModel を構成します。",
+                    ["App.xaml.cs"],
+                    ["App.ViewModels.ShellViewModel"]),
+                new Contract(
+                    ContractKind.Navigation,
+                    "選択と表示の切り替え",
+                    "src/App/Views/ShellView.xaml では一覧を Items にバインド、選択状態を SelectedItem にバインド、表示コンテンツを CurrentPage にバインドしてページ切り替えを行います。",
+                    ["src/App/Views/ShellView.xaml"],
+                    ["App.ViewModels.ShellViewModel", "Items", "SelectedItem", "CurrentPage"])
             ],
             Indexes:
             [
-                new IndexSection("起動経路", ["App.xaml.cs -> App.ViewModels.ShellViewModel"])
+                new IndexSection("起動経路", ["App.xaml.cs -> App.ViewModels.ShellViewModel"]),
+                new IndexSection("ナビゲーション", ["src/App/Views/ShellView.xaml: Items=Items, SelectedItem=SelectedItem, Content=CurrentPage"])
             ],
             SelectedFiles:
             [
                 new SelectedFile(@".\src\App\Views\ShellView.xaml", "entry", 0, true, 42),
-                new SelectedFile(@".\MainWindow.xaml.cs", "startup", 10, true, 10)
+                new SelectedFile(@".\MainWindow.xaml.cs", "startup", 10, true, 10),
+                new SelectedFile(@".\src\App\Views\ShellView.xaml", "navigation-view", 8, true, 42)
             ],
             Unknowns:
             [
@@ -46,10 +59,12 @@ public sealed class MarkdownContextPackRendererTests
         Assert.Contains("## 選定ファイル", markdown);
         Assert.Contains("理由: 入口", markdown);
         Assert.Contains("理由: 起動経路", markdown);
+        Assert.Contains("理由: ナビゲーション View", markdown);
         Assert.Contains("src/App/Views/ShellView.xaml", markdown);
         Assert.Contains("MainWindow.xaml.cs", markdown);
         Assert.DoesNotContain(@".\", markdown);
         Assert.Contains("[起動経路]", markdown);
+        Assert.Contains("[ナビゲーション]", markdown);
         Assert.Contains("[警告] entry.unresolved", markdown);
     }
 

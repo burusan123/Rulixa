@@ -9,6 +9,7 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 public sealed class WpfNet8ContractExtractor : IContractExtractor
 {
     private readonly IWorkspaceFileSystem workspaceFileSystem;
+    private readonly NavigationContractExtractor navigationContractExtractor = new();
 
     public WpfNet8ContractExtractor(IWorkspaceFileSystem workspaceFileSystem)
     {
@@ -59,6 +60,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         AddBindingContracts(scanResult, primaryBindings, true, contracts, fileCandidates);
         AddBindingContracts(scanResult, secondaryBindings, false, contracts, fileCandidates);
         AddConventionalViewFiles(scanResult, resolvedEntry, fileCandidates);
+        await AddNavigationContractsAsync(workspaceRoot, scanResult, resolvedEntry, relevantBindings, contracts, indexes, fileCandidates, cancellationToken).ConfigureAwait(false);
         AddCommandContracts(scanResult, resolvedEntry, contracts, fileCandidates);
         await AddReachableDialogContractsAsync(workspaceRoot, scanResult, resolvedEntry, contracts, fileCandidates, cancellationToken).ConfigureAwait(false);
 
@@ -165,16 +167,19 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             var title = binding.BindingKind switch
             {
                 ViewModelBindingKind.RootDataContext => "ルート DataContext",
-                ViewModelBindingKind.ViewDataContext => "View の DataContext",
+                ViewModelBindingKind.ViewDataContext => "code-behind DataContext",
                 ViewModelBindingKind.DataTemplate => "DataTemplate",
                 _ => binding.BindingKind.ToString()
             };
 
             var summary = binding.BindingKind switch
             {
-                ViewModelBindingKind.RootDataContext => $"{binding.ViewPath} が {binding.ViewModelSymbol} をルート ViewModel として利用します。",
-                ViewModelBindingKind.ViewDataContext => $"{binding.ViewPath} が {binding.ViewModelSymbol} を DataContext として利用します。",
-                ViewModelBindingKind.DataTemplate => $"{binding.ViewPath} から {binding.ViewModelSymbol} への DataTemplate が定義されています。",
+                ViewModelBindingKind.RootDataContext =>
+                    $"{Path.GetFileName(binding.SourcePath)} が {binding.ViewPath} の DataContext に {binding.ViewModelSymbol} を設定します。",
+                ViewModelBindingKind.ViewDataContext =>
+                    $"{Path.GetFileName(binding.SourcePath)} が {binding.ViewPath} の DataContext に {binding.ViewModelSymbol} を設定します。",
+                ViewModelBindingKind.DataTemplate =>
+                    $"{binding.ViewPath} が {binding.ViewModelSymbol} の DataTemplate を定義します。",
                 _ => $"{binding.ViewPath} が {binding.ViewModelSymbol} に対応します。"
             };
 
@@ -268,6 +273,133 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         {
             fileCandidates.Add(new FileSelectionCandidate(codeBehindPath, "code-behind", priority, required));
         }
+    }
+
+    private async Task AddNavigationContractsAsync(
+        string workspaceRoot,
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry,
+        IReadOnlyList<ViewModelBinding> relevantBindings,
+        ICollection<Contract> contracts,
+        ICollection<IndexSection> indexes,
+        ICollection<FileSelectionCandidate> fileCandidates,
+        CancellationToken cancellationToken)
+    {
+        var candidateViews = GetNavigationCandidateViews(scanResult, resolvedEntry, relevantBindings);
+        var navigationBindings = new List<NavigationBinding>();
+
+        foreach (var viewPath in candidateViews)
+        {
+            var absolutePath = Path.Combine(workspaceRoot, viewPath.Replace('/', Path.DirectorySeparatorChar));
+            var source = await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
+            var navigationBinding = navigationContractExtractor.Extract(viewPath, source);
+            if (navigationBinding is null)
+            {
+                continue;
+            }
+
+            navigationBindings.Add(navigationBinding);
+            contracts.Add(BuildNavigationContract(resolvedEntry, navigationBinding));
+            fileCandidates.Add(new FileSelectionCandidate(viewPath, "navigation-view", 8, true));
+        }
+
+        if (navigationBindings.Count > 0)
+        {
+            indexes.Add(BuildNavigationIndex(navigationBindings));
+        }
+    }
+
+    private static IReadOnlyList<string> GetNavigationCandidateViews(
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry,
+        IReadOnlyList<ViewModelBinding> relevantBindings)
+    {
+        var candidateViews = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var binding in relevantBindings)
+        {
+            candidateViews.Add(binding.ViewPath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(resolvedEntry.ResolvedPath)
+            && resolvedEntry.ResolvedPath.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))
+        {
+            candidateViews.Add(resolvedEntry.ResolvedPath);
+        }
+
+        if (resolvedEntry.ResolvedKind == ResolvedEntryKind.Symbol && !string.IsNullOrWhiteSpace(resolvedEntry.Symbol))
+        {
+            var viewName = BuildConventionalViewName(resolvedEntry.Symbol);
+            if (!string.IsNullOrWhiteSpace(viewName))
+            {
+                var viewPath = scanResult.Files
+                    .Where(static file => file.Kind == ScanFileKind.Xaml)
+                    .Select(static file => file.Path)
+                    .FirstOrDefault(path => Path.GetFileNameWithoutExtension(path).Equals(viewName, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(viewPath))
+                {
+                    candidateViews.Add(viewPath);
+                }
+            }
+        }
+
+        return candidateViews
+            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static Contract BuildNavigationContract(ResolvedEntry resolvedEntry, NavigationBinding binding)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(binding.ItemsSourceProperty))
+        {
+            parts.Add($"一覧を {binding.ItemsSourceProperty} にバインド");
+        }
+
+        if (!string.IsNullOrWhiteSpace(binding.SelectedItemProperty))
+        {
+            parts.Add($"選択状態を {binding.SelectedItemProperty} にバインド");
+        }
+
+        if (!string.IsNullOrWhiteSpace(binding.ContentProperty))
+        {
+            parts.Add($"表示コンテンツを {binding.ContentProperty} にバインド");
+        }
+
+        var summary = $"{binding.ViewPath} では {string.Join("、", parts)} してページ切り替えを行います。";
+
+        return new Contract(
+            ContractKind.Navigation,
+            "選択と表示の切り替え",
+            summary,
+            [binding.ViewPath],
+            BuildNavigationSymbols(resolvedEntry, binding));
+    }
+
+    private static IReadOnlyList<string> BuildNavigationSymbols(ResolvedEntry resolvedEntry, NavigationBinding binding)
+    {
+        var symbols = new List<string>();
+        if (!string.IsNullOrWhiteSpace(resolvedEntry.Symbol))
+        {
+            symbols.Add(resolvedEntry.Symbol);
+        }
+
+        if (!string.IsNullOrWhiteSpace(binding.ItemsSourceProperty))
+        {
+            symbols.Add(binding.ItemsSourceProperty);
+        }
+
+        if (!string.IsNullOrWhiteSpace(binding.SelectedItemProperty))
+        {
+            symbols.Add(binding.SelectedItemProperty);
+        }
+
+        if (!string.IsNullOrWhiteSpace(binding.ContentProperty))
+        {
+            symbols.Add(binding.ContentProperty);
+        }
+
+        return symbols;
     }
 
     private static void AddCommandContracts(
@@ -379,7 +511,16 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
     private static IndexSection BuildViewModelIndex(IReadOnlyList<ViewModelBinding> bindings) =>
         new(
             "View-ViewModel",
-            bindings.Select(binding => $"{binding.ViewPath} <-> {binding.ViewModelSymbol} ({DescribeBindingKind(binding.BindingKind)})").ToArray());
+            bindings.Select(binding =>
+                    $"{binding.ViewPath} <-> {binding.ViewModelSymbol} ({DescribeBindingKind(binding.BindingKind)}: {binding.SourcePath})")
+                .ToArray());
+
+    private static IndexSection BuildNavigationIndex(IReadOnlyList<NavigationBinding> bindings) =>
+        new(
+            "ナビゲーション",
+            bindings.Select(binding =>
+                    $"{binding.ViewPath}: Items={binding.ItemsSourceProperty ?? "-"}, SelectedItem={binding.SelectedItemProperty ?? "-"}, Content={binding.ContentProperty ?? "-"}")
+                .ToArray());
 
     private static IndexSection BuildCommandIndex(WorkspaceScanResult scanResult, ResolvedEntry resolvedEntry) =>
         new(
@@ -394,7 +535,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
     private static string DescribeBindingKind(ViewModelBindingKind bindingKind) => bindingKind switch
     {
         ViewModelBindingKind.RootDataContext => "ルート DataContext",
-        ViewModelBindingKind.ViewDataContext => "View の DataContext",
+        ViewModelBindingKind.ViewDataContext => "code-behind DataContext",
         ViewModelBindingKind.DataTemplate => "DataTemplate",
         _ => bindingKind.ToString()
     };

@@ -98,4 +98,28 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.DoesNotContain(selectedPaths, path => path.Contains("/Pages/", StringComparison.OrdinalIgnoreCase));
         Assert.True(pack.SelectedFiles.Count <= 8);
     }
+
+    [Fact]
+    public async Task ExtractAsync_ForShellViewModelSymbol_AddsNavigationContract()
+    {
+        var fileSystem = new WorkspaceFileSystem();
+        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+        var resolver = new ScanBackedEntryResolver();
+        var extractor = new WpfNet8ContractExtractor(fileSystem);
+
+        var scanResult = await scanner.ScanAsync(FixtureRoot);
+        var entry = new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
+        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
+        var ingredients = await extractor.ExtractAsync(FixtureRoot, scanResult, resolvedEntry);
+
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.Navigation
+            && contract.Summary.Contains("SelectedItem", StringComparison.Ordinal)
+            && contract.Summary.Contains("CurrentPage", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "ナビゲーション"
+            && index.Lines.Any(line =>
+                line.Contains("SelectedItem=SelectedItem", StringComparison.Ordinal)
+                && line.Contains("Content=CurrentPage", StringComparison.Ordinal)));
+    }
 }

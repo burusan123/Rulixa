@@ -8,6 +8,18 @@
     </DataTemplate>
   </UserControl.Resources>
   <Grid>
-    <Button Command="{Binding OpenSettingsCommand}" Content="Settings" />
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <ListBox Grid.Row="0"
+             ItemsSource="{Binding Items}"
+             SelectedItem="{Binding SelectedItem, Mode=TwoWay}" />
+    <ContentControl Grid.Row="1"
+                    Content="{Binding CurrentPage}" />
+    <Button Grid.Row="2"
+            Command="{Binding OpenSettingsCommand}"
+            Content="Settings" />
   </Grid>
 </UserControl>
