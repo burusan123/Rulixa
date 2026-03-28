@@ -191,11 +191,19 @@ internal sealed class ScanSymbolCatalogBuilder
                     .ThenBy(static symbol => symbol.StartLine)
                     .ToArray();
                 var first = ordered[0];
+                var partialFileTags = ordered
+                    .Select(static symbol => $"partial-file:{symbol.FilePath}")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
                 return first with
                 {
                     StartLine = ordered.Min(static symbol => symbol.StartLine),
                     EndLine = ordered.Max(static symbol => symbol.EndLine),
-                    FilePath = ordered[0].FilePath
+                    FilePath = ordered[0].FilePath,
+                    Tags = first.Tags
+                        .Concat(partialFileTags)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray()
                 };
             });
 

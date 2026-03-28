@@ -37,8 +37,8 @@ public sealed class MarkdownContextPackRendererTests
                     ["App.ViewModels.ShellViewModel"]),
                 new Contract(
                     ContractKind.Navigation,
-                    "選択から表示への因果",
-                    "SelectedItem の選択更新が CurrentPage の表示切り替えを駆動します。",
+                    "選択から表示への反映",
+                    "SelectedItem の更新が CurrentPage の表示切り替えを駆動します。",
                     ["src/App/ViewModels/ShellViewModel.cs"],
                     ["SelectedItem", "CurrentPage"])
             ],
@@ -106,7 +106,7 @@ public sealed class MarkdownContextPackRendererTests
         Assert.Contains("### src/App/ViewModels/ShellViewModel.cs:40-48", markdown);
         Assert.Contains("```csharp", markdown);
         Assert.Contains("```xml", markdown);
-        Assert.Contains("XAML のナビゲーション binding", markdown);
+        Assert.Contains("XAML ナビゲーション binding", markdown);
         Assert.DoesNotContain(@".\", markdown);
 
         var bindingPosition = markdown.IndexOf("### src/App/Views/MainWindow.xaml.cs:6-9", StringComparison.Ordinal);

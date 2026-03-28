@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Rulixa.Application.Ports;
 using Rulixa.Domain.Entries;
 using Rulixa.Domain.Packs;
@@ -10,22 +9,6 @@ internal static class CommandPackSectionBuilder
 {
     private const int CommandSummaryThreshold = 6;
     private const int MaxDetailedCommandsWhenSummarized = 3;
-
-    private static readonly IReadOnlyDictionary<string, string[]> GoalAliases = new Dictionary<string, string[]>
-    {
-        ["setting"] = ["setting", "settings", "\u8A2D\u5B9A"],
-        ["drafting"] = ["drafting", "\u4F5C\u56F3"],
-        ["license"] = ["license", "\u30E9\u30A4\u30BB\u30F3\u30B9"],
-        ["import"] = ["import", "\u30A4\u30F3\u30DD\u30FC\u30C8"],
-        ["export"] = ["export", "\u30A8\u30AF\u30B9\u30DD\u30FC\u30C8"],
-        ["share"] = ["share", "\u5171\u6709"],
-        ["result"] = ["result", "results", "output", "\u7D50\u679C", "\u51FA\u529B"],
-        ["project"] = ["project", "projects", "\u30D7\u30ED\u30B8\u30A7\u30AF\u30C8"],
-        ["open"] = ["open", "\u958B\u304F", "\u8D77\u52D5"],
-        ["save"] = ["save", "\u4FDD\u5B58"],
-        ["reset"] = ["reset", "\u521D\u671F\u5316", "\u30EA\u30BB\u30C3\u30C8"],
-        ["new"] = ["new", "\u65B0\u898F"]
-    };
 
     internal static async Task AddContractsAsync(
         string workspaceRoot,
@@ -366,7 +349,7 @@ internal static class CommandPackSectionBuilder
         IReadOnlyList<CommandImpactDetails> commandDetails,
         string goal)
     {
-        var goalTerms = ExtractGoalTerms(goal)
+        var goalTerms = GoalDrivenExpansionPlanner.ExtractGoalTerms(goal)
             .OrderBy(static term => term, StringComparer.Ordinal)
             .ToArray();
         var analyses = commandDetails
@@ -490,48 +473,8 @@ internal static class CommandPackSectionBuilder
             MatchedSources: analysis.MatchedSources);
     }
 
-    private static HashSet<string> ExtractGoalTerms(string goal)
-    {
-        var terms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (canonical, aliases) in GoalAliases)
-        {
-            if (aliases.Any(alias => goal.Contains(alias, StringComparison.OrdinalIgnoreCase)))
-            {
-                terms.Add(canonical);
-            }
-        }
-
-        foreach (Match match in Regex.Matches(goal, "[A-Za-z0-9]+"))
-        {
-            terms.Add(Canonicalize(match.Value));
-        }
-
-        return terms;
-    }
-
-    private static IEnumerable<string> ExtractIdentifierTerms(string raw)
-    {
-        foreach (var segment in raw.Split(['.', '_'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            foreach (Match match in Regex.Matches(segment, "[A-Z]?[a-z]+|[A-Z]+(?![a-z])|[0-9]+"))
-            {
-                yield return Canonicalize(match.Value);
-            }
-        }
-    }
-
-    private static string Canonicalize(string value)
-    {
-        foreach (var (canonical, aliases) in GoalAliases)
-        {
-            if (aliases.Any(alias => string.Equals(alias, value, StringComparison.OrdinalIgnoreCase)))
-            {
-                return canonical;
-            }
-        }
-
-        return value.ToLowerInvariant();
-    }
+    private static IEnumerable<string> ExtractIdentifierTerms(string raw) =>
+        GoalDrivenExpansionPlanner.ExtractIdentifierTerms(raw);
 
     private static int CountMatches(IEnumerable<string> goalTerms, IEnumerable<string> candidateTerms)
     {
@@ -552,7 +495,7 @@ internal static class CommandPackSectionBuilder
     private static string GetExecuteMethodName(CommandBinding command) =>
         command.ExecuteSymbol.Split('.').Last();
 
-    private static CommandBinding[] FindCommands(WorkspaceScanResult scanResult, ResolvedEntry resolvedEntry) =>
+    internal static CommandBinding[] FindCommands(WorkspaceScanResult scanResult, ResolvedEntry resolvedEntry) =>
         scanResult.Commands
             .Where(command =>
                 string.Equals(command.ViewModelSymbol, resolvedEntry.Symbol, StringComparison.OrdinalIgnoreCase)

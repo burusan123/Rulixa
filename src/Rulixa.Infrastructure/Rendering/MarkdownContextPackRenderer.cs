@@ -20,7 +20,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         builder.AppendLine();
         builder.AppendLine("## エントリ");
         builder.AppendLine($"- 入力: `{contextPack.Entry}`");
-        builder.AppendLine($"- 解決種別: `{ToDisplayText(contextPack.ResolvedEntry.ResolvedKind)}`");
+        builder.AppendLine($"- 解決結果: `{ToDisplayText(contextPack.ResolvedEntry.ResolvedKind)}`");
         if (!string.IsNullOrWhiteSpace(contextPack.ResolvedEntry.ResolvedPath))
         {
             builder.AppendLine($"- パス: `{NormalizePath(contextPack.ResolvedEntry.ResolvedPath)}`");
@@ -39,7 +39,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         }
 
         builder.AppendLine();
-        builder.AppendLine("## 影響範囲 / インデックス");
+        builder.AppendLine("## 参照ガイド / インデックス");
         foreach (var index in contextPack.Indexes.OrderBy(GetIndexPriority).ThenBy(static index => index.Title, StringComparer.Ordinal))
         {
             builder.AppendLine($"### {index.Title}");
@@ -50,14 +50,17 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         }
 
         builder.AppendLine();
-        builder.AppendLine("## 重要スニペット");
+        builder.AppendLine("## 抜粋スニペット");
         if (contextPack.SelectedSnippets.Count == 0)
         {
             builder.AppendLine("- なし");
         }
         else
         {
-            foreach (var snippet in contextPack.SelectedSnippets.OrderBy(static snippet => snippet.Priority).ThenBy(static snippet => snippet.Path, StringComparer.OrdinalIgnoreCase).ThenBy(static snippet => snippet.StartLine))
+            foreach (var snippet in contextPack.SelectedSnippets
+                         .OrderBy(static snippet => snippet.Priority)
+                         .ThenBy(static snippet => snippet.Path, StringComparer.OrdinalIgnoreCase)
+                         .ThenBy(static snippet => snippet.StartLine))
             {
                 builder.AppendLine($"### {NormalizePath(snippet.Path)}:{snippet.StartLine}-{snippet.EndLine}");
                 builder.AppendLine($"- 理由: {ToDisplayText(snippet.Reason)}, アンカー: `{snippet.Anchor}`");
@@ -68,11 +71,11 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         }
 
         builder.AppendLine();
-        builder.AppendLine("## 選定ファイル");
+        builder.AppendLine("## 選択ファイル");
         foreach (var selectedFile in contextPack.SelectedFiles)
         {
             builder.AppendLine(
-                $"- `{NormalizePath(selectedFile.Path)}` (理由: {ToDisplayText(selectedFile.Reason)}, 行数: {selectedFile.LineCount}, 種別: {(selectedFile.IsRequired ? "必須" : "任意")})");
+                $"- `{NormalizePath(selectedFile.Path)}` (理由: {ToDisplayText(selectedFile.Reason)}, 行数: {selectedFile.LineCount}, 種別: {(selectedFile.IsRequired ? "必須" : "補助")})");
         }
 
         builder.AppendLine();
@@ -138,18 +141,23 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "root-binding-source" => "ルート DataContext の設定元",
         "view-binding" => "View DataContext",
         "view-binding-source" => "View DataContext の設定元",
-        "data-template" => "DataTemplate による二次文脈",
+        "data-template" => "DataTemplate による画面対応",
         "data-template-source" => "DataTemplate の宣言元",
-        "conventional-view" => "規約ベースの対応 View",
+        "conventional-view" => "命名規約に一致する View",
         "code-behind" => "対応する code-behind",
         "command-viewmodel" => "コマンド定義元 ViewModel",
         "command-impact" => "コマンド影響先",
         "command-bound-view" => "コマンドが使われる View",
-        "command-support" => "コマンド実装支援",
+        "command-support" => "コマンド補助実装",
         "dialog-service" => "ダイアログ起動サービス",
         "navigation-view" => "ナビゲーション View",
-        "navigation-xaml-binding" => "XAML のナビゲーション binding",
-        "navigation-update" => "ナビゲーション更新点",
+        "navigation-xaml-binding" => "XAML ナビゲーション binding",
+        "navigation-update" => "ナビゲーション更新処理",
+        "workflow" => "ワークフロー候補",
+        "persistence" => "永続化候補",
+        "hub-object" => "中心状態オブジェクト候補",
+        "external-asset" => "外部資産アクセス候補",
+        "architecture-test" => "アーキテクチャ検証テスト",
         _ => reason
     };
 
@@ -157,12 +165,18 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
     {
         ContractKind.ViewModelBinding when !contract.Title.Contains("DataTemplate", StringComparison.Ordinal) => 0,
         ContractKind.Startup => 10,
-        ContractKind.DependencyInjection when contract.Title == "主要 ViewModel の登録" => 20,
+        ContractKind.DependencyInjection when contract.Title == "Workflow" => 24,
+        ContractKind.DependencyInjection when contract.Title == "Persistence" => 25,
+        ContractKind.DependencyInjection when contract.Title == "Hub Objects" => 26,
+        ContractKind.DependencyInjection when contract.Title == "External Assets" => 27,
+        ContractKind.DependencyInjection when contract.Title == "Architecture Tests" => 28,
+        ContractKind.DependencyInjection when contract.Title == "主対象 ViewModel の登録" => 20,
         ContractKind.DependencyInjection when contract.Title == "直接依存のライフタイム" => 21,
         ContractKind.DependencyInjection => 22,
-        ContractKind.Navigation when contract.Title == "選択から表示への因果" => 25,
+        ContractKind.Navigation when contract.Title == "選択から表示への反映" => 25,
         ContractKind.Navigation => 30,
         ContractKind.ViewModelBinding => 40,
+        ContractKind.Command when contract.Title == "Workflow" => 45,
         ContractKind.Command => 50,
         ContractKind.DialogActivation => 60,
         _ => 100
@@ -171,12 +185,17 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
     private static int GetIndexPriority(IndexSection index) => index.Title switch
     {
         "ナビゲーション" => 0,
-        "選択から表示への因果" => 10,
-        "ナビゲーション更新点" => 20,
+        "選択から表示への反映" => 10,
+        "ナビゲーション更新式" => 20,
         "View-ViewModel" => 30,
         "起動経路" => 40,
         "DI" => 45,
-        "コマンド" => 50,
+        "Workflow" => 50,
+        "Persistence" => 55,
+        "Hub Objects" => 60,
+        "External Assets" => 65,
+        "コマンド" => 70,
+        "Architecture Tests" => 80,
         _ => 100
     };
 }

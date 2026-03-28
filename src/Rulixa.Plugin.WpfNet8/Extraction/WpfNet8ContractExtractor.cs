@@ -10,6 +10,11 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
 {
     private readonly IWorkspaceFileSystem workspaceFileSystem;
     private readonly DependencyInjectionPackSectionBuilder dependencyInjectionBuilder;
+    private readonly WorkflowPackSectionBuilder workflowBuilder;
+    private readonly PersistencePackSectionBuilder persistenceBuilder;
+    private readonly HubObjectPackSectionBuilder hubObjectBuilder;
+    private readonly ExternalAssetPackSectionBuilder externalAssetBuilder;
+    private readonly ArchitectureTestPackSectionBuilder architectureTestBuilder;
     private readonly NavigationPackSectionBuilder navigationBuilder;
     private readonly DialogPackSectionBuilder dialogBuilder;
     private readonly CSharpSnippetCandidateFactory snippetFactory;
@@ -22,6 +27,11 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
         snippetFactory = new CSharpSnippetCandidateFactory(workspaceFileSystem);
         var xamlSnippetFactory = new XamlSnippetCandidateFactory(workspaceFileSystem);
         dependencyInjectionBuilder = new DependencyInjectionPackSectionBuilder(workspaceFileSystem, snippetFactory);
+        workflowBuilder = new WorkflowPackSectionBuilder(workspaceFileSystem, snippetFactory);
+        persistenceBuilder = new PersistencePackSectionBuilder(workspaceFileSystem, snippetFactory);
+        hubObjectBuilder = new HubObjectPackSectionBuilder(workspaceFileSystem, snippetFactory);
+        externalAssetBuilder = new ExternalAssetPackSectionBuilder(workspaceFileSystem);
+        architectureTestBuilder = new ArchitectureTestPackSectionBuilder(workspaceFileSystem);
         navigationBuilder = new NavigationPackSectionBuilder(workspaceFileSystem, snippetFactory, xamlSnippetFactory);
         dialogBuilder = new DialogPackSectionBuilder(workspaceFileSystem, snippetFactory);
     }
@@ -53,7 +63,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
 
         AddResolvedEntryFileCandidate(resolvedEntry, fileCandidates);
 
-        var relevantContext = RelevantPackContextFactory.Create(scanResult, resolvedEntry);
+        var relevantContext = RelevantPackContextFactory.Create(scanResult, resolvedEntry, goal);
 
         AddStartupContracts(scanResult, contracts, fileCandidates);
         await dependencyInjectionBuilder
@@ -76,6 +86,53 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             .AddAsync(workspaceRoot, scanResult, resolvedEntry, relevantContext, contracts, indexes, snippetCandidates, fileCandidates, cancellationToken)
             .ConfigureAwait(false);
         ViewBindingPackSectionBuilder.AddDataTemplateSummaryContract(relevantContext.SecondaryBindings, contracts);
+        await workflowBuilder
+            .AddAsync(
+                workspaceRoot,
+                scanResult,
+                resolvedEntry,
+                relevantContext,
+                contracts,
+                indexes,
+                snippetCandidates,
+                fileCandidates,
+                unknowns,
+                cancellationToken)
+            .ConfigureAwait(false);
+        await persistenceBuilder
+            .AddAsync(
+                workspaceRoot,
+                scanResult,
+                relevantContext,
+                contracts,
+                indexes,
+                snippetCandidates,
+                fileCandidates,
+                unknowns,
+                cancellationToken)
+            .ConfigureAwait(false);
+        await hubObjectBuilder
+            .AddAsync(
+                workspaceRoot,
+                scanResult,
+                relevantContext,
+                contracts,
+                indexes,
+                snippetCandidates,
+                fileCandidates,
+                unknowns,
+                cancellationToken)
+            .ConfigureAwait(false);
+        await externalAssetBuilder
+            .AddAsync(
+                workspaceRoot,
+                scanResult,
+                relevantContext,
+                contracts,
+                indexes,
+                fileCandidates,
+                cancellationToken)
+            .ConfigureAwait(false);
         await CommandPackSectionBuilder.AddContractsAsync(
                 workspaceRoot,
                 scanResult,
@@ -91,6 +148,17 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
             .ConfigureAwait(false);
         await dialogBuilder
             .AddAsync(workspaceRoot, scanResult, resolvedEntry, contracts, snippetCandidates, fileCandidates, cancellationToken)
+            .ConfigureAwait(false);
+        await architectureTestBuilder
+            .AddAsync(
+                workspaceRoot,
+                scanResult,
+                relevantContext,
+                contracts,
+                indexes,
+                fileCandidates,
+                unknowns,
+                cancellationToken)
             .ConfigureAwait(false);
 
         indexes.Add(BuildStartupIndex(scanResult));

@@ -1,0 +1,17 @@
+using AssessMeister.Presentation.Wpf.Models;
+
+namespace AssessMeister.Presentation.Wpf.ViewModels;
+
+public sealed partial class ShellViewModel
+{
+    private void LoadPagesFromProjectDocument(ProjectDocument projectDocument)
+    {
+        projectWorkspaceService.Remember(projectDocument);
+        projectDocument.MarkSaved();
+    }
+
+    private void OpenSettingsCore()
+    {
+        settingWindowService.Show();
+    }
+}

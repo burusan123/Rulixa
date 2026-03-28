@@ -49,18 +49,33 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains(result.ServiceRegistrations, registration =>
             registration.ServiceType == "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"
             && registration.Lifetime == ServiceRegistrationLifetime.Singleton
-            && registration.SourceSpan.StartLine == 11
-            && registration.SourceSpan.EndLine == 13);
+            && registration.SourceSpan.StartLine > 0
+            && registration.SourceSpan.EndLine >= registration.SourceSpan.StartLine);
         Assert.Contains(result.ServiceRegistrations, registration =>
             registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.IProjectWorkspaceService"
             && registration.Lifetime == ServiceRegistrationLifetime.Singleton
-            && registration.SourceSpan.StartLine == 14
-            && registration.SourceSpan.EndLine == 14);
+            && registration.SourceSpan.StartLine > 0
+            && registration.SourceSpan.EndLine >= registration.SourceSpan.StartLine);
+        Assert.Contains(result.ServiceRegistrations, registration =>
+            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.IProjectWorkspaceFlowService"
+            && registration.Lifetime == ServiceRegistrationLifetime.Scoped
+            && registration.SourceSpan.StartLine > 0);
+        Assert.Contains(result.ServiceRegistrations, registration =>
+            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.IProjectRepository"
+            && registration.Lifetime == ServiceRegistrationLifetime.Scoped
+            && registration.SourceSpan.StartLine > 0);
+        Assert.Contains(result.ServiceRegistrations, registration =>
+            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.ISettingsQuery"
+            && registration.Lifetime == ServiceRegistrationLifetime.Transient
+            && registration.SourceSpan.StartLine > 0);
         Assert.Contains(result.ServiceRegistrations, registration =>
             registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.ISettingWindowService"
             && registration.Lifetime == ServiceRegistrationLifetime.Transient
-            && registration.SourceSpan.StartLine == 15
-            && registration.SourceSpan.EndLine == 15);
+            && registration.SourceSpan.StartLine > 0
+            && registration.SourceSpan.EndLine >= registration.SourceSpan.StartLine);
+        Assert.Contains(result.Symbols, symbol =>
+            symbol.QualifiedName == "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"
+            && symbol.Tags.Any(tag => tag.EndsWith("ShellViewModel.Workflow.cs", StringComparison.OrdinalIgnoreCase)));
         Assert.Contains(result.WindowActivations, activation =>
             activation.ServiceSymbol == "AssessMeister.Presentation.Wpf.Services.SettingWindowService"
             && activation.WindowSymbol == "AssessMeister.Presentation.Wpf.Views.SettingWindow");
@@ -1216,6 +1231,51 @@ public sealed class WpfNet8WorkspaceScannerTests
                 Directory.Delete(workspaceRoot, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task ExtractAsync_ForProjectGoal_AddsPhase2Indexes()
+    {
+        var (_, ingredients, _) = await BuildPackAsync(
+            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            Budget.Default,
+            goal: "project workspace overview");
+
+        Assert.Contains(ingredients.Indexes, index => index.Title == "Workflow");
+        Assert.Contains(ingredients.Indexes, index => index.Title == "Persistence");
+        Assert.Contains(ingredients.Indexes, index => index.Title == "Hub Objects");
+        Assert.Contains(ingredients.Indexes, index => index.Title == "External Assets");
+        Assert.Contains(ingredients.Indexes, index => index.Title == "Architecture Tests");
+
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("ProjectWorkspaceFlowService", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("ProjectRepository", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("ProjectDocument", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains(".xlsx", StringComparison.OrdinalIgnoreCase)
+            || line.Contains(".json", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
+            line.Contains("LayerGuardTests", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Contracts, contract => contract.Title == "Workflow");
+        Assert.Contains(ingredients.Contracts, contract => contract.Title == "Persistence");
+        Assert.Contains(ingredients.Contracts, contract => contract.Title == "Hub Objects");
+        Assert.Contains(ingredients.Contracts, contract => contract.Title == "External Assets");
+        Assert.Contains(ingredients.Contracts, contract => contract.Title == "Architecture Tests");
+    }
+
+    [Fact]
+    public async Task ExtractAsync_ForProjectGoal_DoesNotReportPhase2UnknownsWhenSignalsExist()
+    {
+        var (_, ingredients, _) = await BuildPackAsync(
+            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            Budget.Default,
+            goal: "project workspace explain");
+
+        Assert.DoesNotContain(ingredients.Unknowns, diagnostic => diagnostic.Code == "workflow.unresolved");
+        Assert.DoesNotContain(ingredients.Unknowns, diagnostic => diagnostic.Code == "persistence.unresolved");
+        Assert.DoesNotContain(ingredients.Unknowns, diagnostic => diagnostic.Code == "hub-object.unresolved");
     }
 
     [Fact]

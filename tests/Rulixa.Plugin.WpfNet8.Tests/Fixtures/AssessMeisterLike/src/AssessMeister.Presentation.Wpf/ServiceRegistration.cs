@@ -12,6 +12,9 @@ public static class ServiceRegistration
             ShellViewModel
         >();
         services.AddSingleton<IProjectWorkspaceService, ProjectWorkspaceService>();
+        services.AddScoped<IProjectWorkspaceFlowService, ProjectWorkspaceFlowService>();
+        services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddTransient<ISettingsQuery, SettingsQuery>();
         services.AddTransient<ISettingWindowService, SettingWindowService>();
     }
 }

@@ -65,33 +65,32 @@ internal sealed class CommandImpactAnalyzer
 
         foreach (var command in commands)
         {
-            var viewModelFilePath = scanResult.Symbols.FirstOrDefault(symbol =>
-                string.Equals(symbol.QualifiedName, command.ViewModelSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
-            if (string.IsNullOrWhiteSpace(viewModelFilePath))
+            var sourceDocuments = await ReadSourceDocumentsAsync(workspaceRoot, scanResult, command.ViewModelSymbol, cancellationToken)
+                .ConfigureAwait(false);
+            if (sourceDocuments.Count == 0)
             {
                 impactDetails.Add(new CommandImpactDetails(command, [], [], null));
                 continue;
             }
 
-            var source = await ReadSourceAsync(workspaceRoot, viewModelFilePath, cancellationToken).ConfigureAwait(false);
             var executeMethodName = command.ExecuteSymbol.Split('.').Last();
-            var executeMethod = TryFindMethodDefinition(source, executeMethodName);
+            var executeMethod = TryFindMethodDefinition(sourceDocuments, executeMethodName);
             if (executeMethod is null)
             {
-                impactDetails.Add(new CommandImpactDetails(command, [], [], viewModelFilePath));
+                impactDetails.Add(new CommandImpactDetails(command, [], [], sourceDocuments[0].RelativePath));
                 continue;
             }
 
-            var knownTypes = ExtractKnownTypes(source);
+            var knownTypes = ExtractKnownTypes(sourceDocuments);
             var directImpacts = ExtractMethodImpacts(
                 scanResult,
                 command,
                 executeMethodName,
                 knownTypes,
                 executeMethod.Body);
-            var helperInvocations = ExtractHelperInvocations(source, viewModelFilePath, executeMethodName, executeMethod.Body);
+            var helperInvocations = ExtractHelperInvocations(sourceDocuments, executeMethodName, executeMethod.Body);
             var helperImpacts = ExtractHelperImpacts(
-                source,
+                sourceDocuments,
                 scanResult,
                 command,
                 knownTypes,
@@ -117,40 +116,57 @@ internal sealed class CommandImpactAnalyzer
                 helperInvocations
                     .Where(invocation => helperNamesWithImpacts.Contains(invocation.HelperMethodName))
                     .ToArray(),
-                viewModelFilePath));
+                executeMethod.SourceFilePath));
         }
 
         return impactDetails;
     }
 
-    private async Task<string> ReadSourceAsync(
+    private async Task<IReadOnlyList<SourceDocument>> ReadSourceDocumentsAsync(
         string workspaceRoot,
-        string relativePath,
+        WorkspaceScanResult scanResult,
+        string symbol,
         CancellationToken cancellationToken)
     {
-        var absolutePath = Path.Combine(workspaceRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        return await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
+        var aggregates = PartialSymbolAggregateResolver.Build(scanResult, [symbol]);
+        if (!aggregates.TryGetValue(symbol, out var aggregate))
+        {
+            return [];
+        }
+
+        var documents = new List<SourceDocument>();
+        foreach (var relativePath in aggregate.FilePaths)
+        {
+            var absolutePath = Path.Combine(workspaceRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            var source = await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
+            documents.Add(new SourceDocument(relativePath, source));
+        }
+
+        return documents;
     }
 
-    private static Dictionary<string, string> ExtractKnownTypes(string source)
+    private static Dictionary<string, string> ExtractKnownTypes(IReadOnlyList<SourceDocument> sourceDocuments)
     {
         var knownTypes = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (Match match in FieldRegex.Matches(source))
+        foreach (var source in sourceDocuments.Select(static document => document.Content))
         {
-            knownTypes[match.Groups["name"].Value] = match.Groups["type"].Value;
-        }
+            foreach (Match match in FieldRegex.Matches(source))
+            {
+                knownTypes[match.Groups["name"].Value] = match.Groups["type"].Value;
+            }
 
-        foreach (Match match in PropertyRegex.Matches(source))
-        {
-            knownTypes[match.Groups["name"].Value] = match.Groups["type"].Value;
+            foreach (Match match in PropertyRegex.Matches(source))
+            {
+                knownTypes[match.Groups["name"].Value] = match.Groups["type"].Value;
+            }
         }
 
         return knownTypes;
     }
 
     private static IReadOnlyList<DirectCommandImpact> ExtractHelperImpacts(
-        string source,
+        IReadOnlyList<SourceDocument> sourceDocuments,
         WorkspaceScanResult scanResult,
         CommandBinding command,
         IReadOnlyDictionary<string, string> knownTypes,
@@ -160,7 +176,7 @@ internal sealed class CommandImpactAnalyzer
 
         foreach (var helperInvocation in helperInvocations)
         {
-            var helperMethod = TryFindMethodDefinition(source, helperInvocation.HelperMethodName);
+            var helperMethod = TryFindMethodDefinition(sourceDocuments, helperInvocation.HelperMethodName);
             if (helperMethod is null)
             {
                 continue;
@@ -266,15 +282,14 @@ internal sealed class CommandImpactAnalyzer
     }
 
     private static IReadOnlyList<HelperInvocation> ExtractHelperInvocations(
-        string source,
-        string viewModelFilePath,
+        IReadOnlyList<SourceDocument> sourceDocuments,
         string executeMethodName,
         string methodBody)
     {
         var helperMethods = new Dictionary<string, HelperInvocation>(StringComparer.OrdinalIgnoreCase);
 
-        AddHelperInvocations(helperMethods, ThisHelperInvocationRegex.Matches(methodBody), source, viewModelFilePath, executeMethodName);
-        AddHelperInvocations(helperMethods, ImplicitHelperInvocationRegex.Matches(methodBody), source, viewModelFilePath, executeMethodName);
+        AddHelperInvocations(helperMethods, ThisHelperInvocationRegex.Matches(methodBody), sourceDocuments, executeMethodName);
+        AddHelperInvocations(helperMethods, ImplicitHelperInvocationRegex.Matches(methodBody), sourceDocuments, executeMethodName);
 
         return helperMethods.Values.ToArray();
     }
@@ -282,8 +297,7 @@ internal sealed class CommandImpactAnalyzer
     private static void AddHelperInvocations(
         IDictionary<string, HelperInvocation> helperMethods,
         MatchCollection matches,
-        string source,
-        string viewModelFilePath,
+        IReadOnlyList<SourceDocument> sourceDocuments,
         string executeMethodName)
     {
         foreach (Match match in matches)
@@ -296,7 +310,7 @@ internal sealed class CommandImpactAnalyzer
                 continue;
             }
 
-            var helperMethod = TryFindMethodDefinition(source, helperMethodName);
+            var helperMethod = TryFindMethodDefinition(sourceDocuments, helperMethodName);
             if (helperMethod is null || !IsEligibleHelperMethod(helperMethod.DeclarationLine))
             {
                 continue;
@@ -304,7 +318,7 @@ internal sealed class CommandImpactAnalyzer
 
             helperMethods[helperMethodName] = new HelperInvocation(
                 helperMethodName,
-                viewModelFilePath,
+                helperMethod.SourceFilePath,
                 helperMethod.SourceSpan);
         }
     }
@@ -461,6 +475,22 @@ internal sealed class CommandImpactAnalyzer
             || simpleName.EndsWith("Window", StringComparison.Ordinal);
     }
 
+    private static MethodDefinition? TryFindMethodDefinition(
+        IReadOnlyList<SourceDocument> sourceDocuments,
+        string methodName)
+    {
+        foreach (var document in sourceDocuments)
+        {
+            var methodDefinition = TryFindMethodDefinition(document.Content, methodName);
+            if (methodDefinition is not null)
+            {
+                return methodDefinition with { SourceFilePath = document.RelativePath };
+            }
+        }
+
+        return null;
+    }
+
     private static MethodDefinition? TryFindMethodDefinition(string source, string methodName)
     {
         var lines = source.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
@@ -485,6 +515,7 @@ internal sealed class CommandImpactAnalyzer
 
             return new MethodDefinition(
                 methodName,
+                string.Empty,
                 lines[index],
                 source.Substring(bodyRange.Value.BodyStartIndex, bodyRange.Value.EndIndex - bodyRange.Value.BodyStartIndex + 1),
                 new SourceSpan(startLine, GetLineNumberAt(source, bodyRange.Value.EndIndex)));
@@ -573,9 +604,14 @@ internal sealed class CommandImpactAnalyzer
 
     private sealed record MethodDefinition(
         string Name,
+        string SourceFilePath,
         string DeclarationLine,
         string Body,
         SourceSpan SourceSpan);
+
+    private sealed record SourceDocument(
+        string RelativePath,
+        string Content);
 }
 
 internal sealed record CommandImpactDetails(

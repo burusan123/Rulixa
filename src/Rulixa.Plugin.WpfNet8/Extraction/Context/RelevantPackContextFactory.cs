@@ -5,8 +5,12 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal static class RelevantPackContextFactory
 {
-    internal static RelevantPackContext Create(WorkspaceScanResult scanResult, ResolvedEntry resolvedEntry)
+    internal static RelevantPackContext Create(
+        WorkspaceScanResult scanResult,
+        ResolvedEntry resolvedEntry,
+        string goal)
     {
+        var goalProfile = GoalDrivenExpansionPlanner.Analyze(goal);
         var relevantViewModelSymbols = FindRelevantViewModelSymbols(scanResult, resolvedEntry);
         var relevantBindings = FindRelevantBindings(scanResult, resolvedEntry, relevantViewModelSymbols);
         var primaryBindings = relevantBindings
@@ -16,9 +20,17 @@ internal static class RelevantPackContextFactory
             .Where(static binding => binding.BindingKind == ViewModelBindingKind.DataTemplate)
             .ToArray();
         var relevantTransitions = FindRelevantTransitions(scanResult, resolvedEntry, relevantViewModelSymbols, relevantBindings);
+        var aggregateSymbols = relevantViewModelSymbols
+            .Concat(relevantBindings.Select(static binding => binding.ViewModelSymbol))
+            .Concat(relevantTransitions.Select(static transition => transition.ViewModelSymbol))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var symbolAggregates = PartialSymbolAggregateResolver.Build(scanResult, aggregateSymbols);
 
         return new RelevantPackContext(
+            goalProfile,
             relevantViewModelSymbols,
+            symbolAggregates,
             relevantBindings,
             primaryBindings,
             secondaryBindings,
