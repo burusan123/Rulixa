@@ -7,4 +7,6 @@ public interface IWorkspaceFileSystem
     Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken = default);
 
     Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken = default);
+
+    Task<DateTimeOffset> GetLastWriteTimeUtcAsync(string path, CancellationToken cancellationToken = default);
 }

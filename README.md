@@ -42,6 +42,9 @@
 - `resolve-entry`
 - `pack`
 
+`scan` と `resolve-entry` の JSON 出力は、Phase 1 仕様に合わせて lower camel のプロパティ名と仕様トークンを使います。
+例えば `bindingKind` は `root-data-context`、`lifetime` は `singleton`、`generatedAtUtc` は走査対象の最終更新時刻に基づく決定的な UTC 値です。
+
 ### 例: file entry
 
 ```powershell

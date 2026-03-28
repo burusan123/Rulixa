@@ -31,19 +31,31 @@ public sealed class WpfNet8WorkspaceScanner : IWorkspaceScanner
         var commands = commandExtractor.Extract(inventory.FileContents, inventory.ScanFiles);
         var windowActivations = dialogExtractor.Extract(inventory.FileContents);
         var serviceRegistrations = registrationExtractor.Extract(inventory.FileContents);
+        var diagnostics = new List<Rulixa.Domain.Diagnostics.Diagnostic>();
+        var normalizedBindings = ScanResultNormalizer.NormalizeBindings(bindings, diagnostics);
+        var normalizedServiceRegistrations = ScanResultNormalizer.NormalizeServiceRegistrations(
+            serviceRegistrations,
+            inventory.FileContents,
+            symbols,
+            diagnostics);
+        var normalizedWindowActivations = ScanResultNormalizer.NormalizeWindowActivations(
+            windowActivations,
+            inventory.FileContents,
+            symbols,
+            diagnostics);
 
         return new WorkspaceScanResult(
             "phase1.v1",
             Path.GetFullPath(workspaceRoot),
-            DateTimeOffset.UtcNow,
-            projectSummaryBuilder.Build(inventory.ScanFiles, inventory.FileContents, bindings),
+            inventory.GeneratedAtUtc,
+            projectSummaryBuilder.Build(inventory.ScanFiles, inventory.FileContents, normalizedBindings),
             inventory.ScanFiles,
             symbols,
-            bindings,
+            normalizedBindings,
             navigationTransitions,
             commands,
-            windowActivations,
-            serviceRegistrations,
-            []);
+            normalizedWindowActivations,
+            normalizedServiceRegistrations,
+            diagnostics);
     }
 }

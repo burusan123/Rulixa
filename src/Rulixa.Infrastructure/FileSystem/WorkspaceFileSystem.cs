@@ -27,6 +27,12 @@ public sealed class WorkspaceFileSystem : IWorkspaceFileSystem
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
+    public Task<DateTimeOffset> GetLastWriteTimeUtcAsync(string path, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero));
+    }
+
     private static bool IsIgnored(string path)
     {
         var normalized = path.Replace('\\', '/');

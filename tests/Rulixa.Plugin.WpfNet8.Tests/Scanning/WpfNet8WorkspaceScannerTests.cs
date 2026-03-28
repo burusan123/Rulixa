@@ -46,18 +46,21 @@ public sealed class WpfNet8WorkspaceScannerTests
 
         Assert.Contains(result.Commands, command => command.PropertyName == "OpenSettingsCommand");
         Assert.Contains(result.ServiceRegistrations, registration =>
-            registration.ServiceType == "ShellViewModel"
+            registration.ServiceType == "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"
             && registration.Lifetime == ServiceRegistrationLifetime.Singleton
             && registration.SourceSpan.StartLine > 0);
         Assert.Contains(result.ServiceRegistrations, registration =>
-            registration.ServiceType == "IProjectWorkspaceService"
+            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.IProjectWorkspaceService"
             && registration.Lifetime == ServiceRegistrationLifetime.Singleton
             && registration.SourceSpan.StartLine > 0);
         Assert.Contains(result.ServiceRegistrations, registration =>
-            registration.ServiceType == "ISettingWindowService"
+            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.ISettingWindowService"
             && registration.Lifetime == ServiceRegistrationLifetime.Transient
             && registration.SourceSpan.StartLine > 0);
-        Assert.Contains(result.WindowActivations, activation => activation.WindowSymbol == "SettingWindow");
+        Assert.Contains(result.WindowActivations, activation =>
+            activation.ServiceSymbol == "AssessMeister.Presentation.Wpf.Services.SettingWindowService"
+            && activation.WindowSymbol == "AssessMeister.Presentation.Wpf.Views.SettingWindow");
+        Assert.Empty(result.Diagnostics);
     }
 
     [Fact]
@@ -279,6 +282,139 @@ public sealed class WpfNet8WorkspaceScannerTests
 
             Assert.DoesNotContain(result.Files, file => file.Path.StartsWith("publish/", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(result.ProjectSummary.ProjectFiles, path => path.Contains("_wpftmp.csproj", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ScanAsync_UsesLatestFileTimestampAsGeneratedAtUtc()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-scan-time-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views"));
+
+        try
+        {
+            var solutionPath = Path.Combine(workspaceRoot, "Sample.sln");
+            var projectPath = Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Sample.Presentation.Wpf.csproj");
+            var appPath = Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "App.xaml");
+            var viewPath = Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views", "MainWindow.xaml");
+
+            await File.WriteAllTextAsync(solutionPath, string.Empty);
+            await File.WriteAllTextAsync(projectPath, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup></Project>");
+            await File.WriteAllTextAsync(appPath, "<Application />");
+            await File.WriteAllTextAsync(viewPath, "<Window x:Class=\"Sample.Presentation.Wpf.Views.MainWindow\" xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\" />");
+
+            File.SetLastWriteTimeUtc(solutionPath, new DateTime(2026, 03, 28, 1, 0, 0, DateTimeKind.Utc));
+            File.SetLastWriteTimeUtc(projectPath, new DateTime(2026, 03, 28, 2, 0, 0, DateTimeKind.Utc));
+            File.SetLastWriteTimeUtc(appPath, new DateTime(2026, 03, 28, 3, 0, 0, DateTimeKind.Utc));
+            File.SetLastWriteTimeUtc(viewPath, new DateTime(2026, 03, 28, 4, 0, 0, DateTimeKind.Utc));
+
+            var scanner = new WpfNet8WorkspaceScanner(new WorkspaceFileSystem());
+
+            var result = await scanner.ScanAsync(workspaceRoot);
+
+            Assert.Equal(new DateTimeOffset(2026, 03, 28, 4, 0, 0, TimeSpan.Zero), result.GeneratedAtUtc);
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ScanAsync_AddsDiagnosticWhenBindingViewModelIsAmbiguous()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-scan-ambiguous-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views"));
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ViewModels", "A"));
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ViewModels", "B"));
+
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "Sample.sln"), string.Empty);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Sample.Presentation.Wpf.csproj"),
+                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup></Project>");
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views", "ShellView.xaml"),
+                "<Window x:Class=\"Sample.Presentation.Wpf.Views.ShellView\" xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\" />");
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views", "ShellView.xaml.cs"),
+                """
+                namespace Sample.Presentation.Wpf.Views;
+
+                public partial class ShellView
+                {
+                    public ShellView(ShellViewModel shellViewModel)
+                    {
+                        DataContext = shellViewModel;
+                    }
+                }
+                """);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ViewModels", "A", "ShellViewModel.cs"),
+                "namespace Sample.Presentation.Wpf.ViewModels.A; public sealed class ShellViewModel { }");
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ViewModels", "B", "ShellViewModel.cs"),
+                "namespace Sample.Presentation.Wpf.ViewModels.B; public sealed class ShellViewModel { }");
+
+            var scanner = new WpfNet8WorkspaceScanner(new WorkspaceFileSystem());
+
+            var result = await scanner.ScanAsync(workspaceRoot);
+
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == "binding.viewmodel.ambiguous"
+                && diagnostic.FilePath == "src/Sample.Presentation.Wpf/Views/ShellView.xaml");
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ScanAsync_MergesPartialClassSymbolsForResolveEntry()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-scan-partial-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ViewModels"));
+
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "Sample.sln"), string.Empty);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Sample.Presentation.Wpf.csproj"),
+                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup></Project>");
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ViewModels", "ShellViewModel.cs"),
+                "namespace Sample.Presentation.Wpf.ViewModels; public sealed partial class ShellViewModel { public string Name { get; } = \"A\"; }");
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "ViewModels", "ShellViewModel.Partial.cs"),
+                "namespace Sample.Presentation.Wpf.ViewModels; public sealed partial class ShellViewModel { private void OpenSettings() { } }");
+
+            var scanner = new WpfNet8WorkspaceScanner(new WorkspaceFileSystem());
+            var resolver = new ScanBackedEntryResolver();
+
+            var scanResult = await scanner.ScanAsync(workspaceRoot);
+            var resolved = await resolver.ResolveAsync(new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel"), scanResult);
+
+            Assert.Single(scanResult.Symbols.Where(symbol => symbol.QualifiedName == "Sample.Presentation.Wpf.ViewModels.ShellViewModel"));
+            Assert.Equal(ResolvedEntryKind.Symbol, resolved.ResolvedKind);
+            Assert.True(string.Equals(
+                "src/Sample.Presentation.Wpf/ViewModels/ShellViewModel.cs",
+                resolved.ResolvedPath,
+                StringComparison.OrdinalIgnoreCase));
         }
         finally
         {

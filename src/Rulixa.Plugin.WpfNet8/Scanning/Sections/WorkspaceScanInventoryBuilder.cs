@@ -26,6 +26,7 @@ internal sealed class WorkspaceScanInventoryBuilder
 
         var fileContents = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var scanFiles = new List<ScanFile>();
+        DateTimeOffset? latestLastWriteTimeUtc = null;
 
         foreach (var relativePath in relevantFiles)
         {
@@ -35,6 +36,10 @@ internal sealed class WorkspaceScanInventoryBuilder
 
             var kind = ProjectFileDiscovery.DetectKind(relativePath);
             var hash = await fileSystem.ComputeSha256Async(absolutePath, cancellationToken).ConfigureAwait(false);
+            var lastWriteTimeUtc = await fileSystem.GetLastWriteTimeUtcAsync(absolutePath, cancellationToken).ConfigureAwait(false);
+            latestLastWriteTimeUtc = latestLastWriteTimeUtc is null || lastWriteTimeUtc > latestLastWriteTimeUtc
+                ? lastWriteTimeUtc
+                : latestLastWriteTimeUtc;
             scanFiles.Add(new ScanFile(
                 relativePath,
                 kind,
@@ -44,7 +49,10 @@ internal sealed class WorkspaceScanInventoryBuilder
                 ProjectFileDiscovery.DetectTags(relativePath, kind)));
         }
 
-        return new WorkspaceScanInventory(fileContents, scanFiles);
+        return new WorkspaceScanInventory(
+            fileContents,
+            scanFiles,
+            latestLastWriteTimeUtc ?? DateTimeOffset.UnixEpoch);
     }
 
     private static bool IsRelevant(string relativePath) =>

@@ -17,6 +17,7 @@ internal static class Program
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new JsonStringEnumConverter() }
     };
 
@@ -63,7 +64,7 @@ internal static class Program
         var workspace = GetOption(args, "--workspace") ?? Directory.GetCurrentDirectory();
         var outputPath = GetOption(args, "--out");
         var result = await useCase.ExecuteAsync(workspace).ConfigureAwait(false);
-        var json = JsonSerializer.Serialize(result, JsonOptions);
+        var json = JsonSerializer.Serialize(CliJsonModels.FromScanResult(result), JsonOptions);
         return await WriteOutputAsync(json, outputPath).ConfigureAwait(false);
     }
 
@@ -76,7 +77,7 @@ internal static class Program
         var entryText = GetRequiredOption(args, "--entry");
         var scanResult = await scanUseCase.ExecuteAsync(workspace).ConfigureAwait(false);
         var resolved = await resolveUseCase.ExecuteAsync(Entry.Parse(entryText), scanResult).ConfigureAwait(false);
-        Console.WriteLine(JsonSerializer.Serialize(resolved, JsonOptions));
+        Console.WriteLine(JsonSerializer.Serialize(CliJsonModels.FromResolvedEntry(resolved), JsonOptions));
         return 0;
     }
 

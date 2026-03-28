@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Rulixa.Application\Rulixa.Application.csproj" />
+    <ProjectReference Include="..\..\src\Rulixa.Cli\Rulixa.Cli.csproj" />
     <ProjectReference Include="..\..\src\Rulixa.Domain\Rulixa.Domain.csproj" />
     <ProjectReference Include="..\..\src\Rulixa.Infrastructure\Rulixa.Infrastructure.csproj" />
   </ItemGroup>
