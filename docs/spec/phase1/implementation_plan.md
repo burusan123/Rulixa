@@ -75,6 +75,38 @@ Phase 1 の実装は `WPF + .NET 8` ワークスペースを対象に、`scan ->
 - XAML navigation snippet
 - generated / temp file 除外
 
+## Phase 1 の出口条件
+
+- `plugins/rulixa/.codex-plugin/plugin.json` が JSON として正常に読める
+- fixture ベースの `scan` / `resolve-entry` / `pack` の代表導線が安定して通る
+- `auto` entry で `DataTemplate` 由来の二次文脈が主要候補を壊さない
+- dialog 契約が caller / target window / activation kind を安定して含む
+- `dotnet test Rulixa.sln` が常時グリーンである
+
+## 任意スモーク検証
+
+- `D:\C#\AssessMeister` を参考ワークスペースとして使う任意スモーク検証を持つ
+- 既定では実行しない
+- ワークスペースが存在し、明示フラグが有効なときだけ実行する
+- 検証対象は `symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` に固定する
+- 検証観点は次に限定する
+  - resolved entry
+  - Shell 導線の主要 contracts
+  - `SelectedItem -> CurrentPage`
+  - DI 要約
+  - dialog 契約の存在
+  - root binding / DI / navigation update のいずれかの snippet
+
+## CI 設計メモ
+
+- この段階では CI 自体は実装しない
+- 次段で自動化する対象は次を想定する
+  - `dotnet restore`
+  - `dotnet build`
+  - `dotnet test Rulixa.sln`
+  - plugin manifest 妥当性確認
+- 外部ワークスペース依存の任意スモーク検証は CI 対象外とする
+
 ## 次の候補
 
 ### P1
