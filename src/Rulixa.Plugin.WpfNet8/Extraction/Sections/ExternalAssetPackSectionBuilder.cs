@@ -239,18 +239,16 @@ internal sealed class ExternalAssetPackSectionBuilder
 
         var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
             "external-asset.unresolved-source",
-            "External asset-like paths were found, but no representative asset-loading route could be confirmed from path resolution or file access code.",
+            $"追跡できた範囲: {BuildKnownRange(candidates)}。停止点: パス文字列は見つかりましたが、資産を実際に解決・読込する経路を確定できませんでした。",
             null,
             DiagnosticSeverity.Info,
             candidates);
         unknowns.Add(diagnostic);
-        decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+        decisionTraces.Add(HighSignalSelectionSupport.BuildGuidedUnknownTrace(
             "external-asset-selection",
             "external-asset.unresolved-source",
-            "unknown-raised",
-            diagnostic.Message,
-            new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence(HasOnlyFilePathEvidence: true)),
-            0,
+            $"{diagnostic.Message} 次に見る候補: {FormatCandidates(diagnostic.Candidates)}",
+            relevantContext.GoalProfile,
             analyses.Count));
     }
 
@@ -292,7 +290,22 @@ internal sealed class ExternalAssetPackSectionBuilder
     }
 
     private static string BuildSummary(IReadOnlyList<ExternalAssetAnalysis> analyses) =>
-        $"Representative external asset families: {string.Join(", ", analyses.Select(static analysis => analysis.Usage.AssetFamily))}.";
+        $"この画面は {string.Join(" / ", analyses.Select(static analysis => analysis.Usage.AssetFamily))} 系の外部資産を解決します。";
+
+    private static string BuildKnownRange(IEnumerable<string> symbols)
+    {
+        var names = symbols
+            .Select(PackExtractionConventions.GetSimpleTypeName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToArray();
+        return names.Length == 0 ? "入口シンボルまで" : string.Join(" / ", names);
+    }
+
+    private static string FormatCandidates(IReadOnlyList<string> candidates) =>
+        candidates.Count == 0
+            ? "なし"
+            : string.Join(", ", candidates.Select(PackExtractionConventions.GetSimpleTypeName));
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,

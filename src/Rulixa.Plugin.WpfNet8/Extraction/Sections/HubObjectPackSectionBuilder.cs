@@ -257,20 +257,19 @@ internal sealed class HubObjectPackSectionBuilder
             return;
         }
 
-        var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
+        var diagnostic = HighSignalSelectionSupport.BuildGuidedDiagnostic(
             "hub-object.weak-signal",
-            "Hub-object-like symbols were found, but they did not expose enough shared-state signals to become representative map anchors.",
+            BuildKnownRange(weakCandidates),
+            "共有状態の中核と判断できる dirty / snapshot / restore 系の信号が不足しています",
             null,
             DiagnosticSeverity.Info,
             weakCandidates);
         unknowns.Add(diagnostic);
-        decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+        decisionTraces.Add(HighSignalSelectionSupport.BuildGuidedUnknownTrace(
             "hub-object-selection",
             "hub-object.weak-signal",
-            "unknown-raised",
-            diagnostic.Message,
-            new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence()),
-            0,
+            $"{diagnostic.Message} 次に見る候補: {FormatCandidates(diagnostic.Candidates)}",
+            relevantContext.GoalProfile,
             analyses.Count));
     }
 
@@ -346,7 +345,22 @@ internal sealed class HubObjectPackSectionBuilder
     }
 
     private static string BuildSummary(IReadOnlyList<HubObjectAnalysis> analyses) =>
-        $"Representative shared-state anchors: {string.Join(", ", analyses.Select(static analysis => analysis.Candidate.DisplayName))}.";
+        $"この画面の共有状態の中核は {string.Join(" / ", analyses.Select(static analysis => analysis.Candidate.DisplayName))} です。";
+
+    private static string BuildKnownRange(IEnumerable<string> symbols)
+    {
+        var names = symbols
+            .Select(PackExtractionConventions.GetSimpleTypeName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToArray();
+        return names.Length == 0 ? "入口シンボルまで" : string.Join(" / ", names);
+    }
+
+    private static string FormatCandidates(IReadOnlyList<string> candidates) =>
+        candidates.Count == 0
+            ? "なし"
+            : string.Join(", ", candidates.Select(PackExtractionConventions.GetSimpleTypeName));
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,

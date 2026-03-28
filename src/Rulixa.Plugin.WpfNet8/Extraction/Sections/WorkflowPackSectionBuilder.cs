@@ -48,7 +48,7 @@ internal sealed class WorkflowPackSectionBuilder
 
         if (selected.Length == 0)
         {
-            AddUnknowns(relevantContext, discovery, analyses, unknowns, decisionTraces);
+            AddUnknowns(scanResult, relevantContext, discovery, analyses, unknowns, decisionTraces);
             return;
         }
 
@@ -68,7 +68,7 @@ internal sealed class WorkflowPackSectionBuilder
             }
         }
 
-        AddUnknowns(relevantContext, discovery, analyses, unknowns, decisionTraces);
+        AddUnknowns(scanResult, relevantContext, discovery, analyses, unknowns, decisionTraces);
         await AddSnippetsAsync(workspaceRoot, scanResult, relevantContext, selected, snippetCandidates, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -82,7 +82,7 @@ internal sealed class WorkflowPackSectionBuilder
     {
         var candidates = new List<WorkflowCandidate>();
         var ambiguousTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var missingDownstreamCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var missingDownstreamRoutes = new List<MissingDownstreamRoute>();
         var commandDetails = await new CommandImpactAnalyzer(workspaceFileSystem)
             .AnalyzeAsync(
                 workspaceRoot,
@@ -122,7 +122,12 @@ internal sealed class WorkflowPackSectionBuilder
                 ambiguousTargets.UnionWith(secondHopDiscovery.AmbiguousCandidates);
                 if (secondHopDiscovery.Symbols.Count == 0)
                 {
-                    missingDownstreamCandidates.Add(firstHopCandidate.Symbol);
+                    missingDownstreamRoutes.Add(new MissingDownstreamRoute(
+                        rootSymbol,
+                        firstHopCandidate.Symbol,
+                        firstHopCandidate.IsConstructorMatch,
+                        firstHopCandidate.IsDirectCallMatch,
+                        secondHopDiscovery.GuidanceCandidates));
                 }
 
                 var filePaths = PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, rootSymbol)
@@ -141,7 +146,7 @@ internal sealed class WorkflowPackSectionBuilder
             }
         }
 
-        return new WorkflowDiscoveryResult(candidates, ambiguousTargets.ToArray(), missingDownstreamCandidates.ToArray());
+        return new WorkflowDiscoveryResult(candidates, ambiguousTargets.ToArray(), missingDownstreamRoutes.ToArray());
     }
 
     private async Task<FirstHopDiscovery> DiscoverFirstHopCandidatesAsync(
@@ -219,41 +224,59 @@ internal sealed class WorkflowPackSectionBuilder
     {
         var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ambiguousCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var guidanceCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var symbolsToInspect = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { symbol };
 
-        foreach (var filePath in PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, symbol))
+        foreach (var implementationSymbol in PackAnalysisHelpers.FindImplementationSymbolsForService(scanResult, symbol))
         {
-            var source = await ReadSourceAsync(workspaceRoot, filePath, cancellationToken).ConfigureAwait(false);
-            foreach (var referenced in PackAnalysisHelpers.FindReferencedTypeCandidates(
-                         scanResult,
-                         source,
-                         static name =>
-                             PackAnalysisHelpers.IsPersistenceLikeName(name)
-                             || PackAnalysisHelpers.IsHubObjectLikeName(name)
-                             || name.EndsWith("AlgorithmRunner", StringComparison.Ordinal)
-                             || name.EndsWith("Algorithm", StringComparison.Ordinal)
-                             || name.EndsWith("Analyzer", StringComparison.Ordinal)))
+            symbolsToInspect.Add(implementationSymbol);
+            guidanceCandidates.Add(implementationSymbol);
+        }
+
+        foreach (var symbolToInspect in symbolsToInspect.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var filePath in PackAnalysisHelpers.GetSymbolFilePaths(scanResult, relevantContext, symbolToInspect))
             {
-                if (referenced.IsAmbiguous)
+                var source = await ReadSourceAsync(workspaceRoot, filePath, cancellationToken).ConfigureAwait(false);
+                foreach (var referenced in PackAnalysisHelpers.FindReferencedTypeCandidates(
+                             scanResult,
+                             source,
+                             static name =>
+                                 PackAnalysisHelpers.IsPersistenceLikeName(name)
+                                 || PackAnalysisHelpers.IsHubObjectLikeName(name)
+                                 || PackAnalysisHelpers.IsAlgorithmLikeName(name)
+                                 || PackAnalysisHelpers.IsAnalyzerLikeName(name)))
                 {
-                    foreach (var candidate in referenced.CandidateSymbols)
+                    if (referenced.IsAmbiguous)
                     {
-                        ambiguousCandidates.Add(candidate);
+                        foreach (var candidate in referenced.CandidateSymbols)
+                        {
+                            ambiguousCandidates.Add(candidate);
+                            guidanceCandidates.Add(candidate);
+                        }
+
+                        continue;
                     }
 
-                    continue;
-                }
+                    if (!string.IsNullOrWhiteSpace(referenced.ResolvedSymbol)
+                        && !string.Equals(referenced.ResolvedSymbol, symbolToInspect, StringComparison.OrdinalIgnoreCase))
+                    {
+                        symbols.Add(referenced.ResolvedSymbol);
+                        guidanceCandidates.Add(referenced.ResolvedSymbol);
+                    }
 
-                if (!string.IsNullOrWhiteSpace(referenced.ResolvedSymbol)
-                    && !string.Equals(referenced.ResolvedSymbol, symbol, StringComparison.OrdinalIgnoreCase))
-                {
-                    symbols.Add(referenced.ResolvedSymbol);
+                    foreach (var candidate in referenced.CandidateSymbols)
+                    {
+                        guidanceCandidates.Add(candidate);
+                    }
                 }
             }
         }
 
         return new SecondHopDiscovery(
             symbols.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase).ToArray(),
-            ambiguousCandidates.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase).ToArray());
+            ambiguousCandidates.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase).ToArray(),
+            guidanceCandidates.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     private IReadOnlyList<WorkflowAnalysis> AnalyzeCandidates(
@@ -304,12 +327,23 @@ internal sealed class WorkflowPackSectionBuilder
 
         if (relevantContext.GoalProfile.HasCategory("drafting")
             && involvedSymbols.Any(static symbol =>
-                PackExtractionConventions.GetSimpleTypeName(symbol).Contains("Algorithm", StringComparison.Ordinal)
-                || PackExtractionConventions.GetSimpleTypeName(symbol).Contains("Analyzer", StringComparison.Ordinal)
+                PackAnalysisHelpers.IsAlgorithmLikeName(PackExtractionConventions.GetSimpleTypeName(symbol))
+                || PackAnalysisHelpers.IsAnalyzerLikeName(PackExtractionConventions.GetSimpleTypeName(symbol))
                 || PackExtractionConventions.GetSimpleTypeName(symbol).Contains("Port", StringComparison.Ordinal)
                 || PackExtractionConventions.GetSimpleTypeName(symbol).Contains("Adapter", StringComparison.Ordinal)))
         {
             goalCategoryMatches++;
+        }
+
+        if (relevantContext.GoalProfile.HasCategory("drafting")
+            && (PackExtractionConventions.GetSimpleTypeName(candidate.FirstHopSymbol).EndsWith("Port", StringComparison.Ordinal)
+                || PackExtractionConventions.GetSimpleTypeName(candidate.FirstHopSymbol).EndsWith("Adapter", StringComparison.Ordinal)
+                || PackExtractionConventions.GetSimpleTypeName(candidate.FirstHopSymbol).EndsWith("Workflow", StringComparison.Ordinal))
+            && candidate.NextSymbols.Any(static symbol =>
+                PackAnalysisHelpers.IsAlgorithmLikeName(PackExtractionConventions.GetSimpleTypeName(symbol))
+                || PackAnalysisHelpers.IsAnalyzerLikeName(PackExtractionConventions.GetSimpleTypeName(symbol))))
+        {
+            goalCategoryMatches += 2;
         }
 
         return new SectionSignalEvidence(
@@ -365,6 +399,7 @@ internal sealed class WorkflowPackSectionBuilder
     }
 
     private static void AddUnknowns(
+        WorkspaceScanResult scanResult,
         RelevantPackContext relevantContext,
         WorkflowDiscoveryResult discovery,
         IReadOnlyList<WorkflowAnalysis> analyses,
@@ -373,39 +408,74 @@ internal sealed class WorkflowPackSectionBuilder
     {
         if (discovery.AmbiguousTargets.Count > 0)
         {
-            var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
+            var diagnostic = HighSignalSelectionSupport.BuildGuidedDiagnostic(
                 "workflow.ambiguous-target",
-                "Workflow owner candidates were found, but at least one downstream target could not be resolved to a single symbol.",
+                BuildKnownRange(
+                    discovery.MissingDownstreamRoutes.Select(static route => route.FirstHopSymbol),
+                    fallback: discovery.AmbiguousTargets),
+                "関連する複数候補に分かれたため、一意の型として確定できませんでした",
                 null,
                 DiagnosticSeverity.Info,
                 discovery.AmbiguousTargets);
             unknowns.Add(diagnostic);
-            decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+            decisionTraces.Add(HighSignalSelectionSupport.BuildGuidedUnknownTrace(
                 "workflow-selection",
                 "workflow.ambiguous-target",
-                "unknown-raised",
-                diagnostic.Message,
-                new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence(HasAmbiguousCandidates: true)),
-                0,
+                $"{diagnostic.Message} 次に見る候補: {FormatCandidates(diagnostic.Candidates)}",
+                relevantContext.GoalProfile,
                 analyses.Count));
         }
 
-        if (discovery.MissingDownstreamCandidates.Count > 0)
+        if (discovery.MissingDownstreamRoutes.Count > 0)
         {
-            var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
+            var supplementalCandidates = relevantContext.GoalProfile.HasCategory("drafting")
+                ? scanResult.Symbols
+                    .Where(static symbol => symbol.Kind is SymbolKind.Class or SymbolKind.Interface)
+                    .Select(static symbol => symbol.QualifiedName)
+                    .Where(static symbol =>
+                    {
+                        var simpleName = PackExtractionConventions.GetSimpleTypeName(symbol);
+                        return PackAnalysisHelpers.IsAlgorithmLikeName(simpleName) || PackAnalysisHelpers.IsAnalyzerLikeName(simpleName);
+                    })
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+                : Array.Empty<string>();
+            var rankedCandidates = HighSignalSelectionSupport.RankGuidanceCandidates(
+                scanResult,
+                relevantContext.GoalProfile,
+                discovery.MissingDownstreamRoutes.SelectMany(route =>
+                {
+                    var fromPortLikeOwner =
+                        PackExtractionConventions.GetSimpleTypeName(route.FirstHopSymbol).EndsWith("Port", StringComparison.Ordinal)
+                        || PackExtractionConventions.GetSimpleTypeName(route.FirstHopSymbol).EndsWith("Adapter", StringComparison.Ordinal)
+                        || PackExtractionConventions.GetSimpleTypeName(route.FirstHopSymbol).EndsWith("Workflow", StringComparison.Ordinal);
+                    var routeCandidates = route.GuidanceCandidates.Select(candidate => new GuidanceCandidate(
+                        candidate,
+                        route.IsDirectCallMatch,
+                        route.IsConstructorMatch,
+                        PackAnalysisHelpers.FindImplementationSymbolsForService(scanResult, route.FirstHopSymbol)
+                            .Contains(candidate, StringComparer.OrdinalIgnoreCase),
+                        fromPortLikeOwner));
+                    var supplementalRouteCandidates = supplementalCandidates.Select(candidate => new GuidanceCandidate(
+                        candidate,
+                        FromPortLikeOwner: fromPortLikeOwner));
+                    return routeCandidates.Concat(supplementalRouteCandidates);
+                }));
+            var diagnostic = HighSignalSelectionSupport.BuildGuidedDiagnostic(
                 "workflow.missing-downstream",
-                "Workflow owners were found, but the route stopped before reaching persistence, hub state, or algorithm symbols within two hops.",
+                BuildKnownRange(
+                    discovery.MissingDownstreamRoutes.Select(static route => route.FirstHopSymbol),
+                    fallback: Array.Empty<string>()),
+                "persistence / hub-object / algorithm / analyzer に到達する経路を 2 hop 以内で確定できませんでした",
                 null,
                 DiagnosticSeverity.Info,
-                discovery.MissingDownstreamCandidates);
+                rankedCandidates);
             unknowns.Add(diagnostic);
-            decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+            decisionTraces.Add(HighSignalSelectionSupport.BuildGuidedUnknownTrace(
                 "workflow-selection",
                 "workflow.missing-downstream",
-                "unknown-raised",
-                diagnostic.Message,
-                new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence()),
-                0,
+                $"{diagnostic.Message} 次に見る候補: {FormatCandidates(diagnostic.Candidates)}",
+                relevantContext.GoalProfile,
                 analyses.Count));
         }
     }
@@ -452,7 +522,7 @@ internal sealed class WorkflowPackSectionBuilder
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(static family => family, StringComparer.Ordinal)
             .ToArray();
-        return $"This screen routes work through {analyses.Count} representative chains toward {string.Join(", ", downstreamFamilies)}.";
+        return $"この画面は {analyses.Count} 本の代表チェーンで処理を流し、{string.Join(" / ", downstreamFamilies)} へ接続します。";
     }
 
     private static string BuildCanonicalKey(WorkflowCandidate candidate) =>
@@ -504,12 +574,20 @@ internal sealed class WorkflowPackSectionBuilder
 
     private sealed record SecondHopDiscovery(
         IReadOnlyList<string> Symbols,
-        IReadOnlyList<string> AmbiguousCandidates);
+        IReadOnlyList<string> AmbiguousCandidates,
+        IReadOnlyList<string> GuidanceCandidates);
 
     private sealed record WorkflowDiscoveryResult(
         IReadOnlyList<WorkflowCandidate> Candidates,
         IReadOnlyList<string> AmbiguousTargets,
-        IReadOnlyList<string> MissingDownstreamCandidates);
+        IReadOnlyList<MissingDownstreamRoute> MissingDownstreamRoutes);
+
+    private sealed record MissingDownstreamRoute(
+        string RootSymbol,
+        string FirstHopSymbol,
+        bool IsConstructorMatch,
+        bool IsDirectCallMatch,
+        IReadOnlyList<string> GuidanceCandidates);
 
     private sealed record WorkflowCandidate(
         string RootSymbol,
@@ -544,4 +622,30 @@ internal sealed class WorkflowPackSectionBuilder
 
         internal string ToIndexLine() => $"{Evaluation.ConfidenceLabel}: {Candidate.Route}";
     }
+
+    private static string BuildKnownRange(IEnumerable<string> knownSymbols, IEnumerable<string> fallback)
+    {
+        var targets = knownSymbols
+            .Where(static symbol => !string.IsNullOrWhiteSpace(symbol))
+            .Select(PackExtractionConventions.GetSimpleTypeName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToArray();
+        if (targets.Length == 0)
+        {
+            targets = fallback
+                .Where(static symbol => !string.IsNullOrWhiteSpace(symbol))
+                .Select(PackExtractionConventions.GetSimpleTypeName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(3)
+                .ToArray();
+        }
+
+        return targets.Length == 0 ? "入口シンボルまで" : string.Join(" / ", targets);
+    }
+
+    private static string FormatCandidates(IReadOnlyList<string> candidates) =>
+        candidates.Count == 0
+            ? "なし"
+            : string.Join(", ", candidates.Select(PackExtractionConventions.GetSimpleTypeName));
 }

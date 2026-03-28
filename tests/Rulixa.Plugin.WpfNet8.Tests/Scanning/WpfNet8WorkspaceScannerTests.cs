@@ -1645,6 +1645,192 @@ public sealed class WpfNet8WorkspaceScannerTests
     }
 
     [Fact]
+    public async Task ExtractAsync_ForDraftingGoal_SelectsRepresentativeAlgorithmChain()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase2-drafting-chain-{Guid.NewGuid():N}");
+
+        try
+        {
+            await CreateSampleWorkspaceAsync(
+                workspaceRoot,
+                """
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf.ViewModels;
+
+                public sealed class ShellViewModel
+                {
+                    private readonly IDraftingWorkflowPort draftingWorkflowPort;
+
+                    public ShellViewModel(IDraftingWorkflowPort draftingWorkflowPort)
+                    {
+                        this.draftingWorkflowPort = draftingWorkflowPort;
+                    }
+                }
+                """,
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                        services.AddScoped<IDraftingWorkflowPort, DraftingWorkflowPortAdapter>();
+                        services.AddScoped<DiagramAnalyzer>();
+                        services.AddScoped<WallAlgorithmRunner>();
+                    }
+                }
+                """,
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/IDraftingWorkflowPort.cs",
+                    "namespace Sample.Presentation.Wpf.Services; public interface IDraftingWorkflowPort { }"),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/DraftingWorkflowPortAdapter.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public sealed class DraftingWorkflowPortAdapter : IDraftingWorkflowPort
+                    {
+                        private readonly DiagramAnalyzer diagramAnalyzer;
+                        private readonly WallAlgorithmRunner wallAlgorithmRunner;
+
+                        public DraftingWorkflowPortAdapter(DiagramAnalyzer diagramAnalyzer, WallAlgorithmRunner wallAlgorithmRunner)
+                        {
+                            this.diagramAnalyzer = diagramAnalyzer;
+                            this.wallAlgorithmRunner = wallAlgorithmRunner;
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/DiagramAnalyzer.cs",
+                    "namespace Sample.Presentation.Wpf.Services; public sealed class DiagramAnalyzer { }"),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/WallAlgorithmRunner.cs",
+                    "namespace Sample.Presentation.Wpf.Services; public sealed class WallAlgorithmRunner { }"));
+
+            var ingredients = await BuildPackFromWorkspaceAsync(
+                workspaceRoot,
+                new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel"),
+                "drafting ai analyze");
+
+            var workflowLines = GetIndexLines(ingredients, "Workflow");
+
+            Assert.InRange(workflowLines.Count, 1, 6);
+            Assert.Contains(workflowLines, line =>
+                line.Contains("DiagramAnalyzer", StringComparison.Ordinal)
+                || line.Contains("WallAlgorithmRunner", StringComparison.Ordinal));
+            Assert.DoesNotContain(ingredients.Unknowns, diagnostic => diagnostic.Code == "workflow.missing-downstream");
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ExtractAsync_WhenDraftingDownstreamIsMissing_RaisesGuidedUnknownWithTopCandidates()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase2-drafting-unknown-{Guid.NewGuid():N}");
+
+        try
+        {
+            await CreateSampleWorkspaceAsync(
+                workspaceRoot,
+                """
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf.ViewModels;
+
+                public sealed class ShellViewModel
+                {
+                    private readonly IDraftingWorkflowPort draftingWorkflowPort;
+
+                    public ShellViewModel(IDraftingWorkflowPort draftingWorkflowPort)
+                    {
+                        this.draftingWorkflowPort = draftingWorkflowPort;
+                    }
+                }
+                """,
+                """
+                using Sample.Presentation.Wpf.ViewModels;
+                using Sample.Presentation.Wpf.Services;
+
+                namespace Sample.Presentation.Wpf;
+
+                public static class ServiceRegistration
+                {
+                    public static void Register(IServiceCollection services)
+                    {
+                        services.AddSingleton<ShellViewModel>();
+                        services.AddScoped<IDraftingWorkflowPort, DraftingWorkflowPortAdapter>();
+                    }
+                }
+                """,
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/IDraftingWorkflowPort.cs",
+                    "namespace Sample.Presentation.Wpf.Services; public interface IDraftingWorkflowPort { }"),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/DraftingWorkflowPortAdapter.cs",
+                    """
+                    namespace Sample.Presentation.Wpf.Services;
+
+                    public sealed class DraftingWorkflowPortAdapter : IDraftingWorkflowPort
+                    {
+                        private readonly DiagramAnalyzer analyzer;
+
+                        public DraftingWorkflowPortAdapter()
+                        {
+                            analyzer = new DiagramAnalyzer();
+                        }
+                    }
+                    """),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/A/DiagramAnalyzer.cs",
+                    "namespace Sample.Presentation.Wpf.Services.A; public sealed class DiagramAnalyzer { }"),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/B/DiagramAnalyzer.cs",
+                    "namespace Sample.Presentation.Wpf.Services.B; public sealed class DiagramAnalyzer { }"),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/A/WallAlgorithmRunner.cs",
+                    "namespace Sample.Presentation.Wpf.Services.A; public sealed class WallAlgorithmRunner { }"),
+                new WorkspaceFileDefinition(
+                    "src/Sample.Presentation.Wpf/Services/B/WallAlgorithmRunner.cs",
+                    "namespace Sample.Presentation.Wpf.Services.B; public sealed class WallAlgorithmRunner { }"));
+
+            var ingredients = await BuildPackFromWorkspaceAsync(
+                workspaceRoot,
+                new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel"),
+                "drafting ai analyze");
+
+            var diagnostic = Assert.Single(ingredients.Unknowns, unknown => unknown.Code == "workflow.missing-downstream");
+
+            Assert.InRange(diagnostic.Candidates.Count, 1, 3);
+            Assert.Contains(diagnostic.Candidates, candidate =>
+                candidate.EndsWith(".DiagramAnalyzer", StringComparison.Ordinal)
+                || candidate.EndsWith(".WallAlgorithmRunner", StringComparison.Ordinal));
+            Assert.Contains(ingredients.DecisionTraces, trace =>
+                trace.Category == "workflow-selection"
+                && trace.DecisionKind == "unknown-raised"
+                && trace.ItemKey == "workflow.missing-downstream"
+                && trace.Summary.Contains("次に見る候補", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task ExtractAsync_ForShellViewModelSymbol_IsDeterministic()
     {
         var first = await BuildPackAsync(

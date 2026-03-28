@@ -1,5 +1,6 @@
 using Rulixa.Domain.Diagnostics;
 using Rulixa.Domain.Packs;
+using Rulixa.Domain.Scanning;
 
 namespace Rulixa.Plugin.WpfNet8.Extraction;
 
@@ -96,6 +97,94 @@ internal static class HighSignalSelectionSupport
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Take(3)
                 .ToArray());
+
+    internal static Diagnostic BuildGuidedDiagnostic(
+        string code,
+        string knownRange,
+        string stoppingPoint,
+        string? filePath,
+        DiagnosticSeverity severity,
+        IEnumerable<string> candidates) =>
+        BuildDiagnostic(
+            code,
+            $"追跡できた範囲: {knownRange}。停止点: {stoppingPoint}。",
+            filePath,
+            severity,
+            candidates);
+
+    internal static PackDecisionTrace BuildGuidedUnknownTrace(
+        string category,
+        string itemKey,
+        string summary,
+        GoalExpansionProfile goalProfile,
+        int candidateCount) =>
+        BuildDecisionTrace(
+            category,
+            itemKey,
+            "unknown-raised",
+            summary,
+            new SectionSelectionEvaluation(0, SectionConfidence.Low, goalProfile.Terms, [], [], new SectionSignalEvidence()),
+            0,
+            candidateCount);
+
+    internal static IReadOnlyList<string> RankGuidanceCandidates(
+        WorkspaceScanResult scanResult,
+        GoalExpansionProfile goalProfile,
+        IEnumerable<GuidanceCandidate> candidates)
+    {
+        return candidates
+            .Where(static candidate => !string.IsNullOrWhiteSpace(candidate.Symbol))
+            .GroupBy(static candidate => candidate.Symbol, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new
+            {
+                Symbol = group.Key,
+                Score = group.Sum(candidate => ScoreCandidate(scanResult, goalProfile, candidate))
+            })
+            .OrderByDescending(static candidate => candidate.Score)
+            .ThenBy(static candidate => candidate.Symbol, StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .Select(static candidate => candidate.Symbol)
+            .ToArray();
+    }
+
+    private static int ScoreCandidate(
+        WorkspaceScanResult scanResult,
+        GoalExpansionProfile goalProfile,
+        GuidanceCandidate candidate)
+    {
+        var simpleName = PackExtractionConventions.GetSimpleTypeName(candidate.Symbol);
+        var score = candidate.FromDirectMethodCall ? 40 : 0;
+        score += candidate.FromConstructorDependency ? 30 : 0;
+        score += candidate.FromServiceRegistration
+            || scanResult.ServiceRegistrations.Any(registration =>
+                string.Equals(registration.ServiceType, candidate.Symbol, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(registration.ImplementationType, candidate.Symbol, StringComparison.OrdinalIgnoreCase))
+            ? 20
+            : 0;
+        score += candidate.FromPortLikeOwner
+            && (PackAnalysisHelpers.IsAlgorithmLikeName(simpleName) || PackAnalysisHelpers.IsAnalyzerLikeName(simpleName))
+            ? 25
+            : 0;
+
+        score += PackAnalysisHelpers.IsAlgorithmLikeName(simpleName) ? 50 : 0;
+        score += PackAnalysisHelpers.IsAnalyzerLikeName(simpleName) ? 45 : 0;
+        score += PackAnalysisHelpers.IsPersistenceLikeName(simpleName) ? 35 : 0;
+        score += PackAnalysisHelpers.IsHubObjectLikeName(simpleName) ? 25 : 0;
+
+        if (goalProfile.HasCategory("drafting")
+            && (PackAnalysisHelpers.IsAlgorithmLikeName(simpleName) || PackAnalysisHelpers.IsAnalyzerLikeName(simpleName)))
+        {
+            score += 20;
+        }
+
+        if ((goalProfile.HasCategory("project") || goalProfile.HasCategory("system"))
+            && (PackAnalysisHelpers.IsPersistenceLikeName(simpleName) || PackAnalysisHelpers.IsHubObjectLikeName(simpleName)))
+        {
+            score += 15;
+        }
+
+        return score;
+    }
 }
 
 internal sealed record SectionTextEvidence(
@@ -140,9 +229,9 @@ internal sealed record SectionSelectionEvaluation(
 
     internal string ConfidenceLabel => Confidence switch
     {
-        SectionConfidence.High => "high-confidence chain",
-        SectionConfidence.Medium => "medium-confidence candidate",
-        _ => "low-confidence hint"
+        SectionConfidence.High => "高信頼チェーン",
+        SectionConfidence.Medium => "中信頼候補",
+        _ => "低信頼ヒント"
     };
 
     internal int ToPriority(int basePriority) =>
@@ -155,3 +244,10 @@ internal enum SectionConfidence
     Medium,
     High
 }
+
+internal sealed record GuidanceCandidate(
+    string Symbol,
+    bool FromDirectMethodCall = false,
+    bool FromConstructorDependency = false,
+    bool FromServiceRegistration = false,
+    bool FromPortLikeOwner = false);

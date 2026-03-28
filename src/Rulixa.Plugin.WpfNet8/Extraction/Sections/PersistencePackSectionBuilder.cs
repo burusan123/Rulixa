@@ -347,20 +347,19 @@ internal sealed class PersistencePackSectionBuilder
 
         if (discovery.OwnerCandidates.Count > 0 || discovery.AmbiguousCandidates.Count > 0)
         {
-            var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
+            var diagnostic = HighSignalSelectionSupport.BuildGuidedDiagnostic(
                 "persistence.missing-owner",
-                "Persistence-related symbols were seen, but no representative owner-to-persistence boundary survived compression with strong evidence.",
+                BuildKnownRange(discovery.OwnerCandidates),
+                "代表的な owner -> persistence 境界を強い証拠つきで確定できませんでした",
                 null,
                 DiagnosticSeverity.Info,
                 discovery.AmbiguousCandidates.Concat(discovery.OwnerCandidates));
             unknowns.Add(diagnostic);
-            decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+            decisionTraces.Add(HighSignalSelectionSupport.BuildGuidedUnknownTrace(
                 "persistence-selection",
                 "persistence.missing-owner",
-                "unknown-raised",
-                diagnostic.Message,
-                new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence()),
-                0,
+                $"{diagnostic.Message} 次に見る候補: {FormatCandidates(diagnostic.Candidates)}",
+                relevantContext.GoalProfile,
                 analyses.Count));
         }
     }
@@ -407,7 +406,7 @@ internal sealed class PersistencePackSectionBuilder
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(static family => family, StringComparer.Ordinal)
             .ToArray();
-        return $"This screen crosses {analyses.Count} representative persistence boundaries: {string.Join(", ", families)}.";
+        return $"この画面は {analyses.Count} 本の代表境界で {string.Join(" / ", families)} 系の永続化に触れます。";
     }
 
     private static string BuildCanonicalKey(PersistenceLink link) =>
@@ -423,6 +422,21 @@ internal sealed class PersistencePackSectionBuilder
 
     private static bool IsSelfLoopCandidate(PersistenceLink link) =>
         PackAnalysisHelpers.HasSameTypeIdentity(link.OwnerSymbol, link.PersistenceSymbol);
+
+    private static string BuildKnownRange(IEnumerable<string> symbols)
+    {
+        var names = symbols
+            .Select(PackExtractionConventions.GetSimpleTypeName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToArray();
+        return names.Length == 0 ? "入口シンボルまで" : string.Join(" / ", names);
+    }
+
+    private static string FormatCandidates(IReadOnlyList<string> candidates) =>
+        candidates.Count == 0
+            ? "なし"
+            : string.Join(", ", candidates.Select(PackExtractionConventions.GetSimpleTypeName));
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,

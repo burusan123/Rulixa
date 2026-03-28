@@ -91,6 +91,15 @@ public sealed class AssessMeisterOptionalSmokeTests
             || ingredients.Indexes.SelectMany(static index => index.Lines).Any(line =>
                 line.Contains("WallAlgorithm", StringComparison.Ordinal)
                 || line.Contains("Algorithm", StringComparison.Ordinal)));
+        Assert.True(
+            ingredients.Indexes.Where(index => index.Title == "Workflow").SelectMany(static index => index.Lines).Any(line =>
+                line.Contains("Algorithm", StringComparison.Ordinal)
+                || line.Contains("Analyzer", StringComparison.Ordinal))
+            || ingredients.Unknowns.Any(unknown =>
+                unknown.Code == "workflow.missing-downstream"
+                && unknown.Candidates.Any(candidate =>
+                    candidate.Contains("Algorithm", StringComparison.Ordinal)
+                    || candidate.Contains("Analyzer", StringComparison.Ordinal))));
         Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(ingredients, "Workflow"), 0, 6);
         Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(ingredients, "Persistence"), 0, 6);
         Assert.InRange(AssessMeisterSmokeAssertions.GetIndexLineCount(ingredients, "Architecture Tests"), 0, 4);

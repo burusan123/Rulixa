@@ -99,6 +99,15 @@ internal static class PackAnalysisHelpers
         || simpleName.EndsWith("Adapter", StringComparison.Ordinal)
         || IsPersistenceLikeName(simpleName);
 
+    internal static bool IsAlgorithmLikeName(string simpleName) =>
+        simpleName.EndsWith("AlgorithmRunner", StringComparison.Ordinal)
+        || simpleName.EndsWith("Algorithm", StringComparison.Ordinal);
+
+    internal static bool IsAnalyzerLikeName(string simpleName) =>
+        simpleName.EndsWith("Analyzer", StringComparison.Ordinal)
+        || simpleName.EndsWith("ExecutionPlan", StringComparison.Ordinal)
+        || simpleName.EndsWith("Pipeline", StringComparison.Ordinal);
+
     internal static bool IsUiBoundaryLikeName(string simpleName) =>
         simpleName.EndsWith("Window", StringComparison.Ordinal)
         || simpleName.EndsWith("View", StringComparison.Ordinal)
@@ -362,6 +371,20 @@ internal static class PackAnalysisHelpers
             .OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+    internal static IReadOnlyList<string> FindImplementationSymbolsForService(
+        WorkspaceScanResult scanResult,
+        string serviceSymbol)
+    {
+        return scanResult.ServiceRegistrations
+            .Where(registration =>
+                string.Equals(registration.ServiceType, serviceSymbol, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(registration.ServiceType, registration.ImplementationType, StringComparison.OrdinalIgnoreCase))
+            .Select(static registration => registration.ImplementationType)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     internal static int CountServiceRegistrationMatches(
         WorkspaceScanResult scanResult,
         IEnumerable<string> symbols)
@@ -399,13 +422,12 @@ internal static class PackAnalysisHelpers
             return "ui";
         }
 
-        if (simpleName.EndsWith("AlgorithmRunner", StringComparison.Ordinal)
-            || simpleName.EndsWith("Algorithm", StringComparison.Ordinal))
+        if (IsAlgorithmLikeName(simpleName))
         {
             return "algorithm";
         }
 
-        if (simpleName.EndsWith("Analyzer", StringComparison.Ordinal))
+        if (IsAnalyzerLikeName(simpleName))
         {
             return "analyzer";
         }

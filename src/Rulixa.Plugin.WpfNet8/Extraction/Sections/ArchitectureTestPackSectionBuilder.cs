@@ -38,18 +38,16 @@ internal sealed class ArchitectureTestPackSectionBuilder
             {
                 var diagnostic = HighSignalSelectionSupport.BuildDiagnostic(
                     "architecture-tests.not-found",
-                    "No representative architecture, golden, regression, or compatibility test families were detected from the scanned workspace.",
+                    "追跡できた範囲: tests 配下のファイル走査まで。停止点: architecture / golden / regression / compatibility の代表 family を確定できませんでした。",
                     null,
                     DiagnosticSeverity.Info,
                     []);
                 unknowns.Add(diagnostic);
-                decisionTraces.Add(HighSignalSelectionSupport.BuildDecisionTrace(
+                decisionTraces.Add(HighSignalSelectionSupport.BuildGuidedUnknownTrace(
                     "architecture-test-selection",
                     "architecture-tests.not-found",
-                    "unknown-raised",
                     diagnostic.Message,
-                    new SectionSelectionEvaluation(0, SectionConfidence.Low, relevantContext.GoalProfile.Terms, [], [], new SectionSignalEvidence()),
-                    0,
+                    relevantContext.GoalProfile,
                     0));
             }
 
@@ -228,7 +226,7 @@ internal sealed class ArchitectureTestPackSectionBuilder
     }
 
     private static string BuildSummary(IReadOnlyList<ArchitectureFamilyAnalysis> analyses) =>
-        $"Representative test families: {string.Join(", ", analyses.Select(static analysis => analysis.Family.Family))}.";
+        $"このワークスペースでは {string.Join(" / ", analyses.Select(static analysis => analysis.Family.Family))} 系の回帰拘束が確認できます。";
 
     private async Task<string> ReadSourceAsync(
         string workspaceRoot,

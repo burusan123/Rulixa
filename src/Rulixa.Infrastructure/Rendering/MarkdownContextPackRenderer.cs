@@ -20,7 +20,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         builder.AppendLine();
         builder.AppendLine("## エントリ");
         builder.AppendLine($"- 入力: `{contextPack.Entry}`");
-        builder.AppendLine($"- 解決結果: `{ToDisplayText(contextPack.ResolvedEntry.ResolvedKind)}`");
+        builder.AppendLine($"- 解決種別: `{ToDisplayText(contextPack.ResolvedEntry.ResolvedKind)}`");
         if (!string.IsNullOrWhiteSpace(contextPack.ResolvedEntry.ResolvedPath))
         {
             builder.AppendLine($"- パス: `{NormalizePath(contextPack.ResolvedEntry.ResolvedPath)}`");
@@ -33,19 +33,33 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
 
         builder.AppendLine();
         builder.AppendLine("## 契約");
-        foreach (var contract in contextPack.Contracts.OrderBy(GetContractPriority).ThenBy(static contract => contract.Title, StringComparer.Ordinal))
+        if (contextPack.Contracts.Count == 0)
         {
-            builder.AppendLine($"- [{ToDisplayText(contract.Kind)}] {contract.Title}: {contract.Summary}");
+            builder.AppendLine("- なし");
+        }
+        else
+        {
+            foreach (var contract in contextPack.Contracts.OrderBy(GetContractPriority).ThenBy(static contract => contract.Title, StringComparer.Ordinal))
+            {
+                builder.AppendLine($"- [{ToDisplayText(contract.Kind)}] {contract.Title}: {contract.Summary}");
+            }
         }
 
         builder.AppendLine();
         builder.AppendLine("## 参照ガイド / インデックス");
-        foreach (var index in contextPack.Indexes.OrderBy(GetIndexPriority).ThenBy(static index => index.Title, StringComparer.Ordinal))
+        if (contextPack.Indexes.Count == 0)
         {
-            builder.AppendLine($"### {index.Title}");
-            foreach (var line in index.Lines)
+            builder.AppendLine("- なし");
+        }
+        else
+        {
+            foreach (var index in contextPack.Indexes.OrderBy(GetIndexPriority).ThenBy(static index => index.Title, StringComparer.Ordinal))
             {
-                builder.AppendLine($"- {line}");
+                builder.AppendLine($"### {index.Title}");
+                foreach (var line in index.Lines)
+                {
+                    builder.AppendLine($"- {line}");
+                }
             }
         }
 
@@ -72,10 +86,17 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
 
         builder.AppendLine();
         builder.AppendLine("## 選択ファイル");
-        foreach (var selectedFile in contextPack.SelectedFiles)
+        if (contextPack.SelectedFiles.Count == 0)
         {
-            builder.AppendLine(
-                $"- `{NormalizePath(selectedFile.Path)}` (理由: {ToDisplayText(selectedFile.Reason)}, 行数: {selectedFile.LineCount}, 種別: {(selectedFile.IsRequired ? "必須" : "補助")})");
+            builder.AppendLine("- なし");
+        }
+        else
+        {
+            foreach (var selectedFile in contextPack.SelectedFiles)
+            {
+                builder.AppendLine(
+                    $"- `{NormalizePath(selectedFile.Path)}` (理由: {ToDisplayText(selectedFile.Reason)}, 行数: {selectedFile.LineCount}, 必須: {(selectedFile.IsRequired ? "required" : "optional")})");
+            }
         }
 
         builder.AppendLine();
@@ -88,10 +109,9 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         {
             foreach (var unknown in contextPack.Unknowns)
             {
-                var candidates = unknown.Candidates.Count == 0
-                    ? string.Empty
-                    : $" 候補: {string.Join(", ", unknown.Candidates.Select(NormalizePath))}";
-                builder.AppendLine($"- [{ToDisplayText(unknown.Severity)}] {ToDiagnosticLabel(unknown.Code)}: {unknown.Message}{candidates}");
+                builder.AppendLine($"- [{ToDisplayText(unknown.Severity)}] {ToDiagnosticLabel(unknown.Code)}");
+                builder.AppendLine($"  既知の範囲: {FormatUnknownMessage(unknown.Message)}");
+                builder.AppendLine($"  次に見る候補: {FormatCandidates(unknown.Candidates)}");
             }
         }
 
@@ -144,11 +164,11 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "root-binding-source" => "ルート DataContext の設定元",
         "view-binding" => "View DataContext",
         "view-binding-source" => "View DataContext の設定元",
-        "data-template" => "DataTemplate による画面対応",
-        "data-template-source" => "DataTemplate の宣言元",
-        "conventional-view" => "命名規約に一致する View",
-        "code-behind" => "対応する code-behind",
-        "command-viewmodel" => "コマンド定義元 ViewModel",
+        "data-template" => "DataTemplate 対応",
+        "data-template-source" => "DataTemplate 設定元",
+        "conventional-view" => "規約対応 View",
+        "code-behind" => "code-behind",
+        "command-viewmodel" => "コマンド関連 ViewModel",
         "command-impact" => "コマンド影響先",
         "command-bound-view" => "コマンドが使われる View",
         "command-support" => "コマンド補助実装",
@@ -158,23 +178,39 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "navigation-update" => "ナビゲーション更新処理",
         "workflow" => "ワークフロー候補",
         "persistence" => "永続化候補",
-        "hub-object" => "中心状態オブジェクト候補",
-        "external-asset" => "外部資産アクセス候補",
-        "architecture-test" => "アーキテクチャ検証テスト",
+        "hub-object" => "共有状態候補",
+        "external-asset" => "外部資産候補",
+        "architecture-test" => "アーキテクチャテスト候補",
         _ => reason
     };
 
     private static string ToDiagnosticLabel(string code) => code switch
     {
         "entry.unresolved" => "入口の解決失敗",
-        "workflow.missing-downstream" => "Workflow の downstream 不足",
-        "workflow.ambiguous-target" => "Workflow の候補競合",
-        "persistence.missing-owner" => "Persistence の owner 未確定",
-        "hub-object.weak-signal" => "Hub Object の signal 不足",
-        "external-asset.unresolved-source" => "外部資産の解決コード不足",
-        "architecture-tests.not-found" => "Architecture Test 未検出",
+        "workflow.missing-downstream" => "Workflow の探索ガイド",
+        "workflow.ambiguous-target" => "Workflow の候補が競合",
+        "persistence.missing-owner" => "Persistence の探索ガイド",
+        "hub-object.weak-signal" => "Hub Object の探索ガイド",
+        "external-asset.unresolved-source" => "外部資産の探索ガイド",
+        "architecture-tests.not-found" => "Architecture Test の探索ガイド",
         _ => code
     };
+
+    private static string FormatCandidates(IReadOnlyList<string> candidates) =>
+        candidates.Count == 0
+            ? "なし"
+            : string.Join(", ", candidates.Select(candidate => NormalizePath(candidate)));
+
+    private static string FormatUnknownMessage(string message)
+    {
+        const string knownPrefix = "追跡できた範囲: ";
+        if (!message.StartsWith(knownPrefix, StringComparison.Ordinal))
+        {
+            return message;
+        }
+
+        return message[knownPrefix.Length..];
+    }
 
     private static int GetContractPriority(Contract contract) => contract.Kind switch
     {
@@ -185,10 +221,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         ContractKind.DependencyInjection when contract.Title == "Hub Objects" => 26,
         ContractKind.DependencyInjection when contract.Title == "External Assets" => 27,
         ContractKind.DependencyInjection when contract.Title == "Architecture Tests" => 28,
-        ContractKind.DependencyInjection when contract.Title == "主要 ViewModel の登録" => 20,
-        ContractKind.DependencyInjection when contract.Title == "直接依存のライフタイム" => 21,
         ContractKind.DependencyInjection => 22,
-        ContractKind.Navigation when contract.Title == "選択から表示への反映" => 25,
         ContractKind.Navigation => 30,
         ContractKind.ViewModelBinding => 40,
         ContractKind.Command when contract.Title == "Workflow" => 45,
@@ -201,7 +234,7 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
     {
         "ナビゲーション" => 0,
         "選択から表示への因果" => 10,
-        "ナビゲーション更新点" => 20,
+        "ナビゲーション更新処理" => 20,
         "View-ViewModel" => 30,
         "起動経路" => 40,
         "DI" => 45,
