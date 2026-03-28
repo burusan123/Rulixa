@@ -8,7 +8,9 @@ public static class ServiceRegistration
 {
     public static void Register(IServiceCollection services)
     {
-        services.AddSingleton<ShellViewModel>();
+        services.AddSingleton<
+            ShellViewModel
+        >();
         services.AddSingleton<IProjectWorkspaceService, ProjectWorkspaceService>();
         services.AddTransient<ISettingWindowService, SettingWindowService>();
     }

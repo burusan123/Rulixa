@@ -48,15 +48,18 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains(result.ServiceRegistrations, registration =>
             registration.ServiceType == "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"
             && registration.Lifetime == ServiceRegistrationLifetime.Singleton
-            && registration.SourceSpan.StartLine > 0);
+            && registration.SourceSpan.StartLine == 11
+            && registration.SourceSpan.EndLine == 13);
         Assert.Contains(result.ServiceRegistrations, registration =>
             registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.IProjectWorkspaceService"
             && registration.Lifetime == ServiceRegistrationLifetime.Singleton
-            && registration.SourceSpan.StartLine > 0);
+            && registration.SourceSpan.StartLine == 14
+            && registration.SourceSpan.EndLine == 14);
         Assert.Contains(result.ServiceRegistrations, registration =>
             registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.ISettingWindowService"
             && registration.Lifetime == ServiceRegistrationLifetime.Transient
-            && registration.SourceSpan.StartLine > 0);
+            && registration.SourceSpan.StartLine == 15
+            && registration.SourceSpan.EndLine == 15);
         Assert.Contains(result.WindowActivations, activation =>
             activation.ServiceSymbol == "AssessMeister.Presentation.Wpf.Services.SettingWindowService"
             && activation.WindowSymbol == "AssessMeister.Presentation.Wpf.Views.SettingWindow");
@@ -94,7 +97,11 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Path == "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs"
             && snippet.Reason == "dependency-injection"
-            && snippet.Content.Contains("AddSingleton<ShellViewModel>()", StringComparison.Ordinal));
+            && snippet.Content.Contains("services.AddSingleton<", StringComparison.Ordinal)
+            && snippet.Content.Contains("ShellViewModel", StringComparison.Ordinal)
+            && snippet.Content.Contains(">();", StringComparison.Ordinal)
+            && snippet.StartLine <= 11
+            && snippet.EndLine >= 13);
         Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
             && snippet.Reason == "navigation-xaml-binding"
@@ -151,7 +158,11 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Path == "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs"
             && snippet.Reason == "dependency-injection"
-            && snippet.Content.Contains("AddSingleton<ShellViewModel>()", StringComparison.Ordinal));
+            && snippet.Content.Contains("services.AddSingleton<", StringComparison.Ordinal)
+            && snippet.Content.Contains("ShellViewModel", StringComparison.Ordinal)
+            && snippet.Content.Contains(">();", StringComparison.Ordinal)
+            && snippet.StartLine <= 11
+            && snippet.EndLine >= 13);
         Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
             && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
@@ -420,12 +431,12 @@ public sealed class WpfNet8WorkspaceScannerTests
             var scanResult = await scanner.ScanAsync(workspaceRoot);
             var resolved = await resolver.ResolveAsync(new Entry(EntryKind.Symbol, "Sample.Presentation.Wpf.ViewModels.ShellViewModel"), scanResult);
 
-            Assert.Single(scanResult.Symbols.Where(symbol => symbol.QualifiedName == "Sample.Presentation.Wpf.ViewModels.ShellViewModel"));
+            Assert.Single(scanResult.Symbols, symbol => symbol.QualifiedName == "Sample.Presentation.Wpf.ViewModels.ShellViewModel");
             Assert.Equal(ResolvedEntryKind.Symbol, resolved.ResolvedKind);
-            Assert.True(string.Equals(
+            Assert.Equal(
                 "src/Sample.Presentation.Wpf/ViewModels/ShellViewModel.cs",
                 resolved.ResolvedPath,
-                StringComparison.OrdinalIgnoreCase));
+                ignoreCase: true);
         }
         finally
         {

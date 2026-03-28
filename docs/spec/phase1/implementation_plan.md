@@ -79,8 +79,11 @@ Phase 1 の実装は `WPF + .NET 8` ワークスペースを対象に、`scan ->
 
 ### P1
 
-- `ServiceRegistration` の複数行登録への span 拡張
 - snippet reason の粒度整理
+
+完了:
+
+- `ServiceRegistration` の複数行登録への span 拡張
 
 ### P2
 
