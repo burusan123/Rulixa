@@ -1,0 +1,35 @@
+{
+  "name": "rulixa",
+  "version": "0.1.0",
+  "description": "Generate minimal context packs for WPF and .NET workspaces through Rulixa.Cli.",
+  "author": {
+    "name": "Rulixa"
+  },
+  "keywords": [
+    "rulixa",
+    "context-pack",
+    "wpf",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "apps": "./.app.json",
+  "interface": {
+    "displayName": "Rulixa",
+    "shortDescription": "Rulixa.Cli で Context Pack を生成します。",
+    "longDescription": "WPF + .NET 8 のコードベースに対して、entry=file または entry=symbol を起点に最小の Context Pack を生成するローカル plugin です。現在は Rulixa.Cli の pack コマンドを主導線として扱います。",
+    "developerName": "Rulixa",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "AssessMeister の ShellViewModel から Context Pack を作って。",
+      "ShellView.xaml を entry=file で解析する pack コマンドを組み立てて。",
+      "Rulixa.Cli の pack 引数を確認して。"
+    ],
+    "brandColor": "#0F766E"
+  }
+}

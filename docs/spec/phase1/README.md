@@ -1,35 +1,35 @@
 # Phase 1
 
-このフォルダは、`Rulixa` の Phase 1 実装仕様をまとめたものです。  
-現時点の Phase 1 は、`Windows` 上の `WPF + .NET 8` アプリケーションを対象に、AI 用の最小 Context Pack を生成することを目的にしています。
+このフォルダは、`Rulixa` の Phase 1 仕様をまとめた入口です。  
+現在の Phase 1 は `Windows` 上の `WPF + .NET 8` アプリケーションを対象に、AI 用の最小 Context Pack を決定的に生成することを目的にしています。
 
 ## 現在の到達点
 
 - `Rulixa.Domain`、`Rulixa.Application`、`Rulixa.Infrastructure`、`Rulixa.Plugin.WpfNet8`、`Rulixa.Cli` の 5 プロジェクト構成で実装済みです。
-- `scan`、`resolve-entry`、`pack` の CLI が動作します。
+- CLI として `scan`、`resolve-entry`、`pack` を提供しています。
 - `entry=file` と `entry=symbol` の両方に対応しています。
-- `AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` を入口にした Pack 生成を主要な受け入れケースとして扱っています。
+- `AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` を起点にした Pack 生成で、Shell 周辺の必須ファイルだけを優先して選定できます。
 
-## 主要ドキュメント
+## 主なドキュメント
 
-- [scope.md](D:/C#/Rulixa/docs/spec/phase1/scope.md)
-  Phase 1 の対象範囲と非対象
-- [architecture.md](D:/C#/Rulixa/docs/spec/phase1/architecture.md)
+- [scope.md](scope.md)
+  Phase 1 の対象範囲と非対象範囲
+- [architecture.md](architecture.md)
   Frontend / Core 分離とプロジェクト構成
-- [ir.md](D:/C#/Rulixa/docs/spec/phase1/ir.md)
+- [ir.md](ir.md)
   Phase 1 の IR 定義
-- [entry_resolution.md](D:/C#/Rulixa/docs/spec/phase1/entry_resolution.md)
+- [entry_resolution.md](entry_resolution.md)
   `entry=file/symbol/auto` の解決仕様
-- [wpf_net8_extraction_targets.md](D:/C#/Rulixa/docs/spec/phase1/wpf_net8_extraction_targets.md)
-  WPF 解析対象
-- [context_pack_rules.md](D:/C#/Rulixa/docs/spec/phase1/context_pack_rules.md)
+- [wpf_net8_extraction_targets.md](wpf_net8_extraction_targets.md)
+  WPF 向け抽出対象
+- [context_pack_rules.md](context_pack_rules.md)
   Context Pack の選定ルール
-- [implementation_plan.md](D:/C#/Rulixa/docs/spec/phase1/implementation_plan.md)
-  Phase 1 の実装方針
-- [examples/assessmeister_shell_pack_example.md](D:/C#/Rulixa/docs/spec/phase1/examples/assessmeister_shell_pack_example.md)
+- [implementation_plan.md](implementation_plan.md)
+  Phase 1 の実装順序
+- [examples/assessmeister_shell_pack_example.md](examples/assessmeister_shell_pack_example.md)
   `AssessMeister` を題材にした Pack 例
 
-## 代表的な実行例
+## 実行例
 
 ### file entry
 

@@ -15,7 +15,7 @@ internal static class CliMessages
 
     public static string RequiredOption(string optionName) => $"{optionName} は必須です。";
 
-    public static string OutputWritten(string path) => $"出力先: {path}";
+    public static string OutputWritten(string path) => $"出力を書き込みました: {path}";
 
-    public static string UnexpectedError(string message) => $"エラー: {message}";
+    public static string UnexpectedError(string message) => $"予期しないエラーが発生しました: {message}";
 }
