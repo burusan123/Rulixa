@@ -131,29 +131,52 @@ public sealed class ScanBackedEntryResolver : IEntryResolver
                 ? value[..^"View".Length]
                 : value;
 
-        var candidates = new List<ResolvedCandidate>();
+        var candidates = new List<RankedResolvedCandidate>();
         foreach (var binding in scanResult.ViewModelBindings)
         {
             var viewName = Path.GetFileNameWithoutExtension(binding.ViewPath);
             var viewModelName = binding.ViewModelSymbol.Split('.').Last();
-            var isMatch =
-                string.Equals(viewName, $"{normalized}View", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(viewModelName, $"{normalized}ViewModel", StringComparison.OrdinalIgnoreCase);
-            if (!isMatch)
+            var viewNameMatches = string.Equals(viewName, $"{normalized}View", StringComparison.OrdinalIgnoreCase);
+            var viewModelNameMatches = string.Equals(viewModelName, $"{normalized}ViewModel", StringComparison.OrdinalIgnoreCase);
+            if (!viewNameMatches && !viewModelNameMatches)
             {
                 continue;
             }
 
-            candidates.Add(new ResolvedCandidate(CandidateKind.View, binding.ViewPath, null, "auto-view-convention-match"));
-            candidates.Add(new ResolvedCandidate(CandidateKind.ViewModel, null, binding.ViewModelSymbol, "auto-viewmodel-convention-match"));
+            var priority = GetBindingPriority(binding.BindingKind);
+            if (viewNameMatches)
+            {
+                candidates.Add(new RankedResolvedCandidate(
+                    new ResolvedCandidate(CandidateKind.View, binding.ViewPath, null, "auto-view-convention-match"),
+                    priority));
+            }
+
+            if (viewModelNameMatches || binding.BindingKind != ViewModelBindingKind.DataTemplate)
+            {
+                candidates.Add(new RankedResolvedCandidate(
+                    new ResolvedCandidate(CandidateKind.ViewModel, null, binding.ViewModelSymbol, "auto-viewmodel-convention-match"),
+                    priority));
+            }
         }
 
         return candidates
-            .Distinct()
-            .OrderBy(static candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(static candidate => candidate.Symbol, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(static candidate => candidate.Candidate)
+            .Select(static group => new RankedResolvedCandidate(group.Key, group.Min(static candidate => candidate.Priority)))
+            .OrderBy(static candidate => candidate.Priority)
+            .ThenBy(static candidate => candidate.Candidate.Path ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(static candidate => candidate.Candidate.Symbol ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .Select(static candidate => candidate.Candidate)
             .ToArray();
     }
+
+    private static int GetBindingPriority(ViewModelBindingKind bindingKind) =>
+        bindingKind switch
+        {
+            ViewModelBindingKind.RootDataContext => 0,
+            ViewModelBindingKind.ViewDataContext => 1,
+            ViewModelBindingKind.DataTemplate => 2,
+            _ => int.MaxValue
+        };
 
     private static ResolvedCandidate[] FindWindowCandidates(string value, WorkspaceScanResult scanResult)
     {
@@ -194,4 +217,6 @@ public sealed class ScanBackedEntryResolver : IEntryResolver
         var fullPath = Path.IsPathRooted(path) ? path : Path.Combine(workspaceRoot, path);
         return Path.GetRelativePath(workspaceRoot, fullPath).Replace('\\', '/');
     }
+
+    private sealed record RankedResolvedCandidate(ResolvedCandidate Candidate, int Priority);
 }

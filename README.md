@@ -66,7 +66,8 @@ dotnet run --project src\Rulixa.Cli -- pack `
 ## Codex Plugin
 
 repo-local の Codex Plugin を `plugins/rulixa` に配置しています。
-この plugin は `Rulixa.Cli` の `pack` を最短導線で呼び出すためのもので、Codex から Context Pack を作る入口として使います。
+この plugin は `Rulixa.Cli` の Phase 1 `pack` を最短導線で呼び出すためのもので、Codex から Context Pack を作る入口として使います。
+現在の plugin が直接担う主導線は `pack` で、`scan` と `resolve-entry` は CLI 側の支援コマンドとして扱います。
 
 - plugin root: `plugins/rulixa`
 - marketplace: `.agents/plugins/marketplace.json`

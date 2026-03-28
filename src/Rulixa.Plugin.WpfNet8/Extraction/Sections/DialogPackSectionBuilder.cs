@@ -55,7 +55,7 @@ internal sealed class DialogPackSectionBuilder
             contracts.Add(new Contract(
                 ContractKind.DialogActivation,
                 activation.WindowSymbol,
-                $"{activation.CallerSymbol} から {activation.WindowSymbol} が起動されます。",
+                $"{activation.CallerSymbol} から {activation.WindowSymbol} が {activation.ActivationKind} で起動されます。owner={activation.OwnerKind}。",
                 [],
                 [activation.CallerSymbol, activation.ServiceSymbol, activation.WindowSymbol]));
 
@@ -85,6 +85,8 @@ internal sealed class DialogPackSectionBuilder
                     }
                 }
             }
+
+            AddDialogTargetFiles(scanResult, activation, fileCandidates);
         }
     }
 
@@ -92,5 +94,34 @@ internal sealed class DialogPackSectionBuilder
     {
         var simpleName = PackExtractionConventions.GetSimpleTypeName(identifier);
         return source.Contains(simpleName, StringComparison.Ordinal);
+    }
+
+    private static void AddDialogTargetFiles(
+        WorkspaceScanResult scanResult,
+        WindowActivation activation,
+        ICollection<FileSelectionCandidate> fileCandidates)
+    {
+        var windowFile = scanResult.Symbols.FirstOrDefault(symbol =>
+            string.Equals(symbol.QualifiedName, activation.WindowSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
+        if (!string.IsNullOrWhiteSpace(windowFile))
+        {
+            fileCandidates.Add(new FileSelectionCandidate(windowFile, "dialog-window", 8, true));
+            if (windowFile.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))
+            {
+                PackExtractionConventions.AddCodeBehindIfPresent(scanResult, windowFile, fileCandidates, 9, false);
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(activation.WindowViewModelSymbol))
+        {
+            return;
+        }
+
+        var windowViewModelFile = scanResult.Symbols.FirstOrDefault(symbol =>
+            string.Equals(symbol.QualifiedName, activation.WindowViewModelSymbol, StringComparison.OrdinalIgnoreCase))?.FilePath;
+        if (!string.IsNullOrWhiteSpace(windowViewModelFile))
+        {
+            fileCandidates.Add(new FileSelectionCandidate(windowViewModelFile, "dialog-viewmodel", 10, true));
+        }
     }
 }

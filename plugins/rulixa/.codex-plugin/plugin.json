@@ -1,7 +1,7 @@
 {
   "name": "rulixa",
   "version": "0.1.0",
-  "description": "Generate minimal context packs for WPF and .NET workspaces through Rulixa.Cli.",
+  "description": "Generate Phase 1 context packs for WPF and .NET workspaces through Rulixa.Cli.",
   "author": {
     "name": "Rulixa"
   },
@@ -16,8 +16,8 @@
   "apps": "./.app.json",
   "interface": {
     "displayName": "Rulixa",
-    "shortDescription": "Rulixa.Cli で Context Pack を生成します。",
-    "longDescription": "WPF + .NET 8 のコードベースに対して、entry=file または entry=symbol を起点に最小の Context Pack を生成するローカル plugin です。現在は Rulixa.Cli の pack コマンドを主導線として扱います。",
+    "shortDescription": "Run the Phase 1 pack flow through Rulixa.Cli.",
+    "longDescription": "This plugin exposes the current Phase 1 flow for WPF + .NET 8 workspaces. The primary path is the pack command with entry=file or entry=symbol, while scan and resolve-entry remain support commands on the CLI.",
     "developerName": "Rulixa",
     "category": "Coding",
     "capabilities": [
@@ -26,9 +26,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "プロジェクト の ShellViewModel から Context Pack を作って。",
-      "ShellView.xaml を entry=file で解析する pack コマンドを組み立てて。",
-      "Rulixa.Cli の pack 引数を確認して。"
+      "Build a Phase 1 context pack for ShellViewModel.",
+      "Resolve a file entry for ShellView.xaml and then run pack.",
+      "Run the Rulixa.Cli pack command and summarize the output."
     ],
     "brandColor": "#0F766E"
   }

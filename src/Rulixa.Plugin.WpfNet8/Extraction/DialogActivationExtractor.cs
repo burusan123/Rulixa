@@ -8,7 +8,11 @@ internal sealed class DialogActivationExtractor
     private static readonly Regex NamespaceRegex = new(@"namespace\s+(?<namespace>[A-Za-z0-9_\.]+)\s*[;{]", RegexOptions.Compiled);
     private static readonly Regex ClassRegex = new(@"class\s+(?<name>[A-Za-z_]\w*)", RegexOptions.Compiled);
     private static readonly Regex MethodRegex = new(@"(?:(?:public|private|internal)\s+[A-Za-z0-9_<>\.\?\s]+\s+(?<name>[A-Za-z_]\w*)\s*\()", RegexOptions.Compiled);
-    private static readonly Regex WindowRegex = new(@"new\s+(?<window>[A-Za-z_]\w*Window)\s*\(", RegexOptions.Compiled);
+    private static readonly Regex WindowCreationRegex = new(@"(?<variable>[A-Za-z_]\w*)\s*=\s*new\s+(?<window>[A-Za-z_]\w*Window)\s*\(", RegexOptions.Compiled);
+    private static readonly Regex WindowShowRegex = new(@"(?<variable>[A-Za-z_]\w*)\.(?<activation>ShowDialog|Show)\s*\(", RegexOptions.Compiled);
+    private static readonly Regex DirectWindowShowRegex = new(@"new\s+(?<window>[A-Za-z_]\w*Window)\s*\([^;]*?\)\.(?<activation>ShowDialog|Show)\s*\(", RegexOptions.Compiled);
+    private static readonly Regex OwnerAssignmentRegex = new(@"(?<variable>[A-Za-z_]\w*)\.Owner\s*=", RegexOptions.Compiled);
+    private static readonly Regex ViewModelCreationRegex = new(@"new\s+(?<viewModel>[A-Za-z_]\w*ViewModel)\s*\(", RegexOptions.Compiled);
 
     public IReadOnlyList<WindowActivation> Extract(IReadOnlyDictionary<string, string> fileContents)
     {
@@ -28,15 +32,9 @@ internal sealed class DialogActivationExtractor
                 continue;
             }
 
-            foreach (Match windowMatch in WindowRegex.Matches(content))
+            foreach (Match methodMatch in MethodRegex.Matches(content))
             {
-                activations.Add(new WindowActivation(
-                    CallerSymbol: $"{namespaceName}.{className}.{FindContainingMethod(content, windowMatch.Index)}",
-                    ServiceSymbol: $"{namespaceName}.{className}",
-                    WindowSymbol: windowMatch.Groups["window"].Value,
-                    WindowViewModelSymbol: FindWindowViewModel(content, windowMatch.Index),
-                    ActivationKind: content.Contains("ShowDialog", StringComparison.Ordinal) ? "show-dialog" : "show",
-                    OwnerKind: content.Contains("Owner =", StringComparison.Ordinal) ? "main-window" : "none"));
+                activations.AddRange(ExtractMethodActivations(namespaceName, className, content, methodMatch));
             }
         }
 
@@ -46,27 +44,140 @@ internal sealed class DialogActivationExtractor
             .ToArray();
     }
 
-    private static string FindContainingMethod(string content, int index)
+    private static IReadOnlyList<WindowActivation> ExtractMethodActivations(
+        string namespaceName,
+        string className,
+        string content,
+        Match methodMatch)
     {
-        var candidates = MethodRegex.Matches(content).Cast<Match>().Where(match => match.Index <= index).ToArray();
-        return candidates.LastOrDefault()?.Groups["name"].Value ?? "UnknownMethod";
+        var methodName = methodMatch.Groups["name"].Value;
+        if (string.IsNullOrWhiteSpace(methodName))
+        {
+            return [];
+        }
+
+        var methodBodyRange = TryFindBodyRange(content, methodMatch.Index);
+        if (methodBodyRange is null)
+        {
+            return [];
+        }
+
+        var methodBody = content.Substring(
+            methodBodyRange.Value.BodyStartIndex,
+            methodBodyRange.Value.EndIndex - methodBodyRange.Value.BodyStartIndex + 1);
+        var callerSymbol = $"{namespaceName}.{className}.{methodName}";
+        var serviceSymbol = $"{namespaceName}.{className}";
+        var activations = new List<WindowActivation>();
+
+        activations.AddRange(ExtractDirectWindowActivations(methodBody, callerSymbol, serviceSymbol));
+
+        var creations = WindowCreationRegex.Matches(methodBody)
+            .Cast<Match>()
+            .Select(static match => new WindowCreation(
+                match.Groups["variable"].Value,
+                match.Groups["window"].Value,
+                match.Index))
+            .ToArray();
+
+        foreach (Match showMatch in WindowShowRegex.Matches(methodBody))
+        {
+            var variableName = showMatch.Groups["variable"].Value;
+            var creation = creations.LastOrDefault(candidate =>
+                string.Equals(candidate.VariableName, variableName, StringComparison.Ordinal)
+                && candidate.Index <= showMatch.Index);
+            if (creation is null)
+            {
+                continue;
+            }
+
+            activations.Add(new WindowActivation(
+                CallerSymbol: callerSymbol,
+                ServiceSymbol: serviceSymbol,
+                WindowSymbol: creation.WindowType,
+                WindowViewModelSymbol: FindWindowViewModel(methodBody, creation.Index, showMatch.Index),
+                ActivationKind: ToActivationKind(showMatch.Groups["activation"].Value),
+                OwnerKind: HasOwnerAssignment(methodBody, variableName, creation.Index, showMatch.Index) ? "main-window" : "none"));
+        }
+
+        return activations;
     }
 
-    private static string? FindWindowViewModel(string content, int index)
+    private static IReadOnlyList<WindowActivation> ExtractDirectWindowActivations(
+        string methodBody,
+        string callerSymbol,
+        string serviceSymbol) =>
+        DirectWindowShowRegex.Matches(methodBody)
+            .Cast<Match>()
+            .Select(match => new WindowActivation(
+                CallerSymbol: callerSymbol,
+                ServiceSymbol: serviceSymbol,
+                WindowSymbol: match.Groups["window"].Value,
+                WindowViewModelSymbol: FindWindowViewModel(methodBody, match.Index, match.Index + match.Length),
+                ActivationKind: ToActivationKind(match.Groups["activation"].Value),
+                OwnerKind: "none"))
+            .ToArray();
+
+    private static bool HasOwnerAssignment(string methodBody, string variableName, int startIndex, int endIndex)
     {
-        var before = content[..Math.Min(content.Length, index + 300)];
-        var marker = before.LastIndexOf("ViewModel", StringComparison.Ordinal);
-        if (marker < 0)
+        var searchStartIndex = Math.Clamp(startIndex, 0, methodBody.Length);
+        var searchEndIndex = Math.Clamp(endIndex, searchStartIndex, methodBody.Length);
+        var segment = methodBody[searchStartIndex..searchEndIndex];
+
+        return OwnerAssignmentRegex.Matches(segment)
+            .Cast<Match>()
+            .Any(match => string.Equals(match.Groups["variable"].Value, variableName, StringComparison.Ordinal));
+    }
+
+    private static string? FindWindowViewModel(string methodBody, int startIndex, int endIndex)
+    {
+        var searchStartIndex = Math.Clamp(startIndex, 0, methodBody.Length);
+        var searchEndIndex = Math.Clamp(endIndex + 200, searchStartIndex, methodBody.Length);
+        var segment = methodBody[searchStartIndex..searchEndIndex];
+        var matches = ViewModelCreationRegex.Matches(segment);
+        if (matches.Count == 0)
         {
             return null;
         }
 
-        var start = marker;
-        while (start > 0 && char.IsLetterOrDigit(before[start - 1]))
+        return matches[^1].Groups["viewModel"].Value;
+    }
+
+    private static string ToActivationKind(string rawActivation) =>
+        string.Equals(rawActivation, "ShowDialog", StringComparison.Ordinal)
+            ? "show-dialog"
+            : "show";
+
+    private static (int BodyStartIndex, int EndIndex)? TryFindBodyRange(string source, int declarationIndex)
+    {
+        var openingBraceIndex = source.IndexOf('{', declarationIndex);
+        if (openingBraceIndex < 0)
         {
-            start--;
+            return null;
         }
 
-        return before[start..(marker + "ViewModel".Length)];
+        var depth = 0;
+        for (var index = openingBraceIndex; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+                continue;
+            }
+
+            if (source[index] != '}')
+            {
+                continue;
+            }
+
+            depth--;
+            if (depth == 0)
+            {
+                return (openingBraceIndex + 1, index);
+            }
+        }
+
+        return null;
     }
+
+    private sealed record WindowCreation(string VariableName, string WindowType, int Index);
 }

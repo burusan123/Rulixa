@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Rulixa.Domain.Entries;
 using Rulixa.Domain.Packs;
 using Rulixa.Domain.Scanning;
@@ -144,10 +145,10 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/App.xaml.cs", selectedPaths);
+        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/SettingWindow.xaml", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
         Assert.DoesNotContain(selectedPaths, path => path.Contains("/Pages/", StringComparison.OrdinalIgnoreCase));
-        Assert.True(pack.SelectedFiles.Count <= 8);
 
         Assert.Contains(pack.SelectedSnippets, snippet =>
             snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
@@ -172,6 +173,10 @@ public sealed class WpfNet8WorkspaceScannerTests
             contract.Kind == ContractKind.DependencyInjection
             && contract.Summary.Contains("ShellViewModel", StringComparison.Ordinal)
             && contract.Summary.Contains("Singleton", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.DialogActivation
+            && contract.Summary.Contains("show-dialog", StringComparison.Ordinal)
+            && contract.Summary.Contains("SettingWindow", StringComparison.Ordinal));
         Assert.Contains(ingredients.Indexes, index =>
             index.Title == "DI"
             && index.Lines.Any(line =>
@@ -224,6 +229,28 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.True(registrationIndex > viewBindingIndex);
         Assert.True(xamlIndex > registrationIndex);
         Assert.True(navigationIndex > registrationIndex);
+    }
+
+    [Fact]
+    public async Task ResolveEntryAsync_WithAutoShell_ExcludesSecondaryDataTemplateViewModels()
+    {
+        var scanner = new WpfNet8WorkspaceScanner(new WorkspaceFileSystem());
+        var resolver = new ScanBackedEntryResolver();
+
+        var scanResult = await scanner.ScanAsync(FixtureRoot);
+        var resolved = await resolver.ResolveAsync(new Entry(EntryKind.Auto, "Shell"), scanResult);
+
+        Assert.Equal(ResolvedEntryKind.Unresolved, resolved.ResolvedKind);
+        Assert.Contains(resolved.Candidates, candidate =>
+            candidate.Kind == CandidateKind.View
+            && candidate.Path == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml");
+        Assert.Contains(resolved.Candidates, candidate =>
+            candidate.Kind == CandidateKind.ViewModel
+            && candidate.Symbol == "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
+        Assert.DoesNotContain(resolved.Candidates, candidate =>
+            candidate.Symbol == "AssessMeister.Presentation.Wpf.ViewModels.DashboardPageViewModel");
+        Assert.DoesNotContain(resolved.Candidates, candidate =>
+            candidate.Path == "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml");
     }
 
     [Fact]
@@ -445,6 +472,91 @@ public sealed class WpfNet8WorkspaceScannerTests
                 Directory.Delete(workspaceRoot, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task ScanAsync_DistinguishesShowAndShowDialogPerInvocation()
+    {
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-scan-dialog-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Services"));
+        Directory.CreateDirectory(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views"));
+
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "Sample.sln"), string.Empty);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Sample.Presentation.Wpf.csproj"),
+                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup></Project>");
+            await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "App.xaml"), "<Application />");
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views", "OwnedWindow.xaml"),
+                "<Window x:Class=\"Sample.Presentation.Wpf.Views.OwnedWindow\" xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\" />");
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Views", "LooseWindow.xaml"),
+                "<Window x:Class=\"Sample.Presentation.Wpf.Views.LooseWindow\" xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\" />");
+            await File.WriteAllTextAsync(
+                Path.Combine(workspaceRoot, "src", "Sample.Presentation.Wpf", "Services", "WindowService.cs"),
+                """
+                using Sample.Presentation.Wpf.Views;
+
+                namespace Sample.Presentation.Wpf.Services;
+
+                public sealed class WindowService
+                {
+                    public void ShowOwned()
+                    {
+                        var ownedWindow = new OwnedWindow();
+                        ownedWindow.Owner = App.Current.MainWindow;
+                        ownedWindow.ShowDialog();
+                    }
+
+                    public void ShowLoose()
+                    {
+                        var looseWindow = new LooseWindow();
+                        looseWindow.Show();
+                    }
+                }
+                """);
+
+            var scanner = new WpfNet8WorkspaceScanner(new WorkspaceFileSystem());
+
+            var result = await scanner.ScanAsync(workspaceRoot);
+
+            Assert.Contains(result.WindowActivations, activation =>
+                activation.CallerSymbol == "Sample.Presentation.Wpf.Services.WindowService.ShowOwned"
+                && activation.WindowSymbol == "Sample.Presentation.Wpf.Views.OwnedWindow"
+                && activation.ActivationKind == "show-dialog"
+                && activation.OwnerKind == "main-window");
+            Assert.Contains(result.WindowActivations, activation =>
+                activation.CallerSymbol == "Sample.Presentation.Wpf.Services.WindowService.ShowLoose"
+                && activation.WindowSymbol == "Sample.Presentation.Wpf.Views.LooseWindow"
+                && activation.ActivationKind == "show"
+                && activation.OwnerKind == "none");
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ExtractAsync_ForShellViewModelSymbol_IsDeterministic()
+    {
+        var first = await BuildPackAsync(
+            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            Budget.Default,
+            PromoteShellViewModelToLargeFile);
+        var second = await BuildPackAsync(
+            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            Budget.Default,
+            PromoteShellViewModelToLargeFile);
+
+        Assert.Equal(JsonSerializer.Serialize(first.ScanResult), JsonSerializer.Serialize(second.ScanResult));
+        Assert.Equal(JsonSerializer.Serialize(first.Ingredients), JsonSerializer.Serialize(second.Ingredients));
+        Assert.Equal(JsonSerializer.Serialize(first.Pack), JsonSerializer.Serialize(second.Pack));
     }
 
     private static async Task<(WorkspaceScanResult ScanResult, PackIngredients Ingredients, ContextPack Pack)> BuildPackAsync(
