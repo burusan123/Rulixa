@@ -1,7 +1,9 @@
 # Phase 1
 
 このフォルダは `Rulixa` の Phase 1 仕様をまとめた入口です。  
-Phase 1 は `Windows` 上の `WPF + .NET 8` ワークスペースを対象に、`scan -> resolve-entry -> pack` を通して AI 入力用の最小 Context Pack を決定的に生成する段階です。
+`Rulixa` は、設計知の成果物を継続生成し、PR レビュー、監査、差分確認、ドリフト検知に使える状態を保つための基盤です。  
+Context Pack はその中で AI 変更開始に使う重要な成果物ですが、製品全体の主役ではありません。  
+Phase 1 は、その全体構想の最初の具体攻略対象として `Windows` 上の `WPF + .NET 8` を扱い、`scan -> resolve-entry -> pack` を安定化する段階です。
 
 上位方針は [polaris.md](/D:/C#/Rulixa/docs/polaris.md) と [project_full_spec.md](/D:/C#/Rulixa/docs/project_full_spec.md) を正本とし、この配下は Phase 1 の具体仕様を扱います。
 

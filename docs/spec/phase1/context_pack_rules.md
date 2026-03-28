@@ -5,6 +5,9 @@
 Phase 1 の `Context Pack` は、`WPF + .NET 8` の変更対象に対して AI に渡す最小限の構造化コンテキストです。  
 `entry=file` と `entry=symbol` を中心に、必要な構造事実と根拠 snippet を優先してまとめます。
 
+Rulixa 全体の中では、Context Pack は継続生成される成果物群の一部です。  
+上位には `Contracts` や `Index / Map` のような設計成果物があり、運用上は PR レビューや監査に使う差分成果物も扱います。Context Pack はその中で、AI に変更開始用の最小束を渡す役割を持ちます。
+
 ## Pack の基本構成
 
 1. `goal`
