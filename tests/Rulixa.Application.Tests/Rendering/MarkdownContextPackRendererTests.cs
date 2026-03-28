@@ -37,16 +37,37 @@ public sealed class MarkdownContextPackRendererTests
                     ["App.ViewModels.ShellViewModel", "Items", "SelectedItem", "CurrentPage"]),
                 new Contract(
                     ContractKind.Navigation,
+                    "選択から表示への因果",
+                    "SelectedItem の選択更新が CurrentPage の表示切り替えを駆動します。RestoreSelection(...) が SelectedItem = match、Select(...) が CurrentPage = item.PageViewModel を実行します。",
+                    ["src/App/ViewModels/ShellViewModel.cs"],
+                    ["App.ViewModels.ShellViewModel", "SelectedItem", "CurrentPage"]),
+                new Contract(
+                    ContractKind.Navigation,
                     "ViewModel 更新点",
                     "App.ViewModels.ShellViewModel.Select(...) が CurrentPage = item.PageViewModel を実行します。",
                     ["src/App/ViewModels/ShellViewModel.cs"],
-                    ["App.ViewModels.ShellViewModel", "Select", "CurrentPage = item.PageViewModel"])
+                    ["App.ViewModels.ShellViewModel", "Select", "CurrentPage = item.PageViewModel"]),
+                new Contract(
+                    ContractKind.ViewModelBinding,
+                    "ルート DataContext",
+                    "MainWindow.xaml.cs が MainWindow.xaml の DataContext に App.ViewModels.ShellViewModel を設定します。",
+                    ["MainWindow.xaml", "MainWindow.xaml.cs"],
+                    ["MainWindow", "App.ViewModels.ShellViewModel"]),
+                new Contract(
+                    ContractKind.ViewModelBinding,
+                    "DataTemplate 二次文脈",
+                    "src/App/Views/ShellView.xaml には 13 件の DataTemplate 二次文脈があります。例: CeilingPageViewModel, ConstructionPageViewModel, EquipmentPageViewModel。",
+                    ["src/App/Views/ShellView.xaml"],
+                    ["CeilingPageViewModel", "ConstructionPageViewModel", "EquipmentPageViewModel"])
             ],
             Indexes:
             [
-                new IndexSection("起動経路", ["App.xaml.cs -> App.ViewModels.ShellViewModel"]),
                 new IndexSection("ナビゲーション", ["src/App/Views/ShellView.xaml: Items=Items, SelectedItem=SelectedItem, Content=CurrentPage"]),
-                new IndexSection("ナビゲーション更新点", ["App.ViewModels.ShellViewModel.Select(...) -> CurrentPage = item.PageViewModel (line: 42)"])
+                new IndexSection("選択から表示への因果", ["SelectedItem -> CurrentPage (RestoreSelection: SelectedItem = match, Select: CurrentPage = item.PageViewModel)"]),
+                new IndexSection("ナビゲーション更新点", ["App.ViewModels.ShellViewModel.Select(...) -> CurrentPage = item.PageViewModel (line: 42)"]),
+                new IndexSection("View-ViewModel", ["MainWindow.xaml <-> App.ViewModels.ShellViewModel (ルート DataContext: MainWindow.xaml.cs)", "src/App/Views/ShellView.xaml <-> DataTemplate 二次文脈 13件 (例: CeilingPageViewModel, ConstructionPageViewModel, EquipmentPageViewModel)"]),
+                new IndexSection("起動経路", ["App.xaml.cs -> App.ViewModels.ShellViewModel"]),
+                new IndexSection("コマンド", ["OpenSettingsCommand -> App.ViewModels.ShellViewModel.OpenSettings"])
             ],
             SelectedFiles:
             [
@@ -74,8 +95,31 @@ public sealed class MarkdownContextPackRendererTests
         Assert.Contains("[ナビゲーション]", markdown);
         Assert.Contains("## 影響範囲 / インデックス", markdown);
         Assert.Contains("### ナビゲーション更新点", markdown);
+        Assert.Contains("### 選択から表示への因果", markdown);
         Assert.Contains("CurrentPage = item.PageViewModel (line: 42)", markdown);
+        Assert.Contains("DataTemplate 二次文脈", markdown);
+        Assert.DoesNotContain("向けの DataTemplate", markdown);
         Assert.Contains("[警告] entry.unresolved", markdown);
+
+        var rootBindingPosition = markdown.IndexOf("[View と ViewModel の対応] ルート DataContext", StringComparison.Ordinal);
+        var causePosition = markdown.IndexOf("[ナビゲーション] 選択から表示への因果", StringComparison.Ordinal);
+        var navigationPosition = markdown.IndexOf("[ナビゲーション] 一覧・選択・表示の対応", StringComparison.Ordinal);
+        var dataTemplatePosition = markdown.IndexOf("[View と ViewModel の対応] DataTemplate 二次文脈", StringComparison.Ordinal);
+        Assert.True(rootBindingPosition >= 0);
+        Assert.True(causePosition > rootBindingPosition);
+        Assert.True(navigationPosition > causePosition);
+        Assert.True(dataTemplatePosition > navigationPosition);
+
+        var navigationIndexPosition = markdown.IndexOf("### ナビゲーション", StringComparison.Ordinal);
+        var causeIndexPosition = markdown.IndexOf("### 選択から表示への因果", StringComparison.Ordinal);
+        var navigationUpdateIndexPosition = markdown.IndexOf("### ナビゲーション更新点", StringComparison.Ordinal);
+        var viewModelIndexPosition = markdown.IndexOf("### View-ViewModel", StringComparison.Ordinal);
+        var startupIndexPosition = markdown.IndexOf("### 起動経路", StringComparison.Ordinal);
+        Assert.True(navigationIndexPosition >= 0);
+        Assert.True(causeIndexPosition > navigationIndexPosition);
+        Assert.True(navigationUpdateIndexPosition > causeIndexPosition);
+        Assert.True(viewModelIndexPosition > navigationUpdateIndexPosition);
+        Assert.True(startupIndexPosition > viewModelIndexPosition);
     }
 
     [Fact]

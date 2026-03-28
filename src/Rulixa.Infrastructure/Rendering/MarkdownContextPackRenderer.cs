@@ -33,14 +33,14 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
 
         builder.AppendLine();
         builder.AppendLine("## 契約");
-        foreach (var contract in contextPack.Contracts)
+        foreach (var contract in contextPack.Contracts.OrderBy(GetContractPriority).ThenBy(static contract => contract.Title, StringComparer.Ordinal))
         {
             builder.AppendLine($"- [{ToDisplayText(contract.Kind)}] {contract.Title}: {contract.Summary}");
         }
 
         builder.AppendLine();
         builder.AppendLine("## 影響範囲 / インデックス");
-        foreach (var index in contextPack.Indexes)
+        foreach (var index in contextPack.Indexes.OrderBy(GetIndexPriority).ThenBy(static index => index.Title, StringComparer.Ordinal))
         {
             builder.AppendLine($"### {index.Title}");
             foreach (var line in index.Lines)
@@ -124,5 +124,29 @@ public sealed class MarkdownContextPackRenderer : IContextPackRenderer
         "navigation-view" => "ナビゲーション View",
         "navigation-update" => "ナビゲーション更新点",
         _ => reason
+    };
+
+    private static int GetContractPriority(Contract contract) => contract.Kind switch
+    {
+        ContractKind.ViewModelBinding when !contract.Title.Contains("DataTemplate", StringComparison.Ordinal) => 0,
+        ContractKind.Startup => 10,
+        ContractKind.DependencyInjection => 20,
+        ContractKind.Navigation when contract.Title == "選択から表示への因果" => 25,
+        ContractKind.Navigation => 30,
+        ContractKind.ViewModelBinding => 40,
+        ContractKind.Command => 50,
+        ContractKind.DialogActivation => 60,
+        _ => 100
+    };
+
+    private static int GetIndexPriority(IndexSection index) => index.Title switch
+    {
+        "ナビゲーション" => 0,
+        "選択から表示への因果" => 10,
+        "ナビゲーション更新点" => 20,
+        "View-ViewModel" => 30,
+        "起動経路" => 40,
+        "コマンド" => 50,
+        _ => 100
     };
 }

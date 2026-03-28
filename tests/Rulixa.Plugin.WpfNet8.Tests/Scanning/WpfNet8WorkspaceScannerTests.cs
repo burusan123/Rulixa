@@ -63,6 +63,13 @@ public sealed class WpfNet8WorkspaceScannerTests
             new Budget(MaxFiles: 10, MaxTotalLines: 5000, MaxSnippetsPerFile: 3));
 
         var selectedPaths = pack.SelectedFiles.Select(static file => file.Path).ToArray();
+        var dataTemplateBindings = scanResult.ViewModelBindings
+            .Where(binding =>
+                binding.ViewPath == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
+                && binding.BindingKind == ViewModelBindingKind.DataTemplate)
+            .ToArray();
+        var expectedCountText = $"{dataTemplateBindings.Length} 件";
+        var expectedSampleName = dataTemplateBindings[0].ViewModelSymbol.Split('.').Last();
 
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
@@ -72,6 +79,29 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
         Assert.Contains("src/AssessMeister.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.ViewModelBinding
+            && contract.Title == "DataTemplate 二次文脈"
+            && contract.Summary.Contains(expectedCountText, StringComparison.Ordinal)
+            && contract.Summary.Contains(expectedSampleName, StringComparison.Ordinal));
+        Assert.DoesNotContain(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.ViewModelBinding
+            && contract.Title == "DataTemplate"
+            && contract.Summary.Contains("向けの DataTemplate", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "View-ViewModel"
+            && index.Lines.Any(line =>
+                line.Contains("MainWindow.xaml <-> AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel", StringComparison.Ordinal)));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "View-ViewModel"
+            && index.Lines.Any(line =>
+                line.Contains($"DataTemplate 二次文脈 {dataTemplateBindings.Length}件", StringComparison.Ordinal)));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "ナビゲーション更新点"
+            && index.Lines.Any(line => line.Contains("SelectedItem = match", StringComparison.Ordinal)));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "ナビゲーション更新点"
+            && index.Lines.Any(line => line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -130,8 +160,20 @@ public sealed class WpfNet8WorkspaceScannerTests
             && contract.Summary.Contains("CurrentPage", StringComparison.Ordinal));
         Assert.Contains(ingredients.Contracts, contract =>
             contract.Kind == ContractKind.Navigation
+            && contract.Title == "選択から表示への因果"
+            && contract.Summary.Contains("SelectedItem の選択更新が CurrentPage の表示切り替えを駆動します。", StringComparison.Ordinal)
+            && contract.Summary.Contains("SelectedItem = match", StringComparison.Ordinal)
+            && contract.Summary.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.Navigation
             && contract.Summary.Contains(".Select(...)", StringComparison.Ordinal)
             && contract.Summary.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal));
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "選択から表示への因果"
+            && index.Lines.Any(line =>
+                line.Contains("SelectedItem -> CurrentPage", StringComparison.Ordinal)
+                && line.Contains("SelectedItem = match", StringComparison.Ordinal)
+                && line.Contains("CurrentPage = item.PageViewModel", StringComparison.Ordinal)));
         Assert.Contains(ingredients.Indexes, index =>
             index.Title == "ナビゲーション更新点"
             && index.Lines.Any(line =>
@@ -142,6 +184,44 @@ public sealed class WpfNet8WorkspaceScannerTests
             && index.Lines.Any(line =>
                 line.Contains("SelectedItem = match", StringComparison.Ordinal)
                 && line.Contains("line:", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task ExtractAsync_WhenCommandsAreMany_SummarizesCommandContracts()
+    {
+        var fileSystem = new WorkspaceFileSystem();
+        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+        var resolver = new ScanBackedEntryResolver();
+        var extractor = new WpfNet8ContractExtractor(fileSystem);
+
+        var scanResult = await scanner.ScanAsync(FixtureRoot);
+        var baseCommand = Assert.Single(scanResult.Commands);
+        var expandedCommands = Enumerable.Range(1, 7)
+            .Select(index => new CommandBinding(
+                baseCommand.ViewModelSymbol,
+                $"SampleCommand{index}",
+                baseCommand.CommandType,
+                $"{baseCommand.ViewModelSymbol}.ExecuteSample{index}",
+                baseCommand.CanExecuteSymbol,
+                baseCommand.BoundViews))
+            .ToArray();
+        var expandedScanResult = scanResult with { Commands = expandedCommands };
+        var entry = new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
+        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
+
+        var ingredients = await extractor.ExtractAsync(FixtureRoot, expandedScanResult, resolvedEntry);
+
+        Assert.Contains(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.Command
+            && contract.Title == "コマンド導線の要約"
+            && contract.Summary.Contains("7 件のコマンド導線", StringComparison.Ordinal)
+            && contract.Summary.Contains("SampleCommand1", StringComparison.Ordinal));
+        Assert.DoesNotContain(ingredients.Contracts, contract =>
+            contract.Kind == ContractKind.Command
+            && contract.Title == "SampleCommand1");
+        Assert.Contains(ingredients.Indexes, index =>
+            index.Title == "コマンド"
+            && index.Lines.Single().Contains("7件のコマンド導線", StringComparison.Ordinal));
     }
 
     [Fact]
