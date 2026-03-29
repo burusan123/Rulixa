@@ -43,6 +43,7 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Contains("smoke-env-disabled", summary, StringComparison.Ordinal);
             Assert.Contains("synthetic corpus is the handoff quality baseline", summary, StringComparison.Ordinal);
             Assert.Contains("TemplateHeavyResources.SettingsWindow", summary, StringComparison.Ordinal);
+            Assert.Contains("handoff_warnings: `0`", summary, StringComparison.Ordinal);
 
             var gate = JsonSerializer.Deserialize<QualityGateArtifact>(await File.ReadAllTextAsync(result.GatePath), new JsonSerializerOptions
             {
@@ -65,6 +66,7 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Equal(2, runArtifact.DegradedReasonCount);
             Assert.Equal(2, runArtifact.RepresentativeChainCount);
             Assert.Equal(25, runArtifact.FirstUsefulMapTimeMs);
+            Assert.Empty(runArtifact.HandoffWarnings);
         }
         finally
         {

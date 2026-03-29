@@ -71,6 +71,7 @@ public sealed class LocalQualityGateRunWriter
         IReadOnlyList<string> relatedArtifacts)
     {
         var observation = new QualityObservationCalculator().Calculate(cases);
+        var handoffWarnings = new QualityHandoffWarningEvaluator().Evaluate(cases);
         var suiteArtifacts = suites
             .Select(static suite => new LocalQualitySuiteArtifact(
                 Name: suite.Name,
@@ -113,6 +114,7 @@ public sealed class LocalQualityGateRunWriter
             RepresentativeChainCount: observation.RepresentativeChainCount,
             DegradedReasonCount: observation.DegradedReasonCount,
             TotalDegradedDiagnosticCount: cases.Sum(static item => item.DegradedDiagnosticCount),
+            HandoffWarnings: handoffWarnings,
             RelatedArtifacts: relatedArtifacts.OrderBy(static item => item, StringComparer.Ordinal).ToArray());
     }
 
@@ -185,6 +187,11 @@ public sealed class LocalQualityGateRunWriter
         builder.AppendLine($"- first_useful_map_time_ms: `{artifact.FirstUsefulMapTimeMs?.ToString() ?? "none"}`");
         builder.AppendLine($"- unknown_guidance_families: `{FormatInlineList(artifact.UnknownGuidanceSummary.Families)}`");
         builder.AppendLine($"- next_candidates: `{FormatInlineList(artifact.UnknownGuidanceSummary.FirstCandidates)}`");
+        builder.AppendLine($"- handoff_warnings: `{artifact.HandoffWarnings.Count}`");
+        foreach (var warning in artifact.HandoffWarnings)
+        {
+            builder.AppendLine($"  `{warning.CaseId}` [{warning.Category}] {warning.Message}");
+        }
 
         builder.AppendLine();
         builder.AppendLine("## Unknown Guidance Details");

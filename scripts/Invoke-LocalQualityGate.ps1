@@ -15,8 +15,17 @@ function Invoke-DotNet {
     }
 }
 
+function Invoke-DotNetObservation {
+    param(
+        [string[]]$Arguments
+    )
+
+    & dotnet @Arguments
+    return $LASTEXITCODE
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$phase5Root = Join-Path $repoRoot 'artifacts\local-quality'
+$qualityRoot = Join-Path $repoRoot 'artifacts\local-quality'
 $runId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffffffZ')
 
 $originalOutputRoot = $env:RULIXA_LOCAL_QUALITY_OUTPUT_ROOT
@@ -24,7 +33,7 @@ $originalRunId = $env:RULIXA_LOCAL_QUALITY_RUN_ID
 $originalSmoke = $env:RULIXA_RUN_ASSESSMEISTER_SMOKE
 
 try {
-    $env:RULIXA_LOCAL_QUALITY_OUTPUT_ROOT = $phase5Root
+    $env:RULIXA_LOCAL_QUALITY_OUTPUT_ROOT = $qualityRoot
     $env:RULIXA_LOCAL_QUALITY_RUN_ID = $runId
 
     if ($IncludeOptionalSmoke) {
@@ -48,17 +57,34 @@ try {
         '.\tests\Rulixa.Plugin.WpfNet8.Tests\Rulixa.Plugin.WpfNet8.Tests.csproj',
         '--no-build',
         '--filter',
-        'FullyQualifiedName~AcceptanceMatrixTests|FullyQualifiedName~QualityArtifactTests|FullyQualifiedName~LocalQualityGateRunnerTests|FullyQualifiedName~AssessMeisterOptionalSmokeTests|FullyQualifiedName~AssessMeisterLegacyOptionalSmokeTests')
+        'FullyQualifiedName~AcceptanceMatrixTests|FullyQualifiedName~QualityArtifactTests|FullyQualifiedName~LocalQualityGateRunnerTests|FullyQualifiedName~HandoffQualityTests')
 
-    $summaryPath = Join-Path $phase5Root "$runId\summary.md"
-    $gatePath = Join-Path $phase5Root "$runId\gate.json"
-    $kpiPath = Join-Path $phase5Root "$runId\kpi.json"
+    if ($IncludeOptionalSmoke) {
+        $optionalSmokeExitCode = Invoke-DotNetObservation -Arguments @(
+            'test',
+            '.\tests\Rulixa.Plugin.WpfNet8.Tests\Rulixa.Plugin.WpfNet8.Tests.csproj',
+            '--no-build',
+            '--filter',
+            'FullyQualifiedName~AssessMeisterOptionalSmokeTests|FullyQualifiedName~AssessMeisterLegacyOptionalSmokeTests')
+        if ($optionalSmokeExitCode -ne 0) {
+            Write-Warning 'Optional smoke tests failed. They remain observation-only and do not change gate result.'
+        }
+    }
+
+    $summaryPath = Join-Path $qualityRoot "$runId\summary.md"
+    $gatePath = Join-Path $qualityRoot "$runId\gate.json"
+    $kpiPath = Join-Path $qualityRoot "$runId\kpi.json"
+    $gate = Get-Content -Path $gatePath -Raw | ConvertFrom-Json
 
     Write-Host "Local quality gate completed."
     Write-Host "RunId: $runId"
     Write-Host "Summary: $summaryPath"
     Write-Host "Gate: $gatePath"
     Write-Host "KPI: $kpiPath"
+
+    if (-not $gate.passed) {
+        throw "quality gate failed: $($gate.failedChecks -join ', ')"
+    }
 }
 finally {
     Pop-Location

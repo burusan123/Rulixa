@@ -30,6 +30,7 @@ public sealed record LocalQualityRunArtifact(
     int RepresentativeChainCount,
     int DegradedReasonCount,
     int TotalDegradedDiagnosticCount,
+    IReadOnlyList<HandoffWarningArtifact> HandoffWarnings,
     IReadOnlyList<string> RelatedArtifacts);
 
 public sealed record QualityCaseArtifact(
@@ -82,6 +83,11 @@ public sealed record LocalUnknownGuidanceSummaryArtifact(
     int GuidanceItemCount,
     IReadOnlyList<string> Families,
     IReadOnlyList<string> FirstCandidates);
+
+public sealed record HandoffWarningArtifact(
+    string CaseId,
+    string Category,
+    string Message);
 
 public sealed record QualityGateArtifact(
     bool Passed,
