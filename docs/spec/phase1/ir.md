@@ -1,17 +1,13 @@
-# IR 仕様
+﻿# IR 莉墓ｧ・
+## 逶ｮ逧・Phase 1 縺ｮ IR 縺ｯ `scan` 縺ｮ蜃ｺ蜉帙→縺励※逕滓・縺励～resolve-entry` 縺ｨ `pack` 縺悟・譛峨☆繧倶ｸｭ髢楢｡ｨ迴ｾ縺ｧ縺吶・ 
+蟇ｾ雎｡縺ｯ `WPF + .NET 8` 繝ｯ繝ｼ繧ｯ繧ｹ繝壹・繧ｹ縺ｧ縲∝､画峩髢句ｧ九↓蠢・ｦ√↑讒矩逧・ｺ句ｮ溘□縺代ｒ菫晄戟縺励∪縺吶・
+## 險ｭ險域婿驥・
+- JSON 縺ｫ逶ｴ蛻怜喧縺励ｄ縺吶＞蜊倡ｴ斐↑ shape 縺ｫ縺吶ｋ
+- `pack` 縺ｧ蠢・ｦ√↑蝗譫懊→菴咲ｽｮ諠・ｱ繧剃ｿ晄戟縺吶ｋ
+- 譖匁乂縺輔・ `confidence` 縺ｨ `candidates` 縺ｫ谿九☆
+- 陦御ｽ咲ｽｮ縺ｯ Phase 1 縺ｧ縺ｯ `SourceSpan` 縺ｫ邨ｱ荳縺吶ｋ
 
-## 目的
-Phase 1 の IR は `scan` の出力として生成し、`resolve-entry` と `pack` が共有する中間表現です。  
-対象は `WPF + .NET 8` ワークスペースで、変更開始に必要な構造的事実だけを保持します。
-
-## 設計方針
-
-- JSON に直列化しやすい単純な shape にする
-- `pack` で必要な因果と位置情報を保持する
-- 曖昧さは `confidence` と `candidates` に残す
-- 行位置は Phase 1 では `SourceSpan` に統一する
-
-## ルート shape
+## 繝ｫ繝ｼ繝・shape
 
 ```json
 {
@@ -39,20 +35,17 @@ Phase 1 の IR は `scan` の出力として生成し、`resolve-entry` と `pac
 }
 ```
 
-- `startLine` は 1 以上
-- `endLine` は `startLine` 以上
-- 1 行だけの要素も `startLine == endLine` で表す
-
+- `startLine` 縺ｯ 1 莉･荳・- `endLine` 縺ｯ `startLine` 莉･荳・- 1 陦後□縺代・隕∫ｴ繧・`startLine == endLine` 縺ｧ陦ｨ縺・
 ## projectSummary
 
 ```json
 {
-  "solutionFiles": ["AssessMeister.sln"],
-  "projectFiles": ["AssessMeister.csproj"],
+  "solutionFiles": ["RealWorkspace.sln"],
+  "projectFiles": ["RealWorkspace.csproj"],
   "targetFrameworks": ["net8.0-windows"],
   "usesWpf": true,
   "entryPoints": ["App.xaml.cs", "MainWindow.xaml.cs"],
-  "rootViewModels": ["AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"]
+  "rootViewModels": ["ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"]
 }
 ```
 
@@ -60,16 +53,16 @@ Phase 1 の IR は `scan` の出力として生成し、`resolve-entry` と `pac
 
 ```json
 {
-  "path": "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml",
+  "path": "src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml",
   "kind": "xaml",
-  "project": "AssessMeister.Presentation.Wpf",
+  "project": "ReferenceWorkspace.Presentation.Wpf",
   "hash": "sha256:...",
   "lineCount": 120,
   "tags": ["view", "shell"]
 }
 ```
 
-`kind` の値:
+`kind` 縺ｮ蛟､:
 
 - `solution`
 - `project`
@@ -88,16 +81,16 @@ Phase 1 の IR は `scan` の出力として生成し、`resolve-entry` と `pac
 {
   "id": "sym-001",
   "kind": "class",
-  "qualifiedName": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
+  "qualifiedName": "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel",
   "displayName": "ShellViewModel",
-  "filePath": "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs",
+  "filePath": "src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs",
   "startLine": 52,
   "endLine": 1900,
   "tags": ["viewmodel", "shell"]
 }
 ```
 
-`kind` の値:
+`kind` 縺ｮ蛟､:
 
 - `class`
 - `method`
@@ -108,15 +101,14 @@ Phase 1 の IR は `scan` の出力として生成し、`resolve-entry` と `pac
 
 ## viewModelBindings
 
-View と ViewModel の関連を表します。
-
+View 縺ｨ ViewModel 縺ｮ髢｢騾｣繧定｡ｨ縺励∪縺吶・
 ```json
 {
-  "viewPath": "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml",
-  "viewSymbol": "AssessMeister.Presentation.Wpf.Views.MainWindow",
-  "viewModelSymbol": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
+  "viewPath": "src/ReferenceWorkspace.Presentation.Wpf/Views/MainWindow.xaml",
+  "viewSymbol": "ReferenceWorkspace.Presentation.Wpf.Views.MainWindow",
+  "viewModelSymbol": "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel",
   "bindingKind": "root-data-context",
-  "sourcePath": "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs",
+  "sourcePath": "src/ReferenceWorkspace.Presentation.Wpf/Views/MainWindow.xaml.cs",
   "sourceSpan": {
     "startLine": 8,
     "endLine": 8
@@ -126,7 +118,7 @@ View と ViewModel の関連を表します。
 }
 ```
 
-`bindingKind` の値:
+`bindingKind` 縺ｮ蛟､:
 
 - `root-data-context`
 - `view-data-context`
@@ -134,12 +126,11 @@ View と ViewModel の関連を表します。
 
 ## navigationTransitions
 
-ViewModel 内の表示更新点を表します。
-
+ViewModel 蜀・・陦ｨ遉ｺ譖ｴ譁ｰ轤ｹ繧定｡ｨ縺励∪縺吶・
 ```json
 {
-  "viewModelSymbol": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
-  "sourceFilePath": "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs",
+  "viewModelSymbol": "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel",
+  "sourceFilePath": "src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs",
   "updateMethodName": "Select",
   "selectedItemPropertyName": "SelectedItem",
   "currentPagePropertyName": "CurrentPage",
@@ -155,13 +146,13 @@ ViewModel 内の表示更新点を表します。
 
 ```json
 {
-  "viewModelSymbol": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
+  "viewModelSymbol": "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel",
   "propertyName": "OpenDraftingCommand",
   "commandType": "DelegateCommand",
-  "executeSymbol": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel.OpenDrafting",
-  "canExecuteSymbol": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel.CanOpenDrafting",
+  "executeSymbol": "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel.OpenDrafting",
+  "canExecuteSymbol": "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel.CanOpenDrafting",
   "boundViews": [
-    "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
+    "src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml"
   ]
 }
 ```
@@ -170,9 +161,9 @@ ViewModel 内の表示更新点を表します。
 
 ```json
 {
-  "callerSymbol": "AssessMeister.Presentation.Wpf.Services.DraftingWindowService.OpenDraftingWindow",
-  "serviceSymbol": "AssessMeister.Presentation.Wpf.Services.DraftingWindowService",
-  "windowSymbol": "AssessMeister.Presentation.Wpf.Views.Drafting.DraftingWindow",
+  "callerSymbol": "ReferenceWorkspace.Presentation.Wpf.Services.DraftingWindowService.OpenDraftingWindow",
+  "serviceSymbol": "ReferenceWorkspace.Presentation.Wpf.Services.DraftingWindowService",
+  "windowSymbol": "ReferenceWorkspace.Presentation.Wpf.Views.Drafting.DraftingWindow",
   "windowViewModelSymbol": null,
   "activationKind": "show-dialog",
   "ownerKind": "main-window"
@@ -183,9 +174,9 @@ ViewModel 内の表示更新点を表します。
 
 ```json
 {
-  "registrationFile": "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs",
-  "serviceType": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
-  "implementationType": "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel",
+  "registrationFile": "src/ReferenceWorkspace.Presentation.Wpf/ServiceRegistration.cs",
+  "serviceType": "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel",
+  "implementationType": "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel",
   "lifetime": "singleton",
   "sourceSpan": {
     "startLine": 10,
@@ -194,7 +185,7 @@ ViewModel 内の表示更新点を表します。
 }
 ```
 
-`lifetime` の値:
+`lifetime` 縺ｮ蛟､:
 
 - `singleton`
 - `scoped`
@@ -206,8 +197,8 @@ ViewModel 内の表示更新点を表します。
 ```json
 {
   "code": "binding.viewmodel.ambiguous",
-  "message": "ViewModel 候補が複数あります。",
-  "filePath": "src/AssessMeister.Presentation.Wpf/Views/SomeView.xaml",
+  "message": "ViewModel 蛟呵｣懊′隍・焚縺ゅｊ縺ｾ縺吶・,
+  "filePath": "src/ReferenceWorkspace.Presentation.Wpf/Views/SomeView.xaml",
   "severity": "warning",
   "candidates": [
     "A.ViewModels.SomeViewModel",
@@ -216,7 +207,7 @@ ViewModel 内の表示更新点を表します。
 }
 ```
 
-## 主な lookup key
+## 荳ｻ縺ｪ lookup key
 
 - `files`: `path`
 - `symbols`: `qualifiedName`, `filePath`, `startLine`
@@ -226,9 +217,8 @@ ViewModel 内の表示更新点を表します。
 - `windowActivations`: `callerSymbol`, `windowSymbol`
 - `serviceRegistrations`: `serviceType`, `implementationType`
 
-## Phase 1 の制約
+## Phase 1 縺ｮ蛻ｶ邏・
+- AST 縺昴・繧ゅ・縺ｯ菫晄戟縺励↑縺・- 3rd party control 蝗ｺ譛峨・隧ｳ邏ｰ謚ｽ蜃ｺ縺ｯ謇ｱ繧上↑縺・- 隍・焚陦・`ServiceRegistration` 縺ｮ蜴ｳ蟇・span 縺ｯ谺｡谿ｵ縺ｧ諡｡蠑ｵ縺吶ｋ
+- XAML 譛ｬ菴薙・ snippet 蛹悶・谺｡谿ｵ縺ｫ蝗槭☆
 
-- AST そのものは保持しない
-- 3rd party control 固有の詳細抽出は扱わない
-- 複数行 `ServiceRegistration` の厳密 span は次段で拡張する
-- XAML 本体の snippet 化は次段に回す
+

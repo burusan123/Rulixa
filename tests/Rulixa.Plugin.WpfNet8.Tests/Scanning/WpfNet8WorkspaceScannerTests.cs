@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Rulixa.Domain.Entries;
 using Rulixa.Domain.Packs;
 using Rulixa.Domain.Scanning;
@@ -12,7 +12,7 @@ namespace Rulixa.Plugin.WpfNet8.Tests.Scanning;
 public sealed class WpfNet8WorkspaceScannerTests
 {
     private static readonly string FixtureRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Fixtures", "AssessMeisterLike"));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Fixtures", "ReferenceWorkspaceLike"));
 
     [Fact]
     public async Task ScanAsync_ExtractsWpfFactsFromFixture()
@@ -47,38 +47,38 @@ public sealed class WpfNet8WorkspaceScannerTests
 
         Assert.Contains(result.Commands, command => command.PropertyName == "OpenSettingsCommand");
         Assert.Contains(result.ServiceRegistrations, registration =>
-            registration.ServiceType == "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"
+            registration.ServiceType == "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"
             && registration.Lifetime == ServiceRegistrationLifetime.Singleton
             && registration.SourceSpan.StartLine > 0
             && registration.SourceSpan.EndLine >= registration.SourceSpan.StartLine);
         Assert.Contains(result.ServiceRegistrations, registration =>
-            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.IProjectWorkspaceService"
+            registration.ServiceType == "ReferenceWorkspace.Presentation.Wpf.Services.IProjectWorkspaceService"
             && registration.Lifetime == ServiceRegistrationLifetime.Singleton
             && registration.SourceSpan.StartLine > 0
             && registration.SourceSpan.EndLine >= registration.SourceSpan.StartLine);
         Assert.Contains(result.ServiceRegistrations, registration =>
-            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.IProjectWorkspaceFlowService"
+            registration.ServiceType == "ReferenceWorkspace.Presentation.Wpf.Services.IProjectWorkspaceFlowService"
             && registration.Lifetime == ServiceRegistrationLifetime.Scoped
             && registration.SourceSpan.StartLine > 0);
         Assert.Contains(result.ServiceRegistrations, registration =>
-            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.IProjectRepository"
+            registration.ServiceType == "ReferenceWorkspace.Presentation.Wpf.Services.IProjectRepository"
             && registration.Lifetime == ServiceRegistrationLifetime.Scoped
             && registration.SourceSpan.StartLine > 0);
         Assert.Contains(result.ServiceRegistrations, registration =>
-            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.ISettingsQuery"
+            registration.ServiceType == "ReferenceWorkspace.Presentation.Wpf.Services.ISettingsQuery"
             && registration.Lifetime == ServiceRegistrationLifetime.Transient
             && registration.SourceSpan.StartLine > 0);
         Assert.Contains(result.ServiceRegistrations, registration =>
-            registration.ServiceType == "AssessMeister.Presentation.Wpf.Services.ISettingWindowService"
+            registration.ServiceType == "ReferenceWorkspace.Presentation.Wpf.Services.ISettingWindowService"
             && registration.Lifetime == ServiceRegistrationLifetime.Transient
             && registration.SourceSpan.StartLine > 0
             && registration.SourceSpan.EndLine >= registration.SourceSpan.StartLine);
         Assert.Contains(result.Symbols, symbol =>
-            symbol.QualifiedName == "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"
+            symbol.QualifiedName == "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"
             && symbol.Tags.Any(tag => tag.EndsWith("ShellViewModel.Workflow.cs", StringComparison.OrdinalIgnoreCase)));
         Assert.Contains(result.WindowActivations, activation =>
-            activation.ServiceSymbol == "AssessMeister.Presentation.Wpf.Services.SettingWindowService"
-            && activation.WindowSymbol == "AssessMeister.Presentation.Wpf.Views.SettingWindow");
+            activation.ServiceSymbol == "ReferenceWorkspace.Presentation.Wpf.Services.SettingWindowService"
+            && activation.WindowSymbol == "ReferenceWorkspace.Presentation.Wpf.Views.SettingWindow");
         Assert.Empty(result.Diagnostics);
     }
 
@@ -86,32 +86,32 @@ public sealed class WpfNet8WorkspaceScannerTests
     public async Task ExtractAsync_ForShellViewFile_UsesSourceSpansForBindingAndRegistrationSnippets()
     {
         var (scanResult, ingredients, pack) = await BuildPackAsync(
-            new Entry(EntryKind.File, "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"),
+            new Entry(EntryKind.File, "src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml"),
             new Budget(MaxFiles: 10, MaxTotalLines: 5000, MaxSnippetsPerFile: 3),
             PromoteShellViewModelToLargeFile);
 
         var selectedPaths = pack.SelectedFiles.Select(static file => file.Path).ToArray();
         var dataTemplateBindings = scanResult.ViewModelBindings
             .Where(binding =>
-                binding.ViewPath == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
+                binding.ViewPath == "src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml"
                 && binding.BindingKind == ViewModelBindingKind.DataTemplate)
             .ToArray();
 
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/App.xaml.cs", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
-        Assert.DoesNotContain("src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Views/MainWindow.xaml", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/App.xaml.cs", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
+        Assert.DoesNotContain("src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs", selectedPaths);
 
         Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs"
+            snippet.Path == "src/ReferenceWorkspace.Presentation.Wpf/Views/MainWindow.xaml.cs"
             && snippet.Reason == "root-binding-source"
             && snippet.Content.Contains("DataContext = shellViewModel;", StringComparison.Ordinal));
         Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Path == "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs"
+            snippet.Path == "src/ReferenceWorkspace.Presentation.Wpf/ServiceRegistration.cs"
             && snippet.Reason == "dependency-injection"
             && snippet.Content.Contains("services.AddSingleton<", StringComparison.Ordinal)
             && snippet.Content.Contains("ShellViewModel", StringComparison.Ordinal)
@@ -119,11 +119,11 @@ public sealed class WpfNet8WorkspaceScannerTests
             && snippet.StartLine <= 11
             && snippet.EndLine >= 13);
         Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
+            snippet.Path == "src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml"
             && snippet.Reason == "navigation-xaml-binding"
             && snippet.Content.Contains("SelectedItem=\"{Binding SelectedItem", StringComparison.Ordinal));
         Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+            snippet.Path == "src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs"
             && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
             && snippet.Anchor.Contains("Select(...)", StringComparison.Ordinal));
 
@@ -134,7 +134,7 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Contains(ingredients.Indexes, index =>
             index.Title == "View-ViewModel"
             && index.Lines.Any(line =>
-                line.Contains("MainWindow.xaml <-> AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel", StringComparison.Ordinal)));
+                line.Contains("MainWindow.xaml <-> ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel", StringComparison.Ordinal)));
         Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
             line.Contains("SelectedItem = match", StringComparison.Ordinal));
         Assert.Contains(ingredients.Indexes.SelectMany(static index => index.Lines), line =>
@@ -148,31 +148,31 @@ public sealed class WpfNet8WorkspaceScannerTests
     public async Task ExtractAsync_ForShellViewModelSymbol_ReplacesLargeFileWithinDefaultBudget()
     {
         var (_, ingredients, pack) = await BuildPackAsync(
-            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"),
             Budget.Default,
             PromoteShellViewModelToLargeFile);
 
         var selectedFiles = pack.SelectedFiles.ToArray();
         var selectedPaths = selectedFiles.Select(static file => file.Path).ToArray();
 
-        Assert.DoesNotContain(selectedPaths, path => path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs");
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/App.xaml.cs", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Views/SettingWindow.xaml", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
-        Assert.Contains("src/AssessMeister.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
+        Assert.DoesNotContain(selectedPaths, path => path == "src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs");
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml.cs", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Views/MainWindow.xaml.cs", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/App.xaml.cs", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Views/SettingWindow.xaml", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/ServiceRegistration.cs", selectedPaths);
+        Assert.Contains("src/ReferenceWorkspace.Presentation.Wpf/Common/DelegateCommand.cs", selectedPaths);
         Assert.DoesNotContain(selectedPaths, path => path.Contains("/Pages/", StringComparison.OrdinalIgnoreCase));
 
         Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml"
+            snippet.Path == "src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml"
             && snippet.Reason == "navigation-xaml-binding");
         Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Path == "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs"
+            snippet.Path == "src/ReferenceWorkspace.Presentation.Wpf/Views/MainWindow.xaml.cs"
             && snippet.Reason == "root-binding-source");
         Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Path == "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs"
+            snippet.Path == "src/ReferenceWorkspace.Presentation.Wpf/ServiceRegistration.cs"
             && snippet.Reason == "dependency-injection"
             && snippet.Content.Contains("services.AddSingleton<", StringComparison.Ordinal)
             && snippet.Content.Contains("ShellViewModel", StringComparison.Ordinal)
@@ -180,7 +180,7 @@ public sealed class WpfNet8WorkspaceScannerTests
             && snippet.StartLine <= 11
             && snippet.EndLine >= 13);
         Assert.Contains(pack.SelectedSnippets, snippet =>
-            snippet.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+            snippet.Path == "src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs"
             && snippet.Anchor.Contains("ShellViewModel(...)", StringComparison.Ordinal)
             && snippet.Anchor.Contains("Select(...)", StringComparison.Ordinal));
 
@@ -203,7 +203,7 @@ public sealed class WpfNet8WorkspaceScannerTests
     public async Task ExtractAsync_ForShellViewModelSymbol_AddsNavigationContractAndOrderedSnippets()
     {
         var (_, ingredients, pack) = await BuildPackAsync(
-            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"),
             Budget.Default,
             PromoteShellViewModelToLargeFile);
 
@@ -233,11 +233,11 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.DoesNotContain(pack.SelectedFiles, file => file.Path.EndsWith("ShellViewModel.cs", StringComparison.Ordinal));
 
         var orderedSnippetPaths = pack.SelectedSnippets.Select(static snippet => snippet.Path).ToArray();
-        var bindingIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml.cs");
-        var viewBindingIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml.cs");
-        var xamlIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml");
-        var registrationIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/ServiceRegistration.cs");
-        var navigationIndex = Array.IndexOf(orderedSnippetPaths, "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs");
+        var bindingIndex = Array.IndexOf(orderedSnippetPaths, "src/ReferenceWorkspace.Presentation.Wpf/Views/MainWindow.xaml.cs");
+        var viewBindingIndex = Array.IndexOf(orderedSnippetPaths, "src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml.cs");
+        var xamlIndex = Array.IndexOf(orderedSnippetPaths, "src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml");
+        var registrationIndex = Array.IndexOf(orderedSnippetPaths, "src/ReferenceWorkspace.Presentation.Wpf/ServiceRegistration.cs");
+        var navigationIndex = Array.IndexOf(orderedSnippetPaths, "src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs");
 
         Assert.True(bindingIndex >= 0);
         Assert.True(viewBindingIndex > bindingIndex);
@@ -258,14 +258,14 @@ public sealed class WpfNet8WorkspaceScannerTests
         Assert.Equal(ResolvedEntryKind.Unresolved, resolved.ResolvedKind);
         Assert.Contains(resolved.Candidates, candidate =>
             candidate.Kind == CandidateKind.View
-            && candidate.Path == "src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml");
+            && candidate.Path == "src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml");
         Assert.Contains(resolved.Candidates, candidate =>
             candidate.Kind == CandidateKind.ViewModel
-            && candidate.Symbol == "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
+            && candidate.Symbol == "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel");
         Assert.DoesNotContain(resolved.Candidates, candidate =>
-            candidate.Symbol == "AssessMeister.Presentation.Wpf.ViewModels.DashboardPageViewModel");
+            candidate.Symbol == "ReferenceWorkspace.Presentation.Wpf.ViewModels.DashboardPageViewModel");
         Assert.DoesNotContain(resolved.Candidates, candidate =>
-            candidate.Path == "src/AssessMeister.Presentation.Wpf/Views/MainWindow.xaml");
+            candidate.Path == "src/ReferenceWorkspace.Presentation.Wpf/Views/MainWindow.xaml");
     }
 
     [Fact]
@@ -296,13 +296,13 @@ public sealed class WpfNet8WorkspaceScannerTests
             Commands = expandedCommands,
             Files = scanResult.Files
                 .Select(file =>
-                    file.Path is "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
-                        or "src/AssessMeister.Presentation.Wpf/Services/SettingWindowService.cs"
+                    file.Path is "src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+                        or "src/ReferenceWorkspace.Presentation.Wpf/Services/SettingWindowService.cs"
                         ? file with { LineCount = 300 }
                         : file)
                 .ToArray()
         };
-        var entry = new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
+        var entry = new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel");
         var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
 
         var ingredients = await extractor.ExtractAsync(
@@ -366,14 +366,14 @@ public sealed class WpfNet8WorkspaceScannerTests
     public async Task ExtractAsync_WhenCommandUsesThisHelper_TracksHelperRouteAndSnippet()
     {
         var (_, ingredients, _) = await BuildPackAsync(
-            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"),
             Budget.Default,
             scanResult => scanResult with
             {
                 Files = scanResult.Files
                     .Select(file =>
-                        file.Path is "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
-                            or "src/AssessMeister.Presentation.Wpf/Services/SettingWindowService.cs"
+                        file.Path is "src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+                            or "src/ReferenceWorkspace.Presentation.Wpf/Services/SettingWindowService.cs"
                             ? file with { LineCount = 300 }
                             : file)
                     .ToArray()
@@ -399,9 +399,9 @@ public sealed class WpfNet8WorkspaceScannerTests
     public async Task ExtractAsync_WhenCommandCountIsBelowThreshold_EmitsSelectedAllDecisionTrace()
     {
         var (_, ingredients, _) = await BuildPackAsync(
-            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"),
             Budget.Default,
-            goal: "ライセンス通知を確認したい");
+            goal: "license settings");
 
         var trace = Assert.Single(ingredients.DecisionTraces, static decisionTrace => decisionTrace.Category == "command-selection");
         Assert.Equal("command-selection", trace.Category);
@@ -435,7 +435,7 @@ public sealed class WpfNet8WorkspaceScannerTests
                     baseCommand.BoundViews)))
             .ToArray();
         var expandedScanResult = scanResult with { Commands = expandedCommands };
-        var entry = new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel");
+        var entry = new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel");
         var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
 
         var ingredients = await extractor.ExtractAsync(
@@ -1243,7 +1243,7 @@ public sealed class WpfNet8WorkspaceScannerTests
     public async Task ExtractAsync_ForProjectGoal_AddsPhase2Indexes()
     {
         var (_, ingredients, _) = await BuildPackAsync(
-            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"),
             Budget.Default,
             goal: "project workspace overview");
 
@@ -1275,7 +1275,7 @@ public sealed class WpfNet8WorkspaceScannerTests
     public async Task ExtractAsync_ForProjectGoal_CompressesPhase2Indexes()
     {
         var (_, ingredients, _) = await BuildPackAsync(
-            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"),
             Budget.Default,
             goal: "project system understand");
 
@@ -1297,7 +1297,7 @@ public sealed class WpfNet8WorkspaceScannerTests
     public async Task ExtractAsync_ForProjectGoal_DoesNotReportPhase2UnknownsWhenSignalsExist()
     {
         var (_, ingredients, _) = await BuildPackAsync(
-            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"),
             Budget.Default,
             goal: "project workspace explain");
 
@@ -2357,11 +2357,11 @@ public sealed class WpfNet8WorkspaceScannerTests
     public async Task ExtractAsync_ForShellViewModelSymbol_IsDeterministic()
     {
         var first = await BuildPackAsync(
-            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"),
             Budget.Default,
             PromoteShellViewModelToLargeFile);
         var second = await BuildPackAsync(
-            new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            new Entry(EntryKind.Symbol, "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel"),
             Budget.Default,
             PromoteShellViewModelToLargeFile);
 
@@ -2521,7 +2521,7 @@ public sealed class WpfNet8WorkspaceScannerTests
         scanResult with
         {
             Files = scanResult.Files
-                .Select(file => file.Path == "src/AssessMeister.Presentation.Wpf/ViewModels/ShellViewModel.cs"
+                .Select(file => file.Path == "src/ReferenceWorkspace.Presentation.Wpf/ViewModels/ShellViewModel.cs"
                     ? file with { LineCount = 300 }
                     : file)
                 .ToArray()
@@ -2537,3 +2537,4 @@ public sealed class WpfNet8WorkspaceScannerTests
         string Path,
         string Content);
 }
+

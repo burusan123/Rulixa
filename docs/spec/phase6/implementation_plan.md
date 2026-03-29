@@ -1,44 +1,32 @@
-# Implementation Plan
+﻿# Implementation Plan
 
-## 実装順
+## 螳溯｣・・
+1. CI 縺九ｉ local quality gate 縺ｨ蜷後§螳溯｡檎ｵ瑚ｷｯ繧貞他縺ｹ繧九ｈ縺・↓縺吶ｋ
+2. run artifact 繧・release gate 蜷代￠縺ｫ髮・ｴ・☆繧・3. handoff quality warning 繧・summary 縺ｨ gate 縺ｫ霑ｽ蜉縺吶ｋ
+4. benchmark / telemetry 縺ｮ邯咏ｶ夊ｦｳ貂ｬ繧定ｿｽ蜉縺吶ｋ
+5. product readiness 縺ｨ release 蛻､螳壹Ν繝ｼ繝ｫ繧呈磁邯壹☆繧・
+## 譛蛻昴・繧ｹ繝ｩ繧､繧ｹ
 
-1. CI から local quality gate と同じ実行経路を呼べるようにする
-2. run artifact を release gate 向けに集約する
-3. handoff quality warning を summary と gate に追加する
-4. benchmark / telemetry の継続観測を追加する
-5. product readiness と release 判定ルールを接続する
+譛蛻昴↓逹謇九☆繧九・縺ｯ谺｡縺ｮ 3 轤ｹ縺ｫ髯仙ｮ壹☆繧九・
+- CI 逕ｨ runner 縺ｮ霑ｽ蜉
+- release gate JSON 縺ｮ謨ｴ蛯・- `summary.md` 縺ｮ handoff warning 蠑ｷ蛹・
+逅・罰縺ｯ縲￣hase 5 縺ｮ雉・肇繧呈怙繧ょｰ代↑縺・､画峩縺ｧ驕狗畑縺ｫ荵励○繧峨ｌ繧九◆繧√〒縺ゅｋ縲・
+## 繝・せ繝域婿驥・
+- existing acceptance matrix 繧堤ｶｭ謖√☆繧・- existing quality artifact tests 繧堤ｶｭ謖√☆繧・- CI runner 縺ｯ synthetic corpus 縺ｮ縺ｿ縺ｧ pass/fail 繧貞崋螳壹☆繧・- optional smoke 縺ｯ skip / fail / pass 繧・artifact 縺ｫ谿九☆
+- benchmark 蛟､縺ｯ exact match 縺ｧ縺ｯ縺ｪ縺冗ｯ・峇縺ｾ縺溘・ presence 縺ｧ遒ｺ隱阪☆繧・
+## 蜿励￠蜈･繧梧擅莉ｶ
 
-## 最初のスライス
+- CI 縺ｧ required gate 縺悟ｮ溯｡後〒縺阪ｋ
+- release gate 縺・JSON 縺ｨ markdown 縺ｧ遒ｺ隱阪〒縺阪ｋ
+- handoff warning 縺・summary 縺ｫ蜃ｺ繧・- benchmark 隕ｳ貂ｬ蛟､縺・artifact 縺ｫ谿九ｋ
+- `RealWorkspace` 縺ｨ `LegacyRealWorkspace` 縺瑚ｦｳ貂ｬ蟇ｾ雎｡縺ｨ縺励※邯ｭ謖√＆繧後ｋ
 
-最初に着手するのは次の 3 点に限定する。
+## 谺｡繝輔ぉ繝ｼ繧ｺ縺ｫ騾√ｋ繧ゅ・
 
-- CI 用 runner の追加
-- release gate JSON の整備
-- `summary.md` の handoff warning 強化
-
-理由は、Phase 5 の資産を最も少ない変更で運用に乗せられるためである。
-
-## テスト方針
-
-- existing acceptance matrix を維持する
-- existing quality artifact tests を維持する
-- CI runner は synthetic corpus のみで pass/fail を固定する
-- optional smoke は skip / fail / pass を artifact に残す
-- benchmark 値は exact match ではなく範囲または presence で確認する
-
-## 受け入れ条件
-
-- CI で required gate が実行できる
-- release gate が JSON と markdown で確認できる
-- handoff warning が summary に出る
-- benchmark 観測値が artifact に残る
-- `AssessMeister` と `AssessMeister_20260204` が観測対象として維持される
-
-## 次フェーズに送るもの
-
-- `unknown_guidance_hit_rate` の厳密自動採点
-- mode 分離
+- `unknown_guidance_hit_rate` 縺ｮ蜴ｳ蟇・・蜍墓治轤ｹ
+- mode 蛻・屬
 - deep drilldown
-- 3 hop 以上の一般探索
+- 3 hop 莉･荳翫・荳闊ｬ謗｢邏｢
 
-Phase 6 は product hardening の運用完成を主題にし、pack 自体の機能高度化は次へ送る。
+Phase 6 縺ｯ product hardening 縺ｮ驕狗畑螳梧・繧剃ｸｻ鬘後↓縺励｝ack 閾ｪ菴薙・讖溯・鬮伜ｺｦ蛹悶・谺｡縺ｸ騾√ｋ縲・
+

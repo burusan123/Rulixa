@@ -70,6 +70,7 @@ public sealed class QualityArtifactTests
     [Fact]
     public async Task ExecuteCaseAsync_ForUnavailableOptionalSmoke_RecordsSkippedStatus()
     {
+        var originalFlag = Environment.GetEnvironmentVariable(RealWorkspaceOptionalSmokeTests.EnableEnvironmentVariableName);
         var definition = new QualityCaseDefinition(
             CaseId: "missing-optional-smoke",
             CorpusName: "MissingWorkspace",
@@ -83,9 +84,18 @@ public sealed class QualityArtifactTests
             ExpectUnknownGuidance: false,
             DisallowedRepresentativeSections: []);
 
-        var result = await QualityArtifactSupport.ExecuteCaseAsync(definition);
+        try
+        {
+            Environment.SetEnvironmentVariable(RealWorkspaceOptionalSmokeTests.EnableEnvironmentVariableName, "1");
 
-        Assert.Equal("skipped", result.Status);
-        Assert.Equal("workspace-missing", result.SkipReason);
+            var result = await QualityArtifactSupport.ExecuteCaseAsync(definition);
+
+            Assert.Equal("skipped", result.Status);
+            Assert.Equal("workspace-missing", result.SkipReason);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(RealWorkspaceOptionalSmokeTests.EnableEnvironmentVariableName, originalFlag);
+        }
     }
 }

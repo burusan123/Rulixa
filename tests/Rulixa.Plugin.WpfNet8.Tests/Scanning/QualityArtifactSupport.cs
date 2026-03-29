@@ -99,11 +99,13 @@ internal static class QualityArtifactSupport
     internal static IReadOnlyList<QualityCaseDefinition> CreateOptionalSmokeCaseDefinitions() =>
     [
         new(
-            CaseId: "assessmeister-modern-shell",
-            CorpusName: "AssessMeister",
+            CaseId: "real-workspace-modern-root",
+            CorpusName: "RealWorkspace",
             WorkspaceType: "modern-real",
-            WorkspaceRoot: AssessMeisterOptionalSmokeTests.WorkspaceRoot,
-            Entry: new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel"),
+            WorkspaceRoot: RealWorkspaceOptionalSmokeTests.GetConfiguredWorkspaceRoot() ?? string.Empty,
+            Entry: new Entry(
+                EntryKind.Symbol,
+                RealWorkspaceOptionalSmokeTests.GetConfiguredRootSymbol() ?? "Configured.Root.Symbol"),
             Goal: "project",
             Tags: ["root-case", "optional-smoke"],
             RequiredFamilies: ["Drafting", "Settings", "Report/Export", "Architecture"],
@@ -111,11 +113,13 @@ internal static class QualityArtifactSupport
             ExpectUnknownGuidance: false,
             DisallowedRepresentativeSections: []),
         new(
-            CaseId: "assessmeister-modern-drafting",
-            CorpusName: "AssessMeister",
+            CaseId: "real-workspace-modern-secondary",
+            CorpusName: "RealWorkspace",
             WorkspaceType: "modern-real",
-            WorkspaceRoot: AssessMeisterOptionalSmokeTests.WorkspaceRoot,
-            Entry: new Entry(EntryKind.Symbol, "AssessMeister.Presentation.Wpf.ViewModels.Drafting.DraftingWindowViewModel"),
+            WorkspaceRoot: RealWorkspaceOptionalSmokeTests.GetConfiguredWorkspaceRoot() ?? string.Empty,
+            Entry: new Entry(
+                EntryKind.Symbol,
+                RealWorkspaceOptionalSmokeTests.GetConfiguredSecondarySymbol() ?? "Configured.Secondary.Symbol"),
             Goal: "drafting ai analyze",
             Tags: ["optional-smoke"],
             RequiredFamilies: [],
@@ -123,11 +127,13 @@ internal static class QualityArtifactSupport
             ExpectUnknownGuidance: true,
             DisallowedRepresentativeSections: []),
         new(
-            CaseId: "assessmeister-legacy-root",
-            CorpusName: "AssessMeister_20260204",
+            CaseId: "real-workspace-legacy-root",
+            CorpusName: "LegacyRealWorkspace",
             WorkspaceType: "legacy-real",
-            WorkspaceRoot: AssessMeisterLegacyOptionalSmokeTests.WorkspaceRoot,
-            Entry: new Entry(EntryKind.File, "AssessMeister/Predict3DWindow.xaml"),
+            WorkspaceRoot: LegacyRealWorkspaceOptionalSmokeTests.GetConfiguredWorkspaceRoot() ?? string.Empty,
+            Entry: new Entry(
+                EntryKind.File,
+                LegacyRealWorkspaceOptionalSmokeTests.GetConfiguredEntryPath() ?? "Configured/LegacyEntry.xaml"),
             Goal: "legacy system",
             Tags: ["root-case", "optional-smoke"],
             RequiredFamilies: ["Settings", "Report/Export"],
@@ -357,15 +363,20 @@ internal static class QualityArtifactSupport
             return "windows-only";
         }
 
-        if (!Directory.Exists(definition.WorkspaceRoot))
-        {
-            return "workspace-missing";
-        }
-
-        var flag = Environment.GetEnvironmentVariable(AssessMeisterOptionalSmokeTests.EnableEnvironmentVariableName);
+        var flag = Environment.GetEnvironmentVariable(RealWorkspaceOptionalSmokeTests.EnableEnvironmentVariableName);
         if (!string.Equals(flag, "1", StringComparison.Ordinal))
         {
             return "smoke-env-disabled";
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.WorkspaceRoot))
+        {
+            return "workspace-unconfigured";
+        }
+
+        if (!Directory.Exists(definition.WorkspaceRoot))
+        {
+            return "workspace-missing";
         }
 
         return null;

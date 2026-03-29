@@ -1,20 +1,15 @@
-# Goal-driven Expansion
+﻿# Goal-driven Expansion
 
-## 目的
+## 逶ｮ逧・
+`goal` 繧偵◆縺縺ｮ陦ｨ遉ｺ譁・〒縺ｯ縺ｪ縺上￣ack 縺ｮ螻暮幕謌ｦ逡･繧呈ｱｺ繧√ｋ蜈･蜉帙→縺励※謇ｱ縺・・Phase 2 縺ｧ縺ｯ entry 襍ｷ轤ｹ縺ｮ髢｢騾｣邂・園謚ｽ蜃ｺ縺ｫ蜉縺医～goal` 縺ｫ蠢懊§縺ｦ 2 hop 蜑榊ｾ後・蝗譫憺事繧定ｿｽ蜉縺ｧ諡ｾ縺・・
+## 蝓ｺ譛ｬ繝ｫ繝ｼ繝ｫ
 
-`goal` をただの表示文ではなく、Pack の展開戦略を決める入力として扱う。
-Phase 2 では entry 起点の関連箇所抽出に加え、`goal` に応じて 2 hop 前後の因果鎖を追加で拾う。
+- hop 縺ｯ蜴溷援 2 縺ｾ縺ｧ
+- 2 hop 繧定ｶ・∴繧句・蟶ｰ螻暮幕縺ｯ縺励↑縺・- 逶ｴ謗･霎ｿ繧後↑縺・ｴ蜷医・ `unknowns` 繧定ｿ斐☆
+- 1 hop / 2 hop 縺ｮ髢｢菫ゅ・ contract 縺ｫ譏守､ｺ縺吶ｋ
 
-## 基本ルール
-
-- hop は原則 2 まで
-- 2 hop を超える再帰展開はしない
-- 直接辿れない場合は `unknowns` を返す
-- 1 hop / 2 hop の関係は contract に明示する
-
-## 展開単位
-
-Phase 2 で扱うノード例:
+## 螻暮幕蜊倅ｽ・
+Phase 2 縺ｧ謇ｱ縺・ヮ繝ｼ繝我ｾ・
 
 - View
 - ViewModel
@@ -28,7 +23,7 @@ Phase 2 で扱うノード例:
 - External asset
 - Architecture test
 
-エッジ例:
+繧ｨ繝・ず萓・
 
 - binds-to
 - invokes
@@ -39,11 +34,11 @@ Phase 2 で扱うノード例:
 - uses-template
 - guarded-by-test
 
-## goal からの優先度付け
+## goal 縺九ｉ縺ｮ蜆ｪ蜈亥ｺｦ莉倥￠
 
 ### `system` / `understand` / `explain`
 
-優先:
+蜆ｪ蜈・
 
 - HubObject
 - Workflow
@@ -53,7 +48,7 @@ Phase 2 で扱うノード例:
 
 ### `save` / `open` / `project` / `workspace`
 
-優先:
+蜆ｪ蜈・
 
 - Workflow
 - Persistence
@@ -61,7 +56,7 @@ Phase 2 で扱うノード例:
 
 ### `drafting` / `ocr` / `ai` / `analyze`
 
-優先:
+蜆ｪ蜈・
 
 - Workflow
 - Port / Adapter
@@ -70,63 +65,45 @@ Phase 2 で扱うノード例:
 
 ### `architecture` / `layer` / `dependency`
 
-優先:
+蜆ｪ蜈・
 
 - ArchitectureTest
 - DI
 - Workflow
 
-goal に複数語がある場合は加点方式で優先度を決める。
-未知の goal では Phase 1 の section に加え、HubObject と Workflow を最低限有効化する。
+goal 縺ｫ隍・焚隱槭′縺ゅｋ蝣ｴ蜷医・蜉轤ｹ譁ｹ蠑上〒蜆ｪ蜈亥ｺｦ繧呈ｱｺ繧√ｋ縲・譛ｪ遏･縺ｮ goal 縺ｧ縺ｯ Phase 1 縺ｮ section 縺ｫ蜉縺医？ubObject 縺ｨ Workflow 繧呈怙菴朱剞譛牙柑蛹悶☆繧九・
+## 螻暮幕繧｢繝ｫ繧ｴ繝ｪ繧ｺ繝
 
-## 展開アルゴリズム
-
-1. entry から seed symbol / seed file を作る
-2. partial 統合後の symbol aggregate を使う
-3. goal ごとの優先ノード種別に従って candidate を集める
-4. 1 hop で十分な高シグナル候補を優先する
-5. 足りない場合のみ 2 hop を追加する
-6. budget を超えそうなら signal score の低い候補から落とす
-
+1. entry 縺九ｉ seed symbol / seed file 繧剃ｽ懊ｋ
+2. partial 邨ｱ蜷亥ｾ後・ symbol aggregate 繧剃ｽｿ縺・3. goal 縺斐→縺ｮ蜆ｪ蜈医ヮ繝ｼ繝臥ｨｮ蛻･縺ｫ蠕薙▲縺ｦ candidate 繧帝寔繧√ｋ
+4. 1 hop 縺ｧ蜊∝・縺ｪ鬮倥す繧ｰ繝翫Ν蛟呵｣懊ｒ蜆ｪ蜈医☆繧・5. 雜ｳ繧翫↑縺・ｴ蜷医・縺ｿ 2 hop 繧定ｿｽ蜉縺吶ｋ
+6. budget 繧定ｶ・∴縺昴≧縺ｪ繧・signal score 縺ｮ菴弱＞蛟呵｣懊°繧芽誠縺ｨ縺・
 ## unknowns
 
-Phase 2 の `unknowns` は次を満たすときに必須で出す。
-
-- 期待した hop が見つからない
-- symbol は見つかったが代表的な downstream が特定できない
-- 重要候補が複数あり絞り込めない
-- 反射、DI factory、命名不一致で追跡が止まる
-
-`unknowns` には少なくとも次を含める。
-
-- 何が未解決か
-- どこまで分かったか
-- 次に読むべきファイルまたはシンボル候補
-
+Phase 2 縺ｮ `unknowns` 縺ｯ谺｡繧呈ｺ縺溘☆縺ｨ縺阪↓蠢・医〒蜃ｺ縺吶・
+- 譛溷ｾ・＠縺・hop 縺瑚ｦ九▽縺九ｉ縺ｪ縺・- symbol 縺ｯ隕九▽縺九▲縺溘′莉｣陦ｨ逧・↑ downstream 縺檎音螳壹〒縺阪↑縺・- 驥崎ｦ∝呵｣懊′隍・焚縺ゅｊ邨槭ｊ霎ｼ繧√↑縺・- 蜿榊ｰ・．I factory縲∝多蜷堺ｸ堺ｸ閾ｴ縺ｧ霑ｽ霍｡縺梧ｭ｢縺ｾ繧・
+`unknowns` 縺ｫ縺ｯ蟆代↑縺上→繧よｬ｡繧貞性繧√ｋ縲・
+- 菴輔′譛ｪ隗｣豎ｺ縺・- 縺ｩ縺薙∪縺ｧ蛻・°縺｣縺溘°
+- 谺｡縺ｫ隱ｭ繧縺ｹ縺阪ヵ繧｡繧､繝ｫ縺ｾ縺溘・繧ｷ繝ｳ繝懊Ν蛟呵｣・
 ## confidence
 
-Pack 全体と契約ごとに confidence を持たせてよい。
+Pack 蜈ｨ菴薙→螂醍ｴ・＃縺ｨ縺ｫ confidence 繧呈戟縺溘○縺ｦ繧医＞縲・
+鬮・
 
-高:
+- 譏守､ｺ逧・↑ binding縲〉egistration縲…onstructor injection縲∫峩謗･蜻ｼ縺ｳ蜃ｺ縺・
+荳ｭ:
 
-- 明示的な binding、registration、constructor injection、直接呼び出し
+- 蜻ｽ蜷崎ｦ冗ｴ・・ hop helper縲∬ｦ冗ｴ・・繝ｼ繧ｹ蟇ｾ蠢・
+菴・
 
-中:
+- 謗ｨ螳壹・縺ｿ縲∬､・焚蛟呵｣懊≠繧翫｝artial 譛ｪ隗｣豎ｺ縲∵枚蟄怜・繝吶・繧ｹ蜿ら・
 
-- 命名規約、1 hop helper、規約ベース対応
-
-低:
-
-- 推定のみ、複数候補あり、partial 未解決、文字列ベース参照
-
-confidence が低い契約は summary 側でも推定であることが分かる表現にする。
-
-## 期待出力
-
-`AssessMeister` の `DraftingWindowViewModel` なら、少なくとも次のような因果鎖を出せる状態を目指す。
-
+confidence 縺御ｽ弱＞螂醍ｴ・・ summary 蛛ｴ縺ｧ繧よ耳螳壹〒縺ゅｋ縺薙→縺悟・縺九ｋ陦ｨ迴ｾ縺ｫ縺吶ｋ縲・
+## 譛溷ｾ・・蜉・
+`RealWorkspace` 縺ｮ `DraftingWindowViewModel` 縺ｪ繧峨∝ｰ代↑縺上→繧よｬ｡縺ｮ繧医≧縺ｪ蝗譫憺事繧貞・縺帙ｋ迥ｶ諷九ｒ逶ｮ謖・☆縲・
 - `AiAnalyzeCommand -> RunAiDiagramAnalysisAsync -> IDraftingWorkflowService`
 - `IDraftingAiDiagramAnalysisPort -> DraftingAiDiagramAnalysisPortAdapter -> DraftingAiDiagramAnalysisService`
 - `DraftingAiDiagramAnalysisService -> IDraftingWallAlgorithmExecutor -> WallAlgorithmRunner`
 
-この全鎖が出ない場合は `unknowns` に不足区間を残す。
+縺薙・蜈ｨ骼悶′蜃ｺ縺ｪ縺・ｴ蜷医・ `unknowns` 縺ｫ荳崎ｶｳ蛹ｺ髢薙ｒ谿九☆縲・
+

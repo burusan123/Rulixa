@@ -1,61 +1,45 @@
-# Root Expansion Rules
+﻿# Root Expansion Rules
 
-## 1 hop で拾う family
+## 1 hop 縺ｧ諡ｾ縺・family
 
-root seed から 1 hop では次を対象にする。
-
+root seed 縺九ｉ 1 hop 縺ｧ縺ｯ谺｡繧貞ｯｾ雎｡縺ｫ縺吶ｋ縲・
 - workflow-like service
 - hub object candidate
 - dialog / window activation service
 - sibling ViewModel
 - major service
 
-ここでの `major service` は、複数 section で証拠が重なる service を指す。
+縺薙％縺ｧ縺ｮ `major service` 縺ｯ縲∬､・焚 section 縺ｧ險ｼ諡縺碁㍾縺ｪ繧・service 繧呈欠縺吶・
+## dialog / window 縺ｮ謇ｱ縺・
+dialog / window 縺ｯ蜊倅ｽ薙〒縺ｯ section 縺ｫ譏・ｼ縺励↑縺・・谺｡縺ｮ譚｡莉ｶ繧呈ｺ縺溘☆蝣ｴ蜷医↓ system map 縺ｫ蜷ｫ繧√ｋ縲・
+- dialog / window 縺ｮ蜈医↓蛻･ ViewModel 縺ｾ縺溘・ major workflow 縺後≠繧・- root system 縺ｮ荳ｻ隕√し繝悶す繧ｹ繝・Β繧呈ｧ区・縺吶ｋ
 
-## dialog / window の扱い
-
-dialog / window は単体では section に昇格しない。
-次の条件を満たす場合に system map に含める。
-
-- dialog / window の先に別 ViewModel または major workflow がある
-- root system の主要サブシステムを構成する
-
-例:
+萓・
 
 - `DraftingWindowService -> DraftingWindowViewModel`
 - `SettingWindowService -> SettingWindow`
 
-## sibling ViewModel の扱い
-
-`ShellThreeDViewModel` のような sibling ViewModel は次の条件で system map に含める。
-
-- root ViewModel から直接構成される
-- 独立した sub-map family を持つ
-- persistence / hub object / external asset のいずれかに接続する
-
-## System-level section への昇格条件
+## sibling ViewModel 縺ｮ謇ｱ縺・
+`ShellThreeDViewModel` 縺ｮ繧医≧縺ｪ sibling ViewModel 縺ｯ谺｡縺ｮ譚｡莉ｶ縺ｧ system map 縺ｫ蜷ｫ繧√ｋ縲・
+- root ViewModel 縺九ｉ逶ｴ謗･讒区・縺輔ｌ繧・- 迢ｬ遶九＠縺・sub-map family 繧呈戟縺､
+- persistence / hub object / external asset 縺ｮ縺・★繧後°縺ｫ謗･邯壹☆繧・
+## System-level section 縺ｸ縺ｮ譏・ｼ譚｡莉ｶ
 
 ### Hub Objects
 
-- 複数 sub-map から参照される
-- または root family と sub-system family の両方で使われる
-
+- 隍・焚 sub-map 縺九ｉ蜿ら・縺輔ｌ繧・- 縺ｾ縺溘・ root family 縺ｨ sub-system family 縺ｮ荳｡譁ｹ縺ｧ菴ｿ繧上ｌ繧・
 ### Persistence
 
-- system 全体の主要永続化 family を代表できる
-- または root から sibling / sub-window を経由して使われる
-
+- system 蜈ｨ菴薙・荳ｻ隕∵ｰｸ邯壼喧 family 繧剃ｻ｣陦ｨ縺ｧ縺阪ｋ
+- 縺ｾ縺溘・ root 縺九ｉ sibling / sub-window 繧堤ｵ檎罰縺励※菴ｿ繧上ｌ繧・
 ### External Assets
 
-- sub-map ローカルではなく system の説明に効く
-- 例: settings master, report template, algorithm model
+- sub-map 繝ｭ繝ｼ繧ｫ繝ｫ縺ｧ縺ｯ縺ｪ縺・system 縺ｮ隱ｬ譏弱↓蜉ｹ縺・- 萓・ settings master, report template, algorithm model
 
-## helper / lambda 深掘りの扱い
+## helper / lambda 豺ｱ謗倥ｊ縺ｮ謇ｱ縺・
+Phase 3 縺ｧ縺ｯ helper / lambda 豺ｱ謗倥ｊ繧貞・髱｢逧・↓縺ｯ蠎・￡縺ｪ縺・・蟇ｾ雎｡縺ｯ system expansion 縺ｫ蠢・ｦ√↑蝣ｴ蜷医・縺ｿ縺ｨ縺吶ｋ縲・
+- dialog/window 縺九ｉ sub-map ViewModel 縺ｫ謗･邯壹☆繧九こ繝ｼ繧ｹ
+- root 縺九ｉ sub-system family 縺ｸ蛻ｰ驕斐☆繧九◆繧√↓荳榊庄谺縺ｪ helper 1 谿ｵ
 
-Phase 3 では helper / lambda 深掘りを全面的には広げない。
-対象は system expansion に必要な場合のみとする。
+荳闊ｬ逧・↑ deep drilldown 蠑ｷ蛹悶・蛻･ backlog 縺ｨ縺励※謇ｱ縺・・
 
-- dialog/window から sub-map ViewModel に接続するケース
-- root から sub-system family へ到達するために不可欠な helper 1 段
-
-一般的な deep drilldown 強化は別 backlog として扱う。

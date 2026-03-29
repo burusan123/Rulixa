@@ -177,10 +177,10 @@ public sealed class LocalQualityGateRunWriterTests
         var optionalSmokeCases = new[]
         {
             new QualityCaseArtifact(
-                CaseId: "assessmeister-legacy-root",
-                CorpusName: "AssessMeister_20260204",
+                CaseId: "real-workspace-legacy-root",
+                CorpusName: "LegacyRealWorkspace",
                 WorkspaceType: "legacy-real",
-                Entry: "file:AssessMeister/Predict3DWindow.xaml",
+                Entry: "file:Configured/LegacyEntry.xaml",
                 Goal: "legacy system",
                 Status: smokeStatus,
                 Tags: ["optional-smoke", "root-case"],

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using Rulixa.Cli;
 using Rulixa.Domain.Diagnostics;
@@ -10,7 +10,7 @@ namespace Rulixa.Application.Tests.Cli;
 
 public sealed class PackEvidenceBundleTests
 {
-    private const string ShellViewModelSymbol = "AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel";
+    private const string ShellViewModelSymbol = "ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel";
 
     private static readonly string FixtureRoot = Path.GetFullPath(
         Path.Combine(
@@ -21,7 +21,7 @@ public sealed class PackEvidenceBundleTests
             "..",
             "Rulixa.Plugin.WpfNet8.Tests",
             "Fixtures",
-            "AssessMeisterLike"));
+            "ReferenceWorkspaceLike"));
 
     [Fact]
     public async Task Main_WithEvidenceDir_WritesStableEvidenceBundle()
@@ -67,7 +67,7 @@ public sealed class PackEvidenceBundleTests
             var selectedSnippets = selectionSummary.GetProperty("selectedSnippets");
 
             Assert.Equal(writtenPack, firstPack);
-            Assert.Contains("\"entry\": \"symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel\"", manifest, StringComparison.Ordinal);
+            Assert.Contains("\"entry\": \"symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel\"", manifest, StringComparison.Ordinal);
             Assert.Contains("\"goal\": \"project\"", manifest, StringComparison.Ordinal);
             Assert.Contains(contracts.EnumerateArray(), element =>
                 element.GetProperty("title").GetString() == "OpenSettingsCommand");
@@ -177,3 +177,4 @@ public sealed class PackEvidenceBundleTests
         return options;
     }
 }
+

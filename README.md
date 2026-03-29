@@ -1,102 +1,77 @@
 # Rulixa
 
-`Rulixa` は、設計知・依存・制約・安全要件を継続生成し、AI 入力を正規化し、PR レビューや監査に使える成果物へ変換するためのローカル基盤です。
+`Rulixa` は、WPF / .NET ワークスペースから高密度な Context Pack を生成するツールです。  
+目的は全文検索の代替ではなく、LLM や人間が短いコンテキストで正しく理解を始められる system map を返すことです。
 
-現在の Phase 1 では、その具体攻略対象として `Windows` 上の `WPF + .NET 8` アプリケーションを扱い、`Contracts`、`Index`、`Selected Files` を含む Context Pack を `CLI` と `Codex Plugin` から生成できます。
+## できること
 
-## 製品の中心価値
+- `entry=file` と `entry=symbol` の 2 方式で pack を生成
+- root ViewModel や root XAML から system map を圧縮して返す
+- `unknowns` と next candidates で次に掘る候補を案内
+- evidence bundle と quality gate artifact を生成
+- Codex plugin から `pack` を呼び出し可能
 
-- AI に渡す入力を決定的に正規化する
-- PR レビューに必要な契約と依存を差分で読めるようにする
-- 監査証跡として成果物を継続生成する
-- その一部として Context Pack を生成する
-
-## Phase 1 の到達点
-
-- `entry=file` と `entry=symbol` の両方で Context Pack を生成できます。
-- 主対象は `AssessMeister` の Shell 導線です。
-- `symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel` から、Shell 導線の必須ファイルを既定 budget 内で選定できます。
-- `file:src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml` からでも、`ShellViewModel`、`MainWindow`、起動経路、DI 登録まで辿って Pack を組み立てられます。
-- `Pages/*` の `DataTemplate` 由来 ViewModel は、`symbol` 起点の既定 Pack では二次文脈として落とします。
-- `SelectedItem` と `CurrentPage` の binding だけでなく、`CurrentPage = item.PageViewModel` や `SelectedItem = match` のような ViewModel 側更新点も Pack に含めます。
-- `scan` は `publish/*` や `*_wpftmp.csproj` のような生成物を除外し、決定性を崩すノイズを抑えます。
-
-## プロジェクト構成
-
-- `src/Rulixa.Domain`
-  ドメイン型、Pack 選定ルール、IR の中核型
-- `src/Rulixa.Application`
-  ユースケースとポート
-- `src/Rulixa.Infrastructure`
-  ファイルシステム、レンダリング、entry 解決支援
-- `src/Rulixa.Plugin.WpfNet8`
-  `WPF + .NET 8` 固有の走査と契約抽出
-- `src/Rulixa.Cli`
-  `scan`、`resolve-entry`、`pack` を提供する CLI
-
-## CLI
-
-現在の主要コマンドは次の 4 つです。
+## 主なコマンド
 
 - `scan`
 - `resolve-entry`
 - `pack`
 - `compare-evidence`
 
-`scan` と `resolve-entry` の JSON 出力は、Phase 1 仕様に合わせて lower camel のプロパティ名と仕様トークンを使います。
-例えば `bindingKind` は `root-data-context`、`lifetime` は `singleton`、`generatedAtUtc` は走査対象の最終更新時刻に基づく決定的な UTC 値です。
-`pack` は `--evidence-dir <path>` を付けると、`manifest.json`、`scan.json`、`resolved-entry.json`、`pack.md` を同一 bundle として保存できます。
-同じ `workspace + generatedAtUtc + entry + goal + budget` なら同じ bundle 名になり、内容差分がある場合だけ `__r2` 以降の revision directory に退避します。
-`manifest.json` には command 詳細化に対する `goal` 根拠を `decisionTraces` として保存し、`compare-evidence` でその差分を比較できます。
+## 例
 
-### 例: file entry
+### file entry
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
-  --workspace D:\C#\AssessMeister `
-  --entry file:src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml `
-  --goal "Shell 画面に新しいページを追加したい"
+  --workspace <target-workspace> `
+  --entry file:src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml `
+  --goal "Shell 画面の workflow と persistence map を理解する"
 ```
 
-### 例: symbol entry
+### symbol entry
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
-  --workspace D:\C#\AssessMeister `
-  --entry symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "Shell 画面に新しいページを追加したい"
+  --workspace <target-workspace> `
+  --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
+  --goal "システム全体の構造を理解する"
 ```
 
-### 例: evidence bundle を残しながら pack する
+### evidence bundle を保存
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
-  --workspace D:\C#\AssessMeister `
-  --entry symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel `
+  --workspace <target-workspace> `
+  --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
   --goal "project" `
   --evidence-dir artifacts\evidence
 ```
 
-### 例: 2 つの evidence bundle を比較する
+### evidence bundle を比較
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- compare-evidence `
-  --base artifacts\evidence\20260328T0820594860279Z-symbol-assessmeister-presentati-1147cb49a974 `
-  --target artifacts\evidence\20260328T0820594860279Z-symbol-assessmeister-presentati-579ae2573c32
+  --base artifacts\evidence\<base-bundle> `
+  --target artifacts\evidence\<target-bundle>
 ```
 
-## Codex Plugin
+## リポジトリ構成
 
-repo-local の Codex Plugin を `plugins/rulixa` に配置しています。
-この plugin は `Rulixa.Cli` の Phase 1 `pack` を最短導線で呼び出すためのもので、Codex から Context Pack を作る入口として使います。
-現在の plugin が直接担う主導線は `pack` で、`scan` と `resolve-entry` は CLI 側の支援コマンドとして扱います。
-
-- plugin root: `plugins/rulixa`
-- marketplace: `.agents/plugins/marketplace.json`
-- 主 skill: `plugins/rulixa/skills/pack/SKILL.md`
+- `src/Rulixa.Domain`
+- `src/Rulixa.Application`
+- `src/Rulixa.Infrastructure`
+- `src/Rulixa.Plugin.WpfNet8`
+- `src/Rulixa.Cli`
+- `plugins/rulixa`
 
 ## ドキュメント
 
-- [全体仕様](/D:/C#/Rulixa/docs/project_full_spec.md)
-- [背景整理](/D:/C#/Rulixa/docs/polaris.md)
-- [Phase 1 仕様](/D:/C#/Rulixa/docs/spec/phase1/README.md)
+- [全体仕様](/D:/C%23/Rulixa/docs/project_full_spec.md)
+- [Product Readiness](/D:/C%23/Rulixa/docs/product-readiness.md)
+- [Phase 1](/D:/C%23/Rulixa/docs/spec/phase1/README.md)
+- [Phase 2](/D:/C%23/Rulixa/docs/spec/phase2/README.md)
+- [Phase 3](/D:/C%23/Rulixa/docs/spec/phase3/README.md)
+- [Phase 4](/D:/C%23/Rulixa/docs/spec/phase4/README.md)
+- [Phase 5](/D:/C%23/Rulixa/docs/spec/phase5/README.md)
+- [Phase 6](/D:/C%23/Rulixa/docs/spec/phase6/README.md)

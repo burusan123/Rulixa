@@ -30,17 +30,17 @@ $runId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffffffZ')
 
 $originalOutputRoot = $env:RULIXA_LOCAL_QUALITY_OUTPUT_ROOT
 $originalRunId = $env:RULIXA_LOCAL_QUALITY_RUN_ID
-$originalSmoke = $env:RULIXA_RUN_ASSESSMEISTER_SMOKE
+$originalSmoke = $env:RULIXA_RUN_OPTIONAL_SMOKE
 
 try {
     $env:RULIXA_LOCAL_QUALITY_OUTPUT_ROOT = $qualityRoot
     $env:RULIXA_LOCAL_QUALITY_RUN_ID = $runId
 
     if ($IncludeOptionalSmoke) {
-        $env:RULIXA_RUN_ASSESSMEISTER_SMOKE = '1'
+        $env:RULIXA_RUN_OPTIONAL_SMOKE = '1'
     }
     else {
-        Remove-Item Env:RULIXA_RUN_ASSESSMEISTER_SMOKE -ErrorAction SilentlyContinue
+        Remove-Item Env:RULIXA_RUN_OPTIONAL_SMOKE -ErrorAction SilentlyContinue
     }
 
     Push-Location $repoRoot
@@ -65,7 +65,7 @@ try {
             '.\tests\Rulixa.Plugin.WpfNet8.Tests\Rulixa.Plugin.WpfNet8.Tests.csproj',
             '--no-build',
             '--filter',
-            'FullyQualifiedName~AssessMeisterOptionalSmokeTests|FullyQualifiedName~AssessMeisterLegacyOptionalSmokeTests')
+            'FullyQualifiedName~RealWorkspaceOptionalSmokeTests|FullyQualifiedName~LegacyRealWorkspaceOptionalSmokeTests')
         if ($optionalSmokeExitCode -ne 0) {
             Write-Warning 'Optional smoke tests failed. They remain observation-only and do not change gate result.'
         }
@@ -104,9 +104,9 @@ finally {
     }
 
     if ($null -ne $originalSmoke) {
-        $env:RULIXA_RUN_ASSESSMEISTER_SMOKE = $originalSmoke
+        $env:RULIXA_RUN_OPTIONAL_SMOKE = $originalSmoke
     }
     else {
-        Remove-Item Env:RULIXA_RUN_ASSESSMEISTER_SMOKE -ErrorAction SilentlyContinue
+        Remove-Item Env:RULIXA_RUN_OPTIONAL_SMOKE -ErrorAction SilentlyContinue
     }
 }

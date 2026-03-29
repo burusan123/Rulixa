@@ -1,10 +1,8 @@
-# Benchmark and Telemetry
+﻿# Benchmark and Telemetry
 
-## 目的
-
-`Rulixa` の品質を「通る / 落ちる」だけでなく、速度と圧縮品質の両面で継続観測できるようにする。
-
-## 継続観測する値
+## 逶ｮ逧・
+`Rulixa` 縺ｮ蜩∬ｳｪ繧偵碁壹ｋ / 關ｽ縺｡繧九阪□縺代〒縺ｪ縺上・溷ｺｦ縺ｨ蝨ｧ邵ｮ蜩∬ｳｪ縺ｮ荳｡髱｢縺ｧ邯咏ｶ夊ｦｳ貂ｬ縺ｧ縺阪ｋ繧医≧縺ｫ縺吶ｋ縲・
+## 邯咏ｶ夊ｦｳ貂ｬ縺吶ｋ蛟､
 
 - `first_useful_map_time_ms`
 - `representative_chain_count`
@@ -13,40 +11,31 @@
 - `unknown_guidance_family_count`
 - `degraded_reason_count`
 
-## ベンチマーク区分
-
+## 繝吶Φ繝√・繝ｼ繧ｯ蛹ｺ蛻・
 ### Synthetic benchmark
-- 小さい corpus
+- 蟆上＆縺・corpus
 - deterministic
-- CI で毎回実行可能
+- CI 縺ｧ豈主屓螳溯｡悟庄閭ｽ
 
 ### Real workspace benchmark
-- `D:\C#\AssessMeister`
-- `D:\C#\AssessMeister_20260204`
+- `<modern-real-workspace>`
+- `<legacy-real-workspace>`
 
-この区分はローカルまたは専用 runner で実行し、観測値として保存する。
+縺薙・蛹ｺ蛻・・繝ｭ繝ｼ繧ｫ繝ｫ縺ｾ縺溘・蟆ら畑 runner 縺ｧ螳溯｡後＠縲∬ｦｳ貂ｬ蛟､縺ｨ縺励※菫晏ｭ倥☆繧九・
+## 騾陦悟愛螳・
+- `first_useful_map_time_ms` 縺ｮ螟ｧ蟷・が蛹・- representative chain 縺ｮ諤･貂・- degraded reason 縺ｮ諤･蠅・- unknown guidance family 縺ｮ豸亥､ｱ
 
-## 退行判定
+縺薙ｌ繧峨・ warning 縺ｾ縺溘・ fail 縺ｮ蛟呵｣懊→縺励※謇ｱ縺・・ 
+髢ｾ蛟､縺ｯ Phase 6 蛻晄悄縺ｧ縺ｯ邱ｩ繧√↓險ｭ螳壹＠縲・°逕ｨ縺励↑縺後ｉ隱ｿ謨ｴ縺吶ｋ縲・
+## 陦ｨ遉ｺ
 
-- `first_useful_map_time_ms` の大幅悪化
-- representative chain の急減
-- degraded reason の急増
-- unknown guidance family の消失
+`summary.md` 縺ｫ縺ｯ莉･荳九ｒ蝗ｺ螳夊｡ｨ遉ｺ縺吶ｋ縲・
+- representative chain 邱乗焚
+- unknown guidance family 荳隕ｧ
+- next candidate 荳贋ｽ・- degraded diagnostic / degraded reason 莉ｶ謨ｰ
+- first useful map time 縺ｮ莉｣陦ｨ蛟､
 
-これらは warning または fail の候補として扱う。  
-閾値は Phase 6 初期では緩めに設定し、運用しながら調整する。
+## 菴咲ｽｮ縺･縺・
+benchmark 縺ｯ諤ｧ閭ｽ譛驕ｩ蛹悶◎縺ｮ繧ゅ・縺ｧ縺ｯ縺ｪ縺上・ 
+縲御ｻ翫・螟画峩縺ｧ product hardening 繧貞｣翫＠縺ｦ縺・↑縺・°縲阪ｒ隕九ｋ隕ｳ貂ｬ蝓ｺ逶､縺ｨ縺励※謇ｱ縺・・
 
-## 表示
-
-`summary.md` には以下を固定表示する。
-
-- representative chain 総数
-- unknown guidance family 一覧
-- next candidate 上位
-- degraded diagnostic / degraded reason 件数
-- first useful map time の代表値
-
-## 位置づけ
-
-benchmark は性能最適化そのものではなく、  
-「今の変更で product hardening を壊していないか」を見る観測基盤として扱う。

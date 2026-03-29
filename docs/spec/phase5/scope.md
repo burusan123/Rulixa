@@ -1,23 +1,15 @@
-# Scope
+﻿# Scope
 
 ## In Scope
 
-- WPF + .NET workspace に対する compatibility coverage の拡張
-- acceptance corpus の整備
-- KPI / quality gate の定義と測定導線
-- degraded pack / unknown guidance / diagnostics の品質改善
-- compare-evidence を product validation に使うための差分観点整理
-- `Rulixa -> 全文検索` handoff quality の明文化
-
+- WPF + .NET workspace 縺ｫ蟇ｾ縺吶ｋ compatibility coverage 縺ｮ諡｡蠑ｵ
+- acceptance corpus 縺ｮ謨ｴ蛯・- KPI / quality gate 縺ｮ螳夂ｾｩ縺ｨ貂ｬ螳壼ｰ守ｷ・- degraded pack / unknown guidance / diagnostics 縺ｮ蜩∬ｳｪ謾ｹ蝟・- compare-evidence 繧・product validation 縺ｫ菴ｿ縺・◆繧√・蟾ｮ蛻・ｦｳ轤ｹ謨ｴ逅・- `Rulixa -> 蜈ｨ譁・､懃ｴ｢` handoff quality 縺ｮ譏取枚蛹・
 ## Out of Scope
 
-- 新しい public CLI command の追加
-- `ContextPack` / evidence manifest の破壊的変更
-- WPF 以外の UI framework 対応
-- 3 hop 以上の一般探索
-- 全文検索代替を目指す recall 最大化
-- `map/drilldown` mode 分離の実装
-- 汎用 LSP / IDE integration
+- 譁ｰ縺励＞ public CLI command 縺ｮ霑ｽ蜉
+- `ContextPack` / evidence manifest 縺ｮ遐ｴ螢顔噪螟画峩
+- WPF 莉･螟悶・ UI framework 蟇ｾ蠢・- 3 hop 莉･荳翫・荳闊ｬ謗｢邏｢
+- 蜈ｨ譁・､懃ｴ｢莉｣譖ｿ繧堤岼謖・☆ recall 譛螟ｧ蛹・- `map/drilldown` mode 蛻・屬縺ｮ螳溯｣・- 豎守畑 LSP / IDE integration
 
 ## Priorities
 
@@ -29,6 +21,7 @@
 
 ## Non-Goals
 
-- 最短で詳細 drilldown を増やすこと
-- すべての workspace を完全理解できるようにすること
-- pack 本文の件数を増やすこと自体
+- 譛遏ｭ縺ｧ隧ｳ邏ｰ drilldown 繧貞｢励ｄ縺吶％縺ｨ
+- 縺吶∋縺ｦ縺ｮ workspace 繧貞ｮ悟・逅・ｧ｣縺ｧ縺阪ｋ繧医≧縺ｫ縺吶ｋ縺薙→
+- pack 譛ｬ譁・・莉ｶ謨ｰ繧貞｢励ｄ縺吶％縺ｨ閾ｪ菴・
+

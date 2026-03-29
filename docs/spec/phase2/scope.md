@@ -1,55 +1,39 @@
-# Phase 2 スコープ
+﻿# Phase 2 繧ｹ繧ｳ繝ｼ繝・
+## 逶ｮ逧・
+Phase 2 縺ｮ逶ｮ逧・・縲～pack` 繧偵悟・蜿｣縺ｮ隱ｬ譏弱阪°繧峨後す繧ｹ繝・Β逅・ｧ｣縺ｮ縺溘ａ縺ｮ譛遏ｭ繝槭ャ繝励阪∈蠑ｷ蛹悶☆繧九％縺ｨ縺ｫ縺ゅｋ縲・蟇ｾ雎｡縺ｯ縲∝ｰ代↑縺・ヨ繝ｼ繧ｯ繝ｳ縺ｧ LLM 縺梧ｬ｡縺ｮ謗ｨ隲悶ｒ騾ｲ繧√ｉ繧後ｋ縺薙→繧帝㍾隕悶＠縺溯ｨｭ險域隼蝟・〒縺ゅｋ縲・
+## 隗｣豎ｺ縺励◆縺・撫鬘・
+Phase 1 縺ｮ `pack` 縺ｯ谺｡縺ｮ蝠城｡後ｒ谿九＠縺ｦ縺・ｋ縲・
+- 蜈･蜿｣縺九ｉ 1 hop 蜈医∪縺ｧ縺ｯ蠑ｷ縺・′縲∝ｮ溘Θ繝ｼ繧ｹ繧ｱ繝ｼ繧ｹ繧・ｰｸ邯壼喧蠅・阜縺ｾ縺ｧ縺ｮ豬√ｌ縺瑚埋縺・- partial class 縺ｫ蛻・牡縺輔ｌ縺溷梛縺ｮ莉｣陦ｨ繝輔ぃ繧､繝ｫ縺縺代ｒ隕九※蜈ｨ菴薙ｒ隱､隱阪＠繧・☆縺・- goal 縺後後す繧ｹ繝・Β逅・ｧ｣縲阪〒繧・UI 蟇・ｊ section 縺ｫ蛛上ｊ繧・☆縺・- 豺ｱ謗倥ｊ荳崎ｶｳ縺ｧ繧・`unknowns` 縺檎ｩｺ縺ｫ縺ｪ繧翫ｄ縺吶＞
+- 縲梧ｬ｡縺ｫ縺ｩ縺薙ｒ謗倥ｋ縺ｹ縺阪°縲阪′ Pack 縺九ｉ蛻・°繧翫↓縺上＞
 
-## 目的
+## Phase 2 縺ｫ蜷ｫ繧√ｋ繧ゅ・
 
-Phase 2 の目的は、`pack` を「入口の説明」から「システム理解のための最短マップ」へ強化することにある。
-対象は、少ないトークンで LLM が次の推論を進められることを重視した設計改善である。
-
-## 解決したい問題
-
-Phase 1 の `pack` は次の問題を残している。
-
-- 入口から 1 hop 先までは強いが、実ユースケースや永続化境界までの流れが薄い
-- partial class に分割された型の代表ファイルだけを見て全体を誤認しやすい
-- goal が「システム理解」でも UI 寄り section に偏りやすい
-- 深掘り不足でも `unknowns` が空になりやすい
-- 「次にどこを掘るべきか」が Pack から分かりにくい
-
-## Phase 2 に含めるもの
-
-- `goal` に応じて関連ノードを 2 hop 前後で展開する仕組み
-- partial 宣言を 1 シンボルとして束ねる仕組み
-- 新しい高シグナル section builder
+- `goal` 縺ｫ蠢懊§縺ｦ髢｢騾｣繝弱・繝峨ｒ 2 hop 蜑榊ｾ後〒螻暮幕縺吶ｋ莉慕ｵ・∩
+- partial 螳｣險繧・1 繧ｷ繝ｳ繝懊Ν縺ｨ縺励※譚溘・繧倶ｻ慕ｵ・∩
+- 譁ｰ縺励＞鬮倥す繧ｰ繝翫Ν section builder
   - Workflow
   - Persistence
   - ExternalAsset
   - ArchitectureTest
   - HubObject
-- `unknowns` と `confidence` の再定義
-- `pack` 出力の優先度付け改善
-- `AssessMeister` を使った smoke / fixture / acceptance の更新
+- `unknowns` 縺ｨ `confidence` 縺ｮ蜀榊ｮ夂ｾｩ
+- `pack` 蜃ｺ蜉帙・蜆ｪ蜈亥ｺｦ莉倥￠謾ｹ蝟・- `RealWorkspace` 繧剃ｽｿ縺｣縺・smoke / fixture / acceptance 縺ｮ譖ｴ譁ｰ
 
-## Phase 2 に含めないもの
+## Phase 2 縺ｫ蜷ｫ繧√↑縺・ｂ縺ｮ
 
-- 汎用コード検索エンジン化
-- 無制限再帰の call graph 展開
-- Roslyn ベースの完全な interprocedural analysis
-- LLM 自体による要約生成の埋め込み
-- WPF 以外の新規 plugin 対応
-- 既存 `scan` IR の全面刷新
+- 豎守畑繧ｳ繝ｼ繝画､懃ｴ｢繧ｨ繝ｳ繧ｸ繝ｳ蛹・- 辟｡蛻ｶ髯仙・蟶ｰ縺ｮ call graph 螻暮幕
+- Roslyn 繝吶・繧ｹ縺ｮ螳悟・縺ｪ interprocedural analysis
+- LLM 閾ｪ菴薙↓繧医ｋ隕∫ｴ・函謌舌・蝓九ａ霎ｼ縺ｿ
+- WPF 莉･螟悶・譁ｰ隕・plugin 蟇ｾ蠢・- 譌｢蟄・`scan` IR 縺ｮ蜈ｨ髱｢蛻ｷ譁ｰ
 
-## 成功条件
+## 謌仙粥譚｡莉ｶ
 
-- `ShellViewModel` の pack で、起動経路だけでなく `ProjectDocument`、Repository、設定、レポート出力まで見通せる
-- `DraftingWindowViewModel` の pack で、少なくとも `Workflow -> PortAdapter -> Service -> WallAlgorithm` の主因果鎖が出る
-- partial class の入口がどの `.cs` に resolve されても、同じ全体像が得られる
-- 未解決箇所があるときは `unknowns` に明示され、次に読むべき候補ファイルが出る
-- 追加 section が budget を大きく壊さず、Phase 1 と同等の実行速度感を大きく損なわない
+- `ShellViewModel` 縺ｮ pack 縺ｧ縲∬ｵｷ蜍慕ｵ瑚ｷｯ縺縺代〒縺ｪ縺・`ProjectDocument`縲ヽepository縲∬ｨｭ螳壹√Ξ繝昴・繝亥・蜉帙∪縺ｧ隕矩壹○繧・- `DraftingWindowViewModel` 縺ｮ pack 縺ｧ縲∝ｰ代↑縺上→繧・`Workflow -> PortAdapter -> Service -> WallAlgorithm` 縺ｮ荳ｻ蝗譫憺事縺悟・繧・- partial class 縺ｮ蜈･蜿｣縺後←縺ｮ `.cs` 縺ｫ resolve 縺輔ｌ縺ｦ繧ゅ∝酔縺伜・菴灘ワ縺悟ｾ励ｉ繧後ｋ
+- 譛ｪ隗｣豎ｺ邂・園縺後≠繧九→縺阪・ `unknowns` 縺ｫ譏守､ｺ縺輔ｌ縲∵ｬ｡縺ｫ隱ｭ繧縺ｹ縺榊呵｣懊ヵ繧｡繧､繝ｫ縺悟・繧・- 霑ｽ蜉 section 縺・budget 繧貞､ｧ縺阪￥螢翫＆縺壹￣hase 1 縺ｨ蜷檎ｭ峨・螳溯｡碁溷ｺｦ諢溘ｒ螟ｧ縺阪￥謳阪↑繧上↑縺・
+## Phase 2 縺ｮ萓｡蛟､謖・ｨ・
+- `pack` 1 蝗槭〒蠕励ｉ繧後ｋ鬮倥す繧ｰ繝翫Ν螂醍ｴ・焚
+- `unknowns` 縺ｮ螯･蠖捺ｧ
+- `selected files` 縺ｮ邏榊ｾ玲─
+- 蜷後§ entry 縺ｫ蟇ｾ縺吶ｋ蜀咲樟諤ｧ
+- 蜈ｨ譁・､懃ｴ｢縺ｪ縺励〒繧よｬ｡縺ｮ謗｢邏｢譁ｹ驥昴′遶九▽蜑ｲ蜷・
 
-## Phase 2 の価値指標
-
-- `pack` 1 回で得られる高シグナル契約数
-- `unknowns` の妥当性
-- `selected files` の納得感
-- 同じ entry に対する再現性
-- 全文検索なしでも次の探索方針が立つ割合
