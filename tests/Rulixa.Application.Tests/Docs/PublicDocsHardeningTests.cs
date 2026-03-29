@@ -47,6 +47,7 @@ public sealed class PublicDocsHardeningTests
         using var document = JsonDocument.Parse(json);
         Assert.Equal("rulixa", document.RootElement.GetProperty("name").GetString());
         Assert.Equal("Rulixa", document.RootElement.GetProperty("interface").GetProperty("displayName").GetString());
+        Assert.Contains("render-human", document.RootElement.GetProperty("interface").GetProperty("longDescription").GetString(), StringComparison.Ordinal);
     }
 
     private static IEnumerable<string> EnumeratePublicFacingFiles()

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Rulixa.Application.HumanOutputs;
 using Rulixa.Application.Ports;
 using Rulixa.Application.UseCases;
 using Rulixa.Domain.Entries;
@@ -36,6 +37,7 @@ internal static class Program
             var entryResolver = new ScanBackedEntryResolver();
             var contractExtractor = new WpfNet8ContractExtractor(workspaceFileSystem);
             var renderer = new MarkdownContextPackRenderer();
+            var humanOutputRenderer = new HumanOutputMarkdownRenderer();
             var evidenceBundleWriter = new EvidenceBundleWriter(JsonOptions);
             var evidenceBundleReader = new EvidenceBundleReader(JsonOptions);
             var evidenceBundleDiffRenderer = new EvidenceBundleDiffRenderer();
@@ -43,12 +45,14 @@ internal static class Program
             var scanWorkspaceUseCase = new ScanWorkspaceUseCase(workspaceScanner);
             var resolveEntryUseCase = new ResolveEntryUseCase(entryResolver);
             var buildContextPackUseCase = new BuildContextPackUseCase(contractExtractor);
+            var renderHumanOutputUseCase = new RenderHumanOutputUseCase(humanOutputRenderer);
 
             return args[0].ToLowerInvariant() switch
             {
                 "scan" => await RunScanAsync(args[1..], scanWorkspaceUseCase).ConfigureAwait(false),
                 "resolve-entry" => await RunResolveEntryAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase).ConfigureAwait(false),
                 "pack" => await RunPackAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase, buildContextPackUseCase, renderer, evidenceBundleWriter).ConfigureAwait(false),
+                "render-human" => await RunRenderHumanAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase, buildContextPackUseCase, renderer, renderHumanOutputUseCase, evidenceBundleWriter).ConfigureAwait(false),
                 "compare-evidence" => await RunCompareEvidenceAsync(args[1..], evidenceBundleReader, evidenceBundleDiffRenderer).ConfigureAwait(false),
                 _ => Fail(CliMessages.UnknownCommand(args[0]))
             };
@@ -126,6 +130,58 @@ internal static class Program
         return exitCode;
     }
 
+    private static async Task<int> RunRenderHumanAsync(
+        string[] args,
+        ScanWorkspaceUseCase scanUseCase,
+        ResolveEntryUseCase resolveUseCase,
+        BuildContextPackUseCase packUseCase,
+        IContextPackRenderer packRenderer,
+        RenderHumanOutputUseCase renderHumanOutputUseCase,
+        EvidenceBundleWriter evidenceBundleWriter)
+    {
+        var workspace = GetOption(args, "--workspace") ?? Directory.GetCurrentDirectory();
+        var entryText = GetRequiredOption(args, "--entry");
+        var goal = GetRequiredOption(args, "--goal");
+        var mode = ParseHumanOutputMode(GetRequiredOption(args, "--mode"));
+        var outputPath = GetOption(args, "--out");
+        var evidenceDirectory = GetOption(args, "--evidence-dir");
+
+        var scanResult = await scanUseCase.ExecuteAsync(workspace).ConfigureAwait(false);
+        var entry = Entry.Parse(entryText);
+        var resolvedEntry = await resolveUseCase.ExecuteAsync(entry, scanResult).ConfigureAwait(false);
+        var contextPack = await packUseCase.ExecuteAsync(
+                workspace,
+                scanResult,
+                entry,
+                resolvedEntry,
+                goal,
+                Budget.Default)
+            .ConfigureAwait(false);
+
+        string? writtenEvidenceDirectory = null;
+        if (!string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            var packMarkdown = packRenderer.Render(contextPack);
+            writtenEvidenceDirectory = await evidenceBundleWriter.WriteAsync(
+                    evidenceDirectory,
+                    workspace,
+                    Budget.Default,
+                    scanResult,
+                    resolvedEntry,
+                    contextPack,
+                    packMarkdown)
+                .ConfigureAwait(false);
+            Console.Error.WriteLine(CliMessages.EvidenceWritten(writtenEvidenceDirectory));
+        }
+
+        var markdown = renderHumanOutputUseCase.Execute(
+            contextPack,
+            scanResult,
+            mode,
+            new HumanOutputRenderOptions(writtenEvidenceDirectory));
+        return await WriteOutputAsync(markdown, outputPath).ConfigureAwait(false);
+    }
+
     private static async Task<int> RunCompareEvidenceAsync(
         string[] args,
         EvidenceBundleReader evidenceBundleReader,
@@ -162,6 +218,16 @@ internal static class Program
     {
         var rawValue = GetOption(args, optionName);
         return int.TryParse(rawValue, out var parsed) ? parsed : defaultValue;
+    }
+
+    private static HumanOutputMode ParseHumanOutputMode(string modeText)
+    {
+        if (Enum.TryParse<HumanOutputMode>(modeText, ignoreCase: true, out var mode))
+        {
+            return mode;
+        }
+
+        throw new ArgumentException($"--mode には review / audit / knowledge のいずれかを指定してください: {modeText}");
     }
 
     private static async Task<int> WriteOutputAsync(string content, string? outputPath)

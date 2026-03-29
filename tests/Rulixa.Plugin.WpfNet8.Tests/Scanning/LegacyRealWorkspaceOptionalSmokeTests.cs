@@ -1,4 +1,5 @@
 using Rulixa.Application.UseCases;
+using Rulixa.Application.HumanOutputs;
 using Rulixa.Domain.Diagnostics;
 using Rulixa.Domain.Entries;
 using Rulixa.Domain.Packs;
@@ -79,6 +80,40 @@ public sealed class LegacyRealWorkspaceOptionalSmokeTests
         {
             Assert.Contains(entryFileName, markdown, StringComparison.Ordinal);
         }
+    }
+
+    [OptionalLegacyRealWorkspaceFact]
+    public async Task RenderHuman_ForConfiguredLegacyEntry_ProducesAuditSnapshot()
+    {
+        var workspaceRoot = GetRequiredEnvironmentVariable(WorkspaceRootEnvironmentVariableName);
+        var entryPath = GetRequiredEnvironmentVariable(EntryPathEnvironmentVariableName);
+
+        var fileSystem = new WorkspaceFileSystem();
+        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+        var resolver = new ScanBackedEntryResolver();
+        var extractor = new WpfNet8ContractExtractor(fileSystem);
+        var buildPackUseCase = new BuildContextPackUseCase(extractor);
+        var renderHumanOutputUseCase = new RenderHumanOutputUseCase(new HumanOutputMarkdownRenderer());
+
+        var entry = new Entry(EntryKind.File, entryPath);
+        var scanResult = await scanner.ScanAsync(workspaceRoot);
+        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
+        var pack = await buildPackUseCase.ExecuteAsync(
+            workspaceRoot,
+            scanResult,
+            entry,
+            resolvedEntry,
+            "legacy system",
+            Budget.Default);
+        var markdown = renderHumanOutputUseCase.Execute(
+            pack,
+            scanResult,
+            HumanOutputMode.Audit,
+            new HumanOutputRenderOptions(null));
+
+        Assert.Contains("# Audit Snapshot", markdown, StringComparison.Ordinal);
+        Assert.Contains("## Root Entry", markdown, StringComparison.Ordinal);
+        Assert.Contains("## Degraded Diagnostics", markdown, StringComparison.Ordinal);
     }
 
     internal static string? GetConfiguredWorkspaceRoot() =>

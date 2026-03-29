@@ -1,4 +1,5 @@
 using Rulixa.Application.UseCases;
+using Rulixa.Application.HumanOutputs;
 using Rulixa.Domain.Entries;
 using Rulixa.Domain.Packs;
 using Rulixa.Infrastructure.FileSystem;
@@ -114,6 +115,40 @@ public sealed class RealWorkspaceOptionalSmokeTests
                 || line.Contains("IUserPromptService", StringComparison.Ordinal)
                 || line.Contains("FloorSettingsWindow", StringComparison.Ordinal)
                 || line.Contains("IDraftingOverlayRenderer", StringComparison.Ordinal));
+    }
+
+    [OptionalRealWorkspaceFact]
+    public async Task RenderHuman_ForConfiguredRootSymbol_ProducesReviewBrief()
+    {
+        var workspaceRoot = GetRequiredEnvironmentVariable(WorkspaceRootEnvironmentVariableName);
+        var rootSymbol = GetRequiredEnvironmentVariable(RootSymbolEnvironmentVariableName);
+
+        var fileSystem = new WorkspaceFileSystem();
+        var scanner = new WpfNet8WorkspaceScanner(fileSystem);
+        var resolver = new ScanBackedEntryResolver();
+        var extractor = new WpfNet8ContractExtractor(fileSystem);
+        var buildPackUseCase = new BuildContextPackUseCase(extractor);
+        var renderHumanOutputUseCase = new RenderHumanOutputUseCase(new HumanOutputMarkdownRenderer());
+
+        var entry = new Entry(EntryKind.Symbol, rootSymbol);
+        var scanResult = await scanner.ScanAsync(workspaceRoot);
+        var resolvedEntry = await resolver.ResolveAsync(entry, scanResult);
+        var pack = await buildPackUseCase.ExecuteAsync(
+            workspaceRoot,
+            scanResult,
+            entry,
+            resolvedEntry,
+            "project",
+            Budget.Default);
+        var markdown = renderHumanOutputUseCase.Execute(
+            pack,
+            scanResult,
+            HumanOutputMode.Review,
+            new HumanOutputRenderOptions(null));
+
+        Assert.Contains("# Review Brief", markdown, StringComparison.Ordinal);
+        Assert.Contains("## 概要", markdown, StringComparison.Ordinal);
+        Assert.Contains("## 次に読む file / symbol", markdown, StringComparison.Ordinal);
     }
 
     internal static string? GetConfiguredWorkspaceRoot() =>

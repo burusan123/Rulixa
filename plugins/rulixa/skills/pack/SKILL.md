@@ -1,11 +1,12 @@
 ---
 name: pack
-description: `Rulixa.Cli` を使って、WPF / .NET ワークスペースの Context Pack を `entry=file` または `entry=symbol` で生成します。
+description: `Rulixa.Cli` を使って、WPF / .NET ワークスペースの Context Pack と人間向け Markdown を生成します。
 ---
 
 # Rulixa Pack
 
-`Rulixa.Cli` の `pack` は、WPF / .NET ワークスペースの system map を素早く得るための入口です。
+`Rulixa.Cli` は、WPF / .NET ワークスペースの system map を短時間で掴むための CLI です。  
+まず `pack` で地図を取り、必要に応じて `render-human` で review / audit / knowledge 文書へ変換する使い方を推奨します。
 
 ## 入力
 
@@ -25,43 +26,67 @@ dotnet run --project src\Rulixa.Cli -- pack `
 
 ## 例
 
-### symbol entry
+### symbol entry で system map を出す
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace <target-workspace> `
   --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "システム全体の地図を理解する"
+  --goal "システム全体の地図を確認する"
 ```
 
-### file entry
+### file entry で root XAML から入る
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace <target-workspace> `
   --entry file:src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml `
-  --goal "Shell 画面の workflow と persistence map を理解する"
+  --goal "Shell 画面の workflow と persistence map を確認する"
 ```
 
-### entry 解決だけ確認する
+### review brief を生成する
 
 ```powershell
-dotnet run --project src\Rulixa.Cli -- resolve-entry `
+dotnet run --project src\Rulixa.Cli -- render-human `
   --workspace <target-workspace> `
-  --entry <entry>
+  --entry <entry> `
+  --goal "<goal>" `
+  --mode review
 ```
 
-### scan のみ実行する
+### audit snapshot を evidence bundle と一緒に保存する
 
 ```powershell
-dotnet run --project src\Rulixa.Cli -- scan `
-  --workspace <target-workspace>
+dotnet run --project src\Rulixa.Cli -- render-human `
+  --workspace <target-workspace> `
+  --entry <entry> `
+  --goal "<goal>" `
+  --mode audit `
+  --out artifacts\audit.md `
+  --evidence-dir artifacts\evidence
 ```
+
+## 出力の読み方
+
+### `pack`
+
+1. まず system summary と indexes を読みます。
+2. `unknowns` と next candidates から、次に全文検索する候補を選びます。
+3. 必要になった範囲だけ selected snippets / selected files を確認します。
+
+### `render-human`
+
+- `review`
+  概要、中心状態、主要 workflow、unknown / risk、次に読む file / symbol をまとめます。
+- `audit`
+  root entry、observed facts、evidence source、degraded diagnostics、未確定事項をまとめます。
+- `knowledge`
+  subsystem map、dependency seams、architectural constraints、known unknowns をまとめます。
 
 ## 効果的な使い方
 
-1. まず `pack` で system map を取得します。
-2. `unknowns` と next candidates を見て、未確定部分の次候補を確認します。
-3. 本当に詳細が必要な箇所だけ全文検索で深掘りします。
+1. `pack` で最初の地図を取ります。
+2. `unknowns` と next candidates を見て、必要な範囲だけ全文検索します。
+3. 人間向けに共有したいときは `render-human` を使います。
 
-`Rulixa` は「全文を説明しきる」ツールではなく、「どこから読むべきかを整理して返す」ツールです。
+`Rulixa` は「全部読むツール」ではなく、「どこから読むべきかを圧縮して返すツール」です。

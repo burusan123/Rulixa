@@ -1,38 +1,26 @@
 # Rulixa Product Readiness
 
-## 目的
+## 位置づけ
 
-この文書は、`Rulixa` を実運用できる品質に仕上げるためのチェックリストです。  
-Phase 1 以降の実装結果を踏まえつつ、「動く」ではなく「公開して継続運用できる」状態に達しているかを確認します。
+この文書は、`Rulixa` を継続利用できる製品として仕上げるためのチェックリストです。  
+単に `pack` が動くことではなく、`理解の入口を安定して返せること`、`比較・監査に使えること`、`人間向け出力まで含めて運用できること` を確認対象にします。
 
-## 評価軸
+## 現在の到達点
 
-- 技術
-  - 互換性
-  - 安定性
-  - 設計一貫性
-  - 観測可能性
-- 品質保証
-  - corpus
-  - regression
-  - release gate
-- UX
-  - pack の読みやすさ
-  - unknown guidance の使いやすさ
-- サポート運用
-  - diagnostics
-  - evidence bundle
-  - 再現性
+- `pack` / `scan` / `resolve-entry` / `compare-evidence` がある
+- local quality gate と GitHub Actions の required gate がある
+- handoff / corpus / performance の advisory 指標がある
+- `render-human` で `review` / `audit` / `knowledge` の Markdown を出せる
 
 ## KPI
 
-| 指標 | 意味 | 最低基準 | 観測方法 |
+| 指標 | 意味 | 現在の扱い | 確認方法 |
 |---|---|---|---|
-| `pack success rate` | pack が返る割合 | required corpus で 100% | regression / smoke |
-| `partial pack rate` | degraded だが有用な pack が返る割合 | failure との差分として観測 | diagnostics / artifact |
-| `crash-free rate` | 例外で止まらない割合 | release gate で 100% | CI / local gate |
-| `first useful map time` | 最初の有用な map が返るまでの時間 | baseline 比較で退行しない | benchmark / artifact |
-| `unknown guidance hit rate` | handoff 候補が次の探索に効く割合 | advisory で継続観測 | case assertion / review |
+| `pack success rate` | pack が返る割合 | required corpus で 100% を目標 | regression / smoke |
+| `partial pack rate` | degraded だが有用な pack が返る割合 | advisory | diagnostics / artifact |
+| `crash-free rate` | 実行中に未処理例外が出ない割合 | release gate で 100% | CI / local gate |
+| `first useful map time` | 最初の有用な map が返るまでの時間 | advisory | baseline 比較 |
+| `unknown guidance hit rate` | handoff 候補が次の調査に効く割合 | advisory | case review |
 | `false confidence rate` | 分かったふりをした割合 | required corpus で 0% | regression |
 | `deterministic rate` | 同一入力で同一結果が返る割合 | required corpus で 100% | regression |
 
@@ -40,47 +28,41 @@ Phase 1 以降の実装結果を踏まえつつ、「動く」ではなく「公
 
 ### 1. 技術
 
-- [ ] modern WPF + DI 構成で system pack が返る
-- [ ] legacy WPF + code-behind 構成で crash しない
-- [ ] `App.xaml StartupUri` を root 解決に使える
-- [ ] `DataContext = new XxxViewModel()` を root binding として扱える
-- [ ] service locator を限定的に扱える
-- [ ] `new Window()` / `ShowDialog()` を route として扱える
-- [ ] ResourceDictionary / merged dictionaries で top-level failure にならない
-- [ ] unsupported construct でも degraded pack と diagnostics を返せる
-- [ ] false confidence を抑制できている
+- [ ] modern WPF + DI で system pack が安定して返る
+- [ ] legacy WPF + code-behind で crash せず返る
+- [ ] root entry を `App.xaml` / `DataContext` / `new Window()` から解決できる
+- [ ] unsupported construct は degraded pack + diagnostics に落とせる
+- [ ] false confidence を抑止できる
+- [ ] `render-human` が review / audit / knowledge を生成できる
 
 ### 2. 品質保証
 
 - [ ] synthetic corpus が modern / legacy / dialog-heavy / weak-signal を含む
-- [ ] observed corpus が複数カテゴリで観測できる
-- [ ] pack 本文の regression テストがある
-- [ ] diagnostics の regression テストがある
-- [ ] deterministic regression がある
-- [ ] release gate が CI で実行される
+- [ ] observed corpus を observation-only で継続観測できる
+- [ ] required gate が CI で動く
 - [ ] advisory 指標が artifact に残る
+- [ ] compare-evidence の regression が維持される
 
 ### 3. UX
 
-- [ ] plugin 説明が日本語で読める
-- [ ] `pack -> 必要時のみ全文検索` の導線が明確
-- [ ] `entry=file` / `entry=symbol` の選び方が分かる
-- [ ] system map が root entry で読める
-- [ ] `unknowns` が「次に見る候補」として読める
-- [ ] docs / examples が GitHub でそのまま読める
+- [ ] `entry=file` / `entry=symbol` の選び方が docs で明確
+- [ ] `pack -> 必要時のみ全文検索` の導線が分かる
+- [ ] `render-human` の 3 mode の違いが README と skill で分かる
+- [ ] unknown guidance の読み方が public docs で説明されている
+- [ ] GitHub 上で壊れるローカル絶対パスが public docs に残っていない
 
 ### 4. サポート運用
 
-- [ ] diagnostics から再現に必要な情報を取れる
-- [ ] evidence bundle を比較に使える
-- [ ] local quality gate を開発者が毎回回せる
-- [ ] GitHub Actions の required gate が運用されている
-- [ ] optional smoke が observation-only として分離されている
+- [ ] evidence bundle を監査の根拠として保存できる
+- [ ] `summary.md` / `gate.json` / `kpi.json` が release review に使える
+- [ ] optional smoke を observation-only として運用できる
+- [ ] `render-human --mode audit` を監査ドラフトとして使える
+- [ ] `render-human --mode knowledge` を設計知の叩き台として使える
 
 ## フェーズとの関係
 
 - Phase 1
-  基礎と evidence
+  土台と evidence
 - Phase 2
   高シグナル sections
 - Phase 3
@@ -93,3 +75,5 @@ Phase 1 以降の実装結果を踏まえつつ、「動く」ではなく「公
   GitHub Actions と release gate
 - Phase 7
   handoff scoring と corpus / performance 比較
+- Phase 8
+  human output (`render-human`)
