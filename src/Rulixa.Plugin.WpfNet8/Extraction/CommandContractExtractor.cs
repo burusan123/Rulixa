@@ -17,9 +17,13 @@ internal sealed class CommandContractExtractor
     {
         var viewLookup = files
             .Where(static file => file.Kind == ScanFileKind.Xaml)
+            .GroupBy(static file => Path.GetFileNameWithoutExtension(file.Path), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
-                static file => Path.GetFileNameWithoutExtension(file.Path),
-                static file => file.Path,
+                static group => group.Key,
+                static group => group
+                    .OrderBy(static file => file.Path, StringComparer.OrdinalIgnoreCase)
+                    .First()
+                    .Path,
                 StringComparer.OrdinalIgnoreCase);
 
         var commands = new List<CommandBinding>();

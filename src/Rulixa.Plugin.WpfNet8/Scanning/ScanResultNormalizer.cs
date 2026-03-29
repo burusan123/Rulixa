@@ -89,7 +89,8 @@ internal static class ScanResultNormalizer
                 symbols,
                 diagnostics,
                 "window-activation.service-symbol.unresolved",
-                SymbolKind.Class);
+                SymbolKind.Class,
+                SymbolKind.Window);
             var windowSymbol = SymbolResolution.ResolveTypeSymbol(
                 activation.WindowSymbol,
                 sourcePath,

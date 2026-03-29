@@ -26,13 +26,13 @@ public sealed class WpfNet8WorkspaceScanner : IWorkspaceScanner
 
         var inventory = await inventoryBuilder.BuildAsync(workspaceRoot, cancellationToken).ConfigureAwait(false);
         var symbols = symbolCatalogBuilder.Build(inventory.FileContents);
-        var bindings = bindingExtractor.Extract(inventory.FileContents, symbols);
+        var bindingExtraction = bindingExtractor.Extract(inventory.FileContents, symbols);
         var navigationTransitions = navigationTransitionExtractor.Extract(inventory.FileContents);
         var commands = commandExtractor.Extract(inventory.FileContents, inventory.ScanFiles);
         var windowActivations = dialogExtractor.Extract(inventory.FileContents);
         var serviceRegistrations = registrationExtractor.Extract(inventory.FileContents);
-        var diagnostics = new List<Rulixa.Domain.Diagnostics.Diagnostic>();
-        var normalizedBindings = ScanResultNormalizer.NormalizeBindings(bindings, diagnostics);
+        var diagnostics = new List<Rulixa.Domain.Diagnostics.Diagnostic>(bindingExtraction.Diagnostics);
+        var normalizedBindings = ScanResultNormalizer.NormalizeBindings(bindingExtraction.Bindings, diagnostics);
         var normalizedServiceRegistrations = ScanResultNormalizer.NormalizeServiceRegistrations(
             serviceRegistrations,
             inventory.FileContents,

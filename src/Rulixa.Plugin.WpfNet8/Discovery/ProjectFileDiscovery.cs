@@ -27,7 +27,8 @@ internal static class ProjectFileDiscovery
             return ScanFileKind.Project;
         }
 
-        if (string.Equals(fileName, "App.xaml.cs", StringComparison.OrdinalIgnoreCase)
+        if (string.Equals(fileName, "App.xaml", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(fileName, "App.xaml.cs", StringComparison.OrdinalIgnoreCase)
             || string.Equals(fileName, "MainWindow.xaml.cs", StringComparison.OrdinalIgnoreCase))
         {
             return ScanFileKind.Startup;

@@ -7,7 +7,7 @@ internal sealed class DialogActivationExtractor
 {
     private static readonly Regex NamespaceRegex = new(@"namespace\s+(?<namespace>[A-Za-z0-9_\.]+)\s*[;{]", RegexOptions.Compiled);
     private static readonly Regex ClassRegex = new(@"class\s+(?<name>[A-Za-z_]\w*)", RegexOptions.Compiled);
-    private static readonly Regex MethodRegex = new(@"(?:(?:public|private|internal)\s+[A-Za-z0-9_<>\.\?\s]+\s+(?<name>[A-Za-z_]\w*)\s*\()", RegexOptions.Compiled);
+    private static readonly Regex MethodRegex = new(@"(?:(?:public|private|internal|protected)\s+[A-Za-z0-9_<>\.\?\s]+\s+(?<name>[A-Za-z_]\w*)\s*\()", RegexOptions.Compiled);
     private static readonly Regex WindowCreationRegex = new(@"(?<variable>[A-Za-z_]\w*)\s*=\s*new\s+(?<window>[A-Za-z_]\w*Window)\s*\(", RegexOptions.Compiled);
     private static readonly Regex WindowShowRegex = new(@"(?<variable>[A-Za-z_]\w*)\.(?<activation>ShowDialog|Show)\s*\(", RegexOptions.Compiled);
     private static readonly Regex DirectWindowShowRegex = new(@"new\s+(?<window>[A-Za-z_]\w*Window)\s*\([^;]*?\)\.(?<activation>ShowDialog|Show)\s*\(", RegexOptions.Compiled);
@@ -18,7 +18,7 @@ internal sealed class DialogActivationExtractor
     {
         var activations = new List<WindowActivation>();
 
-        foreach (var (path, content) in fileContents.Where(static pair => pair.Key.Contains("/Services/", StringComparison.OrdinalIgnoreCase)))
+        foreach (var (path, content) in fileContents.Where(IsCandidateFile))
         {
             if (!content.Contains("ShowDialog", StringComparison.Ordinal) && !content.Contains(".Show(", StringComparison.Ordinal))
             {
@@ -101,6 +101,13 @@ internal sealed class DialogActivationExtractor
 
         return activations;
     }
+
+    private static bool IsCandidateFile(KeyValuePair<string, string> pair) =>
+        pair.Key.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+        && !pair.Key.Contains("/tests/", StringComparison.OrdinalIgnoreCase)
+        && !pair.Key.StartsWith("tests/", StringComparison.OrdinalIgnoreCase)
+        && !pair.Key.Contains("/obj/", StringComparison.OrdinalIgnoreCase)
+        && !pair.Key.Contains("/bin/", StringComparison.OrdinalIgnoreCase);
 
     private static IReadOnlyList<WindowActivation> ExtractDirectWindowActivations(
         string methodBody,
