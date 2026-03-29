@@ -10,12 +10,12 @@ using Rulixa.Plugin.WpfNet8.Scanning;
 
 namespace Rulixa.Plugin.WpfNet8.Tests.Scanning;
 
-public sealed class Phase5CompatibilityCoverageTests
+public sealed class CompatibilityCoverageTests
 {
     [Fact]
     public async Task BuildPack_WithForwardingHelperAndAdapter_PromotesReportExportFamily()
     {
-        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase5-helper-route-{Guid.NewGuid():N}");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-compatibility-helper-route-{Guid.NewGuid():N}");
 
         try
         {
@@ -107,7 +107,7 @@ public sealed class Phase5CompatibilityCoverageTests
     [Fact]
     public async Task ScanAsync_WithResourceDictionaryHeavyLegacyXaml_DoesNotCrashAndReturnsPartialBinding()
     {
-        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase5-resource-dictionary-{Guid.NewGuid():N}");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-compatibility-resource-dictionary-{Guid.NewGuid():N}");
 
         try
         {
@@ -208,7 +208,7 @@ public sealed class Phase5CompatibilityCoverageTests
     [Fact]
     public async Task BuildPack_WithWeakLegacySignals_PrefersUnknownGuidanceOverFalsePersistence()
     {
-        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-phase5-weak-signals-{Guid.NewGuid():N}");
+        var workspaceRoot = Path.Combine(Path.GetTempPath(), $"rulixa-compatibility-weak-signals-{Guid.NewGuid():N}");
 
         try
         {

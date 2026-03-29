@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Rulixa.Infrastructure.Quality;
 
-public sealed class Phase5KpiArtifactWriter
+public sealed class QualityArtifactWriter
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -15,7 +15,7 @@ public sealed class Phase5KpiArtifactWriter
     public async Task<string> WriteAsync(
         string outputRootDirectory,
         string suiteName,
-        IReadOnlyList<Phase5KpiCaseArtifact> cases,
+        IReadOnlyList<QualityCaseArtifact> cases,
         DateTimeOffset? generatedAtUtc = null,
         CancellationToken cancellationToken = default)
     {
@@ -24,9 +24,9 @@ public sealed class Phase5KpiArtifactWriter
         ArgumentNullException.ThrowIfNull(cases);
 
         var timestamp = generatedAtUtc ?? DateTimeOffset.UtcNow;
-        var gate = new Phase5QualityGateEvaluator().Evaluate(cases);
-        var artifact = new Phase5KpiArtifact(
-            SchemaVersion: Phase5KpiArtifactConventions.SchemaVersion,
+        var gate = new QualityGateEvaluator().Evaluate(cases);
+        var artifact = new QualityArtifact(
+            SchemaVersion: QualityArtifactConventions.SchemaVersion,
             SuiteName: suiteName,
             GeneratedAtUtc: timestamp.UtcDateTime.ToString("O"),
             Cases: cases,
@@ -36,7 +36,7 @@ public sealed class Phase5KpiArtifactWriter
         var fullOutputRoot = Path.GetFullPath(outputRootDirectory);
         Directory.CreateDirectory(fullOutputRoot);
 
-        var filePath = Path.Combine(fullOutputRoot, Phase5KpiArtifactConventions.BuildFileName(timestamp, suiteName));
+        var filePath = Path.Combine(fullOutputRoot, QualityArtifactConventions.BuildFileName(timestamp, suiteName));
         await File.WriteAllTextAsync(filePath, json, cancellationToken).ConfigureAwait(false);
         return filePath;
     }

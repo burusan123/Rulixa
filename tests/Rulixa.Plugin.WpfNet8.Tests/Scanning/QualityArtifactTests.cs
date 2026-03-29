@@ -3,35 +3,35 @@ using Rulixa.Infrastructure.Quality;
 
 namespace Rulixa.Plugin.WpfNet8.Tests.Scanning;
 
-public sealed class Phase5KpiArtifactTests
+public sealed class QualityArtifactTests
 {
     [Fact]
     public async Task WriteArtifact_ForSyntheticAndOptionalSmoke_WritesJsonAndEvaluatesGate()
     {
-        var outputRoot = Phase5KpiArtifactSupport.CreateArtifactOutputRoot();
+        var outputRoot = QualityArtifactSupport.CreateArtifactOutputRoot();
         try
         {
-            var cases = new List<Phase5KpiCaseArtifact>();
-            foreach (var definition in Phase5KpiArtifactSupport.CreateSyntheticCaseDefinitions())
+            var cases = new List<QualityCaseArtifact>();
+            foreach (var definition in QualityArtifactSupport.CreateSyntheticCaseDefinitions())
             {
-                cases.Add(await Phase5KpiArtifactSupport.ExecuteCaseAsync(definition));
+                cases.Add(await QualityArtifactSupport.ExecuteCaseAsync(definition));
             }
 
-            foreach (var definition in Phase5KpiArtifactSupport.CreateOptionalSmokeCaseDefinitions())
+            foreach (var definition in QualityArtifactSupport.CreateOptionalSmokeCaseDefinitions())
             {
-                cases.Add(await Phase5KpiArtifactSupport.ExecuteCaseAsync(definition));
+                cases.Add(await QualityArtifactSupport.ExecuteCaseAsync(definition));
             }
 
-            var writer = new Phase5KpiArtifactWriter();
+            var writer = new QualityArtifactWriter();
             var filePath = await writer.WriteAsync(outputRoot, "plugin-tests", cases, new DateTimeOffset(2026, 03, 29, 3, 0, 0, TimeSpan.Zero));
             var json = await File.ReadAllTextAsync(filePath);
-            var artifact = JsonSerializer.Deserialize<Phase5KpiArtifact>(json, new JsonSerializerOptions
+            var artifact = JsonSerializer.Deserialize<QualityArtifact>(json, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
 
             Assert.NotNull(artifact);
-            Assert.Equal(Phase5KpiArtifactConventions.SchemaVersion, artifact!.SchemaVersion);
+            Assert.Equal(QualityArtifactConventions.SchemaVersion, artifact!.SchemaVersion);
             Assert.Contains(artifact.Cases, static item => item.Tags.Contains("root-case", StringComparer.OrdinalIgnoreCase));
             Assert.Contains(artifact.Cases, static item => !item.Tags.Contains("root-case", StringComparer.OrdinalIgnoreCase));
             Assert.Contains(artifact.Cases, static item =>
@@ -53,18 +53,18 @@ public sealed class Phase5KpiArtifactTests
     }
 
     [Fact]
-    public void BuildDefaultOutputDirectory_ReturnsArtifactsPhase5Path()
+    public void BuildDefaultOutputDirectory_ReturnsArtifactsLocalQualityPath()
     {
         var repoRoot = @"D:\C#\Rulixa";
-        var outputDirectory = Phase5KpiArtifactConventions.BuildDefaultOutputDirectory(repoRoot);
+        var outputDirectory = QualityArtifactConventions.BuildDefaultOutputDirectory(repoRoot);
 
-        Assert.Equal(Path.Combine(repoRoot, "artifacts", "phase5"), outputDirectory);
+        Assert.Equal(Path.Combine(repoRoot, "artifacts", "local-quality"), outputDirectory);
     }
 
     [Fact]
     public async Task ExecuteCaseAsync_ForUnavailableOptionalSmoke_RecordsSkippedStatus()
     {
-        var definition = new Phase5KpiCaseDefinition(
+        var definition = new QualityCaseDefinition(
             CaseId: "missing-optional-smoke",
             CorpusName: "MissingWorkspace",
             WorkspaceType: "legacy-real",
@@ -77,7 +77,7 @@ public sealed class Phase5KpiArtifactTests
             ExpectUnknownGuidance: false,
             DisallowedRepresentativeSections: []);
 
-        var result = await Phase5KpiArtifactSupport.ExecuteCaseAsync(definition);
+        var result = await QualityArtifactSupport.ExecuteCaseAsync(definition);
 
         Assert.Equal("skipped", result.Status);
         Assert.Equal("workspace-missing", result.SkipReason);

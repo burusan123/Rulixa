@@ -1,8 +1,8 @@
 namespace Rulixa.Infrastructure.Quality;
 
-public sealed class Phase5QualityGateEvaluator
+public sealed class QualityGateEvaluator
 {
-    public Phase5QualityGateArtifact Evaluate(IReadOnlyList<Phase5KpiCaseArtifact> cases)
+    public QualityGateArtifact Evaluate(IReadOnlyList<QualityCaseArtifact> cases)
     {
         ArgumentNullException.ThrowIfNull(cases);
 
@@ -43,7 +43,7 @@ public sealed class Phase5QualityGateEvaluator
             failedChecks.Add("false_confidence_rate");
         }
 
-        return new Phase5QualityGateArtifact(
+        return new QualityGateArtifact(
             Passed: failedChecks.Count == 0,
             CrashFreeRate: crashFreeRate,
             PackSuccessRate: packSuccessRate,
@@ -54,8 +54,8 @@ public sealed class Phase5QualityGateEvaluator
     }
 
     private static double CalculateRate(
-        IReadOnlyCollection<Phase5KpiCaseArtifact> cases,
-        Func<Phase5KpiCaseArtifact, bool> predicate)
+        IReadOnlyCollection<QualityCaseArtifact> cases,
+        Func<QualityCaseArtifact, bool> predicate)
     {
         if (cases.Count == 0)
         {

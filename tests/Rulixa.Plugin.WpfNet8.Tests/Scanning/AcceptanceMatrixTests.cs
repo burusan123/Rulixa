@@ -10,7 +10,7 @@ using Rulixa.Plugin.WpfNet8.Scanning;
 
 namespace Rulixa.Plugin.WpfNet8.Tests.Scanning;
 
-public sealed class Phase5AcceptanceMatrixTests
+public sealed class AcceptanceMatrixTests
 {
     [Theory]
     [MemberData(nameof(RootCases))]

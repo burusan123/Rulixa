@@ -12,14 +12,15 @@ using Rulixa.Plugin.WpfNet8.Scanning;
 
 namespace Rulixa.Plugin.WpfNet8.Tests.Scanning;
 
-internal static class Phase5KpiArtifactSupport
+internal static class QualityArtifactSupport
 {
+    internal static readonly string RepositoryRoot = GetRepositoryRoot();
     internal static readonly string LegacyDialogHeavyRoot = GetFixtureRoot("LegacyDialogHeavy");
     internal static readonly string LegacyServiceLocatorRoot = GetFixtureRoot("LegacyServiceLocator");
     internal static readonly string ModernSiblingRootRoot = GetFixtureRoot("ModernSiblingRoot");
     internal static readonly string TemplateHeavyResourcesRoot = GetFixtureRoot("TemplateHeavyResources");
 
-    internal static IReadOnlyList<Phase5KpiCaseDefinition> CreateSyntheticCaseDefinitions() =>
+    internal static IReadOnlyList<QualityCaseDefinition> CreateSyntheticCaseDefinitions() =>
     [
         new(
             CaseId: "legacy-dialog-root",
@@ -95,7 +96,7 @@ internal static class Phase5KpiArtifactSupport
             DisallowedRepresentativeSections: ["Persistence", "Architecture Tests", "Workflow"])
     ];
 
-    internal static IReadOnlyList<Phase5KpiCaseDefinition> CreateOptionalSmokeCaseDefinitions() =>
+    internal static IReadOnlyList<QualityCaseDefinition> CreateOptionalSmokeCaseDefinitions() =>
     [
         new(
             CaseId: "assessmeister-modern-shell",
@@ -135,12 +136,12 @@ internal static class Phase5KpiArtifactSupport
             DisallowedRepresentativeSections: [])
     ];
 
-    internal static async Task<Phase5KpiCaseArtifact> ExecuteCaseAsync(Phase5KpiCaseDefinition definition, CancellationToken cancellationToken = default)
+    internal static async Task<QualityCaseArtifact> ExecuteCaseAsync(QualityCaseDefinition definition, CancellationToken cancellationToken = default)
     {
         var skipReason = GetSkipReason(definition);
         if (!string.IsNullOrWhiteSpace(skipReason))
         {
-            return new Phase5KpiCaseArtifact(
+            return new QualityCaseArtifact(
                 CaseId: definition.CaseId,
                 CorpusName: definition.CorpusName,
                 WorkspaceType: definition.WorkspaceType,
@@ -176,7 +177,7 @@ internal static class Phase5KpiArtifactSupport
             var hasUnknownGuidance = firstRun.Pack!.Unknowns.Any(static unknown => unknown.Candidates.Count > 0);
             var falseConfidenceDetected = DetectFalseConfidence(definition, firstRun.Pack);
 
-            return new Phase5KpiCaseArtifact(
+            return new QualityCaseArtifact(
                 CaseId: definition.CaseId,
                 CorpusName: definition.CorpusName,
                 WorkspaceType: definition.WorkspaceType,
@@ -199,7 +200,7 @@ internal static class Phase5KpiArtifactSupport
         catch (Exception exception)
         {
             stopwatch.Stop();
-            return new Phase5KpiCaseArtifact(
+            return new QualityCaseArtifact(
                 CaseId: definition.CaseId,
                 CorpusName: definition.CorpusName,
                 WorkspaceType: definition.WorkspaceType,
@@ -222,16 +223,35 @@ internal static class Phase5KpiArtifactSupport
     }
 
     internal static string CreateArtifactOutputRoot() =>
-        Path.Combine(Path.GetTempPath(), "rulixa-phase5-artifacts", Guid.NewGuid().ToString("N"));
+        Path.Combine(Path.GetTempPath(), "rulixa-local-quality-artifacts", Guid.NewGuid().ToString("N"));
+
+    internal static string CreateRepositoryArtifactOutputRoot() =>
+        QualityArtifactConventions.BuildDefaultOutputDirectory(RepositoryRoot);
+
+    internal static async Task<IReadOnlyList<QualityCaseArtifact>> ExecuteDefinitionsAsync(
+        IReadOnlyList<QualityCaseDefinition> definitions,
+        CancellationToken cancellationToken = default)
+    {
+        var results = new List<QualityCaseArtifact>(definitions.Count);
+        foreach (var definition in definitions)
+        {
+            results.Add(await ExecuteCaseAsync(definition, cancellationToken).ConfigureAwait(false));
+        }
+
+        return results;
+    }
 
     internal static string GetFixtureRoot(string fixtureName) =>
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Fixtures", fixtureName));
+        Path.GetFullPath(Path.Combine(RepositoryRoot, "tests", "Rulixa.Plugin.WpfNet8.Tests", "Fixtures", fixtureName));
 
-    internal static bool IsRootCase(Phase5KpiCaseDefinition definition) =>
+    internal static bool IsRootCase(QualityCaseDefinition definition) =>
         definition.Tags.Contains("root-case", StringComparer.OrdinalIgnoreCase);
 
+    internal static string GetRepositoryRoot() =>
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+
     private static async Task<(WorkspaceScanResult ScanResult, ContextPack Pack)> BuildPackAsync(
-        Phase5KpiCaseDefinition definition,
+        QualityCaseDefinition definition,
         CancellationToken cancellationToken)
     {
         var fileSystem = new WorkspaceFileSystem();
@@ -254,7 +274,7 @@ internal static class Phase5KpiArtifactSupport
     }
 
     private static async Task<bool> IsDeterministicAsync(
-        Phase5KpiCaseDefinition definition,
+        QualityCaseDefinition definition,
         (WorkspaceScanResult ScanResult, ContextPack Pack) firstRun,
         CancellationToken cancellationToken)
     {
@@ -273,7 +293,7 @@ internal static class Phase5KpiArtifactSupport
             });
     }
 
-    private static bool DetectFalseConfidence(Phase5KpiCaseDefinition definition, ContextPack pack)
+    private static bool DetectFalseConfidence(QualityCaseDefinition definition, ContextPack pack)
     {
         if (definition.ExpectUnknownGuidance && !pack.Unknowns.Any(static unknown => unknown.Candidates.Count > 0))
         {
@@ -313,7 +333,7 @@ internal static class Phase5KpiArtifactSupport
         return false;
     }
 
-    private static string? GetSkipReason(Phase5KpiCaseDefinition definition)
+    private static string? GetSkipReason(QualityCaseDefinition definition)
     {
         if (!definition.Tags.Contains("optional-smoke", StringComparer.OrdinalIgnoreCase))
         {
@@ -339,10 +359,10 @@ internal static class Phase5KpiArtifactSupport
         return null;
     }
 
-    private static Phase5UnknownGuidanceArtifact ToUnknownGuidance(Diagnostic diagnostic)
+    private static UnknownGuidanceArtifact ToUnknownGuidance(Diagnostic diagnostic)
     {
         var firstCandidate = diagnostic.Candidates.FirstOrDefault();
-        return new Phase5UnknownGuidanceArtifact(
+        return new UnknownGuidanceArtifact(
             Code: diagnostic.Code,
             Family: InferFamily(diagnostic),
             CandidateCount: diagnostic.Candidates.Count,
@@ -384,7 +404,7 @@ internal static class Phase5KpiArtifactSupport
     }
 }
 
-internal sealed record Phase5KpiCaseDefinition(
+internal sealed record QualityCaseDefinition(
     string CaseId,
     string CorpusName,
     string WorkspaceType,
