@@ -194,6 +194,182 @@ public sealed class CompareEvidenceBundleTests
         }
     }
 
+    [Fact]
+    public async Task Main_WithCompareEvidence_RendersLegacyQualityImprovements()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"rulixa-compare-legacy-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            var writer = new EvidenceBundleWriter(CreateJsonOptions());
+            var budget = new Budget(MaxFiles: 8, MaxTotalLines: 1600, MaxSnippetsPerFile: 3);
+            var entry = new Entry(EntryKind.File, "LegacyApp/ShellWindow.xaml");
+            var scan = CreateScanResult(new DateTimeOffset(2026, 03, 29, 2, 0, 0, TimeSpan.Zero));
+            var resolvedEntry = new ResolvedEntry(
+                "file:LegacyApp/ShellWindow.xaml",
+                ResolvedEntryKind.File,
+                "LegacyApp/ShellWindow.xaml",
+                null,
+                ConfidenceLevel.High,
+                []);
+            var beforePack = new ContextPack(
+                Goal: "legacy system",
+                Entry: entry,
+                ResolvedEntry: resolvedEntry,
+                Contracts:
+                [
+                    new Contract(
+                        ContractKind.Startup,
+                        "System Pack",
+                        "ShellWindow を中心に Shell の地図を返します。",
+                        ["LegacyApp/ShellWindow.xaml"],
+                        ["LegacyApp.ShellWindow"])
+                ],
+                Indexes: [],
+                SelectedSnippets: [],
+                SelectedFiles:
+                [
+                    new SelectedFile("LegacyApp/ShellWindow.xaml", "entry", 0, true, 12),
+                    new SelectedFile("LegacyApp/OverlayWindow.xaml", "dialog-window", 10, true, 10)
+                ],
+                DecisionTraces:
+                [
+                    new PackDecisionTrace(
+                        "workflow-selection",
+                        "IOverlayService",
+                        "selected",
+                        "UI overlay 候補を選択しました。",
+                        2,
+                        1,
+                        2,
+                        ["legacy"],
+                        ["legacy"],
+                        []),
+                    new PackDecisionTrace(
+                        "workflow-selection",
+                        "workflow.missing-downstream",
+                        "unknown-raised",
+                        "既知の範囲: ShellWindow。切れた箇所: report family。次に見る候補: ReportWindowService",
+                        0,
+                        0,
+                        2,
+                        ["legacy"],
+                        ["legacy"],
+                        [])
+                ],
+                Unknowns:
+                [
+                    new Rulixa.Domain.Diagnostics.Diagnostic(
+                        "workflow.missing-downstream",
+                        "既知の範囲: ShellWindow。切れた箇所: report family。次に見る候補: ReportWindowService",
+                        "LegacyApp/ShellWindow.xaml.cs",
+                        Rulixa.Domain.Diagnostics.DiagnosticSeverity.Warning,
+                        ["LegacyApp.ShellWindow", "LegacyApp.ReportWindowService"])
+                ]);
+            var afterPack = new ContextPack(
+                Goal: "legacy system",
+                Entry: entry,
+                ResolvedEntry: resolvedEntry,
+                Contracts:
+                [
+                    new Contract(
+                        ContractKind.Startup,
+                        "System Pack",
+                        "ShellWindow を中心に Shell / Report/Export / Settings の地図を返します。中心状態は ProjectDocument です。",
+                        ["LegacyApp/ShellWindow.xaml", "LegacyApp/ProjectDocument.cs"],
+                        ["LegacyApp.ShellWindow", "LegacyApp.ProjectDocument"]),
+                    new Contract(
+                        ContractKind.DialogActivation,
+                        "LegacyApp.ReportWindow",
+                        "LegacyApp.ShellWindow から LegacyApp.ReportWindow を show-dialog で起動します。owner=none",
+                        ["LegacyApp/ReportWindow.xaml"],
+                        ["LegacyApp.ShellWindow.OpenReport", "LegacyApp.ReportWindowService", "LegacyApp.ReportWindow"])
+                ],
+                Indexes: [],
+                SelectedSnippets: [],
+                SelectedFiles:
+                [
+                    new SelectedFile("LegacyApp/ShellWindow.xaml", "entry", 0, true, 12),
+                    new SelectedFile("LegacyApp/ReportWindow.xaml", "dialog-window", 10, true, 10)
+                ],
+                DecisionTraces:
+                [
+                    new PackDecisionTrace(
+                        "workflow-selection",
+                        "ReportWindowService",
+                        "selected",
+                        "report family の代表 route を選択しました。",
+                        6,
+                        1,
+                        2,
+                        ["legacy"],
+                        ["legacy"],
+                        []),
+                    new PackDecisionTrace(
+                        "workflow-selection",
+                        "IOverlayService",
+                        "omitted-ui-boundary",
+                        "UI ノイズとして overlay 候補を除外しました。",
+                        1,
+                        2,
+                        2,
+                        ["legacy"],
+                        ["legacy"],
+                        []),
+                    new PackDecisionTrace(
+                        "workflow-selection",
+                        "workflow.missing-downstream",
+                        "unknown-raised",
+                        "既知の範囲: ShellWindow -> ReportWindowService。切れた箇所: persistence family。次に見る候補: ProjectDocument, ReportTemplateLoader",
+                        0,
+                        0,
+                        2,
+                        ["legacy"],
+                        ["legacy"],
+                        [])
+                ],
+                Unknowns:
+                [
+                    new Rulixa.Domain.Diagnostics.Diagnostic(
+                        "workflow.missing-downstream",
+                        "既知の範囲: ShellWindow -> ReportWindowService。切れた箇所: persistence family。次に見る候補: ProjectDocument, ReportTemplateLoader",
+                        "LegacyApp/ShellWindow.xaml.cs",
+                        Rulixa.Domain.Diagnostics.DiagnosticSeverity.Warning,
+                        ["LegacyApp.ShellWindow", "LegacyApp.ProjectDocument", "LegacyApp.ReportTemplateLoader"])
+                ]);
+
+            var beforeDirectory = await writer.WriteAsync(root, scan.WorkspaceRoot, budget, scan, resolvedEntry, beforePack, "# before");
+            var afterDirectory = await writer.WriteAsync(root, scan.WorkspaceRoot, budget, scan, resolvedEntry, afterPack, "# after");
+            var diffPath = Path.Combine(root, "legacy-diff.md");
+
+            var exitCode = await Program.Main(
+                [
+                    "compare-evidence",
+                    "--base", beforeDirectory,
+                    "--target", afterDirectory,
+                    "--out", diffPath
+                ]);
+
+            var diff = await File.ReadAllTextAsync(diffPath);
+
+            Assert.Equal(0, exitCode);
+            Assert.Contains("Report/Export / Settings", diff, StringComparison.Ordinal);
+            Assert.Contains("ReportWindowService", diff, StringComparison.Ordinal);
+            Assert.Contains("ProjectDocument", diff, StringComparison.Ordinal);
+            Assert.Contains("ReportTemplateLoader", diff, StringComparison.Ordinal);
+            Assert.Contains("omitted-ui-boundary", diff, StringComparison.Ordinal);
+            Assert.Contains("LegacyApp/OverlayWindow.xaml", diff, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static WorkspaceScanResult CreateScanResult(DateTimeOffset generatedAtUtc) =>
         new(
             "rulixa.phase1.scan.v1",
