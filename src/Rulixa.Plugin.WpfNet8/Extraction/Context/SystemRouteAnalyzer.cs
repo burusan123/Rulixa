@@ -6,6 +6,7 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal sealed class SystemRouteAnalyzer
 {
+    private const int HelperForwardingDepth = 1;
     private static readonly Regex FieldRegex = new(
         @"^\s*(?:private|protected|internal|public)\s+(?:readonly\s+)?(?<type>[A-Za-z_][A-Za-z0-9_<>\.\?,\[\]]*)\s+(?<name>[A-Za-z_]\w*)\s*;",
         RegexOptions.Compiled | RegexOptions.Multiline);
@@ -17,6 +18,9 @@ internal sealed class SystemRouteAnalyzer
         RegexOptions.Compiled);
     private static readonly Regex MethodCallRegex = new(
         @"(?<target>new\s+[A-Za-z_][A-Za-z0-9_\.]*\s*\([^;]*?\)|(?:this\.)?[A-Za-z_]\w*)\.(?<method>[A-Za-z_]\w*)\s*\(",
+        RegexOptions.Compiled);
+    private static readonly Regex SelfMethodCallRegex = new(
+        @"(?<!\.)(?<!new\s)\b(?<method>[A-Za-z_]\w*)\s*\(",
         RegexOptions.Compiled);
     private static readonly Regex NewTypeRegex = new(@"new\s+(?<type>[A-Za-z_][A-Za-z0-9_\.]*)\s*\(", RegexOptions.Compiled);
     private static readonly Regex IdentifierRegex = new(@"^(?:this\.)?(?<name>[A-Za-z_]\w*)$", RegexOptions.Compiled);
@@ -133,6 +137,10 @@ internal sealed class SystemRouteAnalyzer
         var ownerClassName = PackExtractionConventions.GetSimpleTypeName(ownerSymbol);
         var knownTypes = ExtractKnownTypes(documents, ownerClassName);
         var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var helperBodies = documents
+            .SelectMany(static document => ExtractMethodBodies(document.Content))
+            .GroupBy(static body => body.Name, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.Ordinal);
 
         foreach (var dependency in documents
                      .SelectMany(document => PackAnalysisHelpers.ExtractConstructorDependencyTypeNames(document.Content, ownerClassName))
@@ -143,37 +151,134 @@ internal sealed class SystemRouteAnalyzer
 
         foreach (var document in documents)
         {
-            foreach (var referenced in PackAnalysisHelpers.FindReferencedTypeCandidates(
-                         scanResult,
-                         document.Content,
-                         PackAnalysisHelpers.IsSystemExpansionRelevantName))
-            {
-                if (string.IsNullOrWhiteSpace(referenced.ResolvedSymbol)
-                    || string.Equals(referenced.ResolvedSymbol, ownerSymbol, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                discovered.Add(referenced.ResolvedSymbol);
-            }
-
             var localTypes = ExtractLocalTypes(document.Content, knownTypes);
-            foreach (Match match in MethodCallRegex.Matches(document.Content))
-            {
-                var rawTarget = match.Groups["target"].Value.Trim();
-                var targetTypeName = ResolveTargetTypeName(rawTarget, knownTypes, localTypes);
-                if (string.IsNullOrWhiteSpace(targetTypeName))
-                {
-                    continue;
-                }
-
-                AddResolvedSymbol(discovered, scanResult, targetTypeName, ownerSymbol);
-            }
+            AddDocumentTargets(discovered, scanResult, ownerSymbol, document.Content, knownTypes, localTypes);
+            AddForwardedHelperTargets(
+                discovered,
+                scanResult,
+                ownerSymbol,
+                document.Content,
+                helperBodies,
+                knownTypes,
+                HelperForwardingDepth);
         }
 
         return discovered
             .OrderBy(static symbol => symbol, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static void AddDocumentTargets(
+        ISet<string> discovered,
+        WorkspaceScanResult scanResult,
+        string ownerSymbol,
+        string source,
+        IReadOnlyDictionary<string, string> knownTypes,
+        IReadOnlyDictionary<string, string> localTypes)
+    {
+        foreach (var referenced in PackAnalysisHelpers.FindReferencedTypeCandidates(
+                     scanResult,
+                     source,
+                     PackAnalysisHelpers.IsSystemExpansionRelevantName))
+        {
+            if (string.IsNullOrWhiteSpace(referenced.ResolvedSymbol)
+                || string.Equals(referenced.ResolvedSymbol, ownerSymbol, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            discovered.Add(referenced.ResolvedSymbol);
+        }
+
+        foreach (Match match in MethodCallRegex.Matches(source))
+        {
+            var rawTarget = match.Groups["target"].Value.Trim();
+            var targetTypeName = ResolveTargetTypeName(rawTarget, knownTypes, localTypes);
+            if (string.IsNullOrWhiteSpace(targetTypeName))
+            {
+                continue;
+            }
+
+            AddResolvedSymbol(discovered, scanResult, targetTypeName, ownerSymbol);
+        }
+    }
+
+    private static void AddForwardedHelperTargets(
+        ISet<string> discovered,
+        WorkspaceScanResult scanResult,
+        string ownerSymbol,
+        string source,
+        IReadOnlyDictionary<string, HelperMethodBody> helperBodies,
+        IReadOnlyDictionary<string, string> knownTypes,
+        int remainingDepth)
+    {
+        if (remainingDepth <= 0 || helperBodies.Count == 0)
+        {
+            return;
+        }
+
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match match in SelfMethodCallRegex.Matches(source))
+        {
+            if (IsMethodDeclarationMatch(source, match))
+            {
+                continue;
+            }
+
+            var methodName = match.Groups["method"].Value;
+            if (!ShouldFollowHelper(methodName, helperBodies, visited))
+            {
+                continue;
+            }
+
+            var helperBody = helperBodies[methodName];
+            var localTypes = ExtractLocalTypes(helperBody.Body, knownTypes);
+            AddDocumentTargets(discovered, scanResult, ownerSymbol, helperBody.Body, knownTypes, localTypes);
+            AddForwardedHelperTargets(
+                discovered,
+                scanResult,
+                ownerSymbol,
+                helperBody.Body,
+                helperBodies,
+                knownTypes,
+                remainingDepth - 1);
+        }
+    }
+
+    private static bool ShouldFollowHelper(
+        string methodName,
+        IReadOnlyDictionary<string, HelperMethodBody> helperBodies,
+        ISet<string> visited)
+    {
+        if (!helperBodies.ContainsKey(methodName))
+        {
+            return false;
+        }
+
+        if (string.Equals(methodName, "if", StringComparison.Ordinal)
+            || string.Equals(methodName, "for", StringComparison.Ordinal)
+            || string.Equals(methodName, "foreach", StringComparison.Ordinal)
+            || string.Equals(methodName, "while", StringComparison.Ordinal)
+            || string.Equals(methodName, "switch", StringComparison.Ordinal)
+            || string.Equals(methodName, "catch", StringComparison.Ordinal)
+            || string.Equals(methodName, "return", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return visited.Add(methodName);
+    }
+
+    private static bool IsMethodDeclarationMatch(string source, Match match)
+    {
+        var lineStartIndex = source.LastIndexOf('\n', Math.Max(0, match.Index - 1));
+        var segmentStart = lineStartIndex < 0 ? 0 : lineStartIndex + 1;
+        var segment = source[segmentStart..match.Index];
+
+        return Regex.IsMatch(
+            segment,
+            @"^\s*(?:(?:public|private|internal|protected|static|sealed|virtual|override|async|partial|extern|new)\s+)*[A-Za-z_][A-Za-z0-9_<>\.\?,\[\]]*\s+$",
+            RegexOptions.CultureInvariant);
     }
 
     private static void AddResolvedSymbol(
@@ -360,8 +465,68 @@ internal sealed class SystemRouteAnalyzer
 
         return null;
     }
+
+    private static IReadOnlyList<HelperMethodBody> ExtractMethodBodies(string source)
+    {
+        var helperBodies = new List<HelperMethodBody>();
+        var methodHeaderRegex = new Regex(
+            @"(?:(?:public|private|internal|protected)\s+(?:static\s+)?[A-Za-z0-9_<>\.\?\[\],\s]+\s+(?<name>[A-Za-z_]\w*)\s*\([^)]*\)\s*)\{",
+            RegexOptions.Compiled);
+
+        foreach (Match match in methodHeaderRegex.Matches(source))
+        {
+            var bodyRange = TryFindBodyRange(source, match.Index + match.Length - 1);
+            if (bodyRange is null)
+            {
+                continue;
+            }
+
+            helperBodies.Add(new HelperMethodBody(
+                match.Groups["name"].Value,
+                source.Substring(
+                    bodyRange.Value.BodyStartIndex,
+                    bodyRange.Value.EndIndex - bodyRange.Value.BodyStartIndex)));
+        }
+
+        return helperBodies;
+    }
+
+    private static (int BodyStartIndex, int EndIndex)? TryFindBodyRange(string source, int openingBraceIndex)
+    {
+        if (openingBraceIndex < 0 || openingBraceIndex >= source.Length || source[openingBraceIndex] != '{')
+        {
+            return null;
+        }
+
+        var depth = 0;
+        for (var index = openingBraceIndex; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+                continue;
+            }
+
+            if (source[index] != '}')
+            {
+                continue;
+            }
+
+            depth--;
+            if (depth == 0)
+            {
+                return (openingBraceIndex + 1, index);
+            }
+        }
+
+        return null;
+    }
 }
 
 internal sealed record SystemRouteSourceDocument(
     string RelativePath,
     string Content);
+
+internal sealed record HelperMethodBody(
+    string Name,
+    string Body);

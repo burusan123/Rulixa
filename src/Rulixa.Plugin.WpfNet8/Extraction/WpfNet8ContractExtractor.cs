@@ -158,7 +158,7 @@ public sealed class WpfNet8ContractExtractor : IContractExtractor
                 cancellationToken)
             .ConfigureAwait(false);
         await dialogBuilder
-            .AddAsync(workspaceRoot, scanResult, resolvedEntry, contracts, snippetCandidates, fileCandidates, cancellationToken)
+            .AddAsync(workspaceRoot, scanResult, resolvedEntry, relevantContext, contracts, snippetCandidates, fileCandidates, cancellationToken)
             .ConfigureAwait(false);
         await architectureTestBuilder
             .AddAsync(

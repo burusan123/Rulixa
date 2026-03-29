@@ -48,10 +48,22 @@ public sealed class AssessMeisterLegacyOptionalSmokeTests
             pack.Contracts.Any(contract => contract.Title == "System Pack")
             || pack.Indexes.Any()
             || pack.Unknowns.Any());
+        Assert.Contains(pack.Contracts, contract =>
+            contract.Title == "System Pack"
+            && contract.Summary.Contains("Settings", StringComparison.Ordinal)
+            && contract.Summary.Contains("Report/Export", StringComparison.Ordinal));
         Assert.True(
             scanResult.WindowActivations.Any()
             || pack.Contracts.Any(contract => contract.Kind == ContractKind.DialogActivation)
             || pack.Unknowns.Any(unknown => unknown.Code.StartsWith("workflow.", StringComparison.Ordinal)));
+        Assert.True(
+            pack.Contracts.Any(contract => contract.Kind == ContractKind.DialogActivation)
+            || pack.SelectedFiles.Any(file =>
+                file.Path.Contains("Setting", StringComparison.OrdinalIgnoreCase)
+                || file.Path.Contains("Report", StringComparison.OrdinalIgnoreCase))
+            || pack.Unknowns.Any(unknown =>
+                unknown.Code == "persistence.missing-owner"
+                || unknown.Code.StartsWith("workflow.", StringComparison.Ordinal)));
         Assert.Contains("Predict3DWindow", markdown, StringComparison.Ordinal);
     }
 }

@@ -22,18 +22,22 @@ internal sealed class DialogPackSectionBuilder
         string workspaceRoot,
         WorkspaceScanResult scanResult,
         ResolvedEntry resolvedEntry,
+        RelevantPackContext relevantContext,
         ICollection<Contract> contracts,
         ICollection<SnippetSelectionCandidate> snippetCandidates,
         ICollection<FileSelectionCandidate> fileCandidates,
         CancellationToken cancellationToken)
     {
-        if (resolvedEntry.ResolvedKind != ResolvedEntryKind.Symbol || string.IsNullOrWhiteSpace(resolvedEntry.ResolvedPath))
+        if (string.IsNullOrWhiteSpace(resolvedEntry.ResolvedPath))
         {
             return;
         }
 
         var absolutePath = Path.Combine(workspaceRoot, resolvedEntry.ResolvedPath.Replace('/', Path.DirectorySeparatorChar));
         var source = await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
+        var relatedSymbolNames = relevantContext.RelatedSymbols
+            .Select(PackExtractionConventions.GetSimpleTypeName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var reachableImplementations = scanResult.ServiceRegistrations
             .Where(registration =>
@@ -44,9 +48,7 @@ internal sealed class DialogPackSectionBuilder
             .ToArray();
 
         var activations = scanResult.WindowActivations
-            .Where(activation => reachableImplementations.Any(implementation =>
-                activation.ServiceSymbol.EndsWith($".{implementation}", StringComparison.OrdinalIgnoreCase)
-                || activation.CallerSymbol.Contains(implementation, StringComparison.OrdinalIgnoreCase)))
+            .Where(activation => IsRelevantActivation(activation, reachableImplementations, relevantContext.RelatedSymbols, relatedSymbolNames))
             .OrderBy(static activation => activation.WindowSymbol, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -94,6 +96,46 @@ internal sealed class DialogPackSectionBuilder
     {
         var simpleName = PackExtractionConventions.GetSimpleTypeName(identifier);
         return source.Contains(simpleName, StringComparison.Ordinal);
+    }
+
+    private static bool IsRelevantActivation(
+        WindowActivation activation,
+        IReadOnlyList<string> reachableImplementations,
+        IReadOnlySet<string> relatedSymbols,
+        IReadOnlySet<string> relatedSymbolNames)
+    {
+        if (reachableImplementations.Any(implementation =>
+                activation.ServiceSymbol.EndsWith($".{implementation}", StringComparison.OrdinalIgnoreCase)
+                || activation.CallerSymbol.Contains(implementation, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (relatedSymbols.Contains(activation.ServiceSymbol)
+            || relatedSymbols.Contains(activation.WindowSymbol)
+            || (!string.IsNullOrWhiteSpace(activation.WindowViewModelSymbol) && relatedSymbols.Contains(activation.WindowViewModelSymbol)))
+        {
+            return true;
+        }
+
+        foreach (var relatedSymbol in relatedSymbols)
+        {
+            if (activation.CallerSymbol.StartsWith($"{relatedSymbol}.", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        var activationNames = new[]
+        {
+            PackExtractionConventions.GetSimpleTypeName(activation.ServiceSymbol),
+            PackExtractionConventions.GetSimpleTypeName(activation.WindowSymbol),
+            string.IsNullOrWhiteSpace(activation.WindowViewModelSymbol)
+                ? string.Empty
+                : PackExtractionConventions.GetSimpleTypeName(activation.WindowViewModelSymbol)
+        };
+
+        return activationNames.Any(name => !string.IsNullOrWhiteSpace(name) && relatedSymbolNames.Contains(name));
     }
 
     private static void AddDialogTargetFiles(
