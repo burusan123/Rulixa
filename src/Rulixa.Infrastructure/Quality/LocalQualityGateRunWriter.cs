@@ -106,6 +106,9 @@ public sealed class LocalQualityGateRunWriter
             QualityGate: gate,
             SyntheticSummary: BuildObservationSummary(syntheticCases),
             OptionalSmokeSummary: BuildObservationSummary(optionalSmokeCases),
+            SyntheticCorpusHandoffs: BuildCorpusHandoffSummaries(syntheticCases, "synthetic"),
+            ObservedCorpusHandoffs: BuildCorpusHandoffSummaries(optionalSmokeCases, "observed"),
+            MissOrUnknownCases: BuildCaseHandoffSummaries(cases),
             UnknownGuidanceSummary: new LocalUnknownGuidanceSummaryArtifact(
                 CaseCount: observation.UnknownGuidanceCaseCount,
                 GuidanceItemCount: observation.UnknownGuidanceItemCount,
@@ -161,16 +164,19 @@ public sealed class LocalQualityGateRunWriter
         builder.AppendLine("## Synthetic Corpus");
         builder.AppendLine();
         AppendObservation(builder, artifact.SyntheticSummary);
+        AppendCorpusHandoffSummaries(builder, artifact.SyntheticCorpusHandoffs);
 
         builder.AppendLine();
-        builder.AppendLine("## Optional Smoke");
+        builder.AppendLine("## Observed Corpus");
         builder.AppendLine();
         AppendObservation(builder, artifact.OptionalSmokeSummary);
+        AppendCorpusHandoffSummaries(builder, artifact.ObservedCorpusHandoffs);
         foreach (var smokeCase in artifact.Cases
                      .Where(static item => item.Tags.Contains("optional-smoke", StringComparer.OrdinalIgnoreCase))
-                     .OrderBy(static item => item.CaseId, StringComparer.Ordinal))
+                     .OrderBy(static item => item.CorpusCategory, StringComparer.Ordinal)
+                     .ThenBy(static item => item.CaseId, StringComparer.Ordinal))
         {
-            builder.AppendLine($"- `{smokeCase.CaseId}`: `{smokeCase.Status}`");
+            builder.AppendLine($"- `{smokeCase.CorpusCategory}` / `{smokeCase.CaseId}`: `{smokeCase.Status}`");
             if (!string.IsNullOrWhiteSpace(smokeCase.SkipReason))
             {
                 builder.AppendLine($"  skip reason: `{smokeCase.SkipReason}`");
@@ -208,6 +214,22 @@ public sealed class LocalQualityGateRunWriter
         }
 
         builder.AppendLine();
+        builder.AppendLine("## Case Handoff Details");
+        builder.AppendLine();
+        if (artifact.MissOrUnknownCases.Count == 0)
+        {
+            builder.AppendLine("- miss_or_unknown_cases: none");
+        }
+        else
+        {
+            foreach (var item in artifact.MissOrUnknownCases)
+            {
+                builder.AppendLine(
+                    $"- `{item.CorpusCategory}` / `{item.CaseId}` outcome=`{item.Outcome}` first_candidate=`{item.FirstCandidate ?? "none"}` reason=`{item.Reason ?? "none"}`");
+            }
+        }
+
+        builder.AppendLine();
         builder.AppendLine("## Performance Baseline");
         builder.AppendLine();
         if (artifact.PerformanceBaseline is null)
@@ -224,6 +246,19 @@ public sealed class LocalQualityGateRunWriter
                 artifact.PerformanceBaseline.RegressionWarnings.Count > 0
                     ? $"- regression_warnings: `{string.Join("`, `", artifact.PerformanceBaseline.RegressionWarnings)}`"
                     : "- regression_warnings: none");
+            if (artifact.PerformanceBaseline.CaseComparisons.Count == 0)
+            {
+                builder.AppendLine("- case_comparisons: none");
+            }
+            else
+            {
+                builder.AppendLine("- case_comparisons:");
+                foreach (var item in artifact.PerformanceBaseline.CaseComparisons)
+                {
+                    builder.AppendLine(
+                        $"  `{item.CorpusCategory}` / `{item.CaseId}` time_delta=`{FormatMetricDelta(item.FirstUsefulMapTimeMs)}` representative_delta=`{FormatMetricDelta(item.RepresentativeChainCount)}` unknown_delta=`{FormatMetricDelta(item.UnknownGuidanceCaseCount)}` degraded_delta=`{FormatMetricDelta(item.DegradedReasonCount)}` warnings=`{FormatInlineList(item.RegressionWarnings)}`");
+                }
+            }
         }
 
         builder.AppendLine();
@@ -284,8 +319,28 @@ public sealed class LocalQualityGateRunWriter
         builder.AppendLine($"- skipped: `{summary.SkippedCount}`");
     }
 
+    private static void AppendCorpusHandoffSummaries(
+        StringBuilder builder,
+        IReadOnlyList<CorpusHandoffSummaryArtifact> summaries)
+    {
+        if (summaries.Count == 0)
+        {
+            builder.AppendLine("- corpus_handoff: none");
+            return;
+        }
+
+        foreach (var summary in summaries)
+        {
+            builder.AppendLine(
+                $"- `{summary.CorpusCategory}` hit=`{summary.HitCount}` miss=`{summary.MissCount}` unknown=`{summary.UnknownCount}` total=`{summary.TotalCases}`");
+        }
+    }
+
     private static string FormatInlineList(IReadOnlyCollection<string> values) =>
         values.Count == 0 ? "none" : string.Join("`, `", values);
+
+    private static string FormatMetricDelta(MetricBaselineArtifact? metric) =>
+        metric?.Delta?.ToString() ?? "none";
 
     private static void AppendBaselineMetric(StringBuilder builder, string name, MetricBaselineArtifact? metric)
     {
@@ -314,6 +369,34 @@ public sealed class LocalQualityGateRunWriter
             File.Copy(sourceFile, targetFile, overwrite: true);
         }
     }
+
+    private static IReadOnlyList<CorpusHandoffSummaryArtifact> BuildCorpusHandoffSummaries(
+        IReadOnlyCollection<QualityCaseArtifact> cases,
+        string scope) =>
+        cases.GroupBy(static item => item.CorpusCategory, StringComparer.Ordinal)
+            .OrderBy(static group => group.Key, StringComparer.Ordinal)
+            .Select(group => new CorpusHandoffSummaryArtifact(
+                CorpusCategory: group.Key,
+                Scope: scope,
+                TotalCases: group.Count(),
+                HitCount: group.Count(static item => string.Equals(item.HandoffOutcome, "hit", StringComparison.OrdinalIgnoreCase)),
+                MissCount: group.Count(static item => string.Equals(item.HandoffOutcome, "miss", StringComparison.OrdinalIgnoreCase)),
+                UnknownCount: group.Count(static item => string.Equals(item.HandoffOutcome, "unknown", StringComparison.OrdinalIgnoreCase))))
+            .ToArray();
+
+    private static IReadOnlyList<CaseHandoffSummaryArtifact> BuildCaseHandoffSummaries(
+        IReadOnlyCollection<QualityCaseArtifact> cases) =>
+        cases.Where(static item => item.HandoffOutcome is "miss" or "unknown")
+            .OrderBy(static item => item.CorpusCategory, StringComparer.Ordinal)
+            .ThenBy(static item => item.CaseId, StringComparer.Ordinal)
+            .Select(item => new CaseHandoffSummaryArtifact(
+                CaseId: item.CaseId,
+                CorpusCategory: item.CorpusCategory,
+                Scope: item.Tags.Contains("optional-smoke", StringComparer.OrdinalIgnoreCase) ? "observed" : "synthetic",
+                Outcome: item.HandoffOutcome ?? "unknown",
+                FirstCandidate: item.HandoffFirstCandidate,
+                Reason: item.HandoffReason))
+            .ToArray();
 }
 
 public sealed record LocalQualitySuiteInput(

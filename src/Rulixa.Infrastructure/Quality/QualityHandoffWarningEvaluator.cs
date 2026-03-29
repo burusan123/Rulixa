@@ -72,7 +72,7 @@ internal sealed class QualityHandoffWarningEvaluator
         warnings.Add(new HandoffWarningArtifact(
             CaseId: qualityCase.CaseId,
             Category: "settings-report-ui-noise",
-            Message: $"Settings / Report 系の first candidate が UI ノイズに寄っています: {noisyGuidance.FirstCandidate}."));
+            Message: $"Settings / Report 系の first candidate が UI ノイズで終わっています: {noisyGuidance.FirstCandidate}."));
     }
 
     private static void AppendRawFailureWarning(

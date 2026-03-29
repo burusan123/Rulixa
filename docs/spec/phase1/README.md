@@ -1,46 +1,27 @@
 # Phase 1
 
-このフォルダは `Rulixa` の Phase 1 仕様をまとめた入口です。  
-`Rulixa` は、設計知の成果物を継続生成し、PR レビュー、監査、差分確認、ドリフト検知に使える状態を保つための基盤です。  
-Context Pack はその中で AI 変更開始に使う重要な成果物ですが、製品全体の主役ではありません。  
-Phase 1 は、その全体構想の最初の具体攻略対象として `Windows` 上の `WPF + .NET 8` を扱い、`scan -> resolve-entry -> pack` を安定化する段階です。
+Phase 1 は、`Rulixa` の最初の土台を定義するフェーズです。  
+目的は `scan -> resolve-entry -> pack` の最小経路を成立させ、WPF + .NET 8 ワークスペースから Context Pack を生成できるようにすることでした。
 
-上位方針は [polaris.md](../../polaris.md) と [project_full_spec.md](../../project_full_spec.md) を正本とし、この配下は Phase 1 の具体仕様を扱います。
+上位仕様は [polaris.md](../../polaris.md) と [project_full_spec.md](../../project_full_spec.md) を参照してください。
 
-## 現在の実装範囲
+## このフェーズで入れるもの
 
-- プロジェクト構成は `Rulixa.Domain`、`Rulixa.Application`、`Rulixa.Infrastructure`、`Rulixa.Plugin.WpfNet8`、`Rulixa.Cli`
-- CLI は `scan`、`resolve-entry`、`pack`、`compare-evidence`
-- `entry=file`、`entry=symbol`、`entry=auto` を処理
-- `SelectedItem -> CurrentPage` の navigation 導線を抽出
-- root binding、view binding、`DataTemplate` 要約、DI、dialog activation を Pack に反映
-- `auto` entry は `root-data-context` / `view-data-context` を優先し、`data-template` 由来候補を劣後
-- command は少数件なら全件詳細化し、多数件なら summary を維持しつつ `goal` に近い command だけを詳細化
-- command 詳細化では `execute -> direct service/dialog` に加えて、同一 ViewModel 内の `private helper 1 hop` を `execute -> helper -> service/dialog` として表示
-- dialog 抽出は invocation 単位で `show` / `show-dialog` / `owner kind` を判定
-- 大きい `*.cs` は全文ではなく snippet 優先で Pack に入れる
-- `pack --evidence-dir` で `manifest.json`、`scan.json`、`resolved-entry.json`、`pack.md` を決定的な bundle として保存する
-- `compare-evidence` で bundle 2 つの metadata / contracts / selected files / selected snippets の差分を確認する
-- optional smoke として `<modern-real-workspace>` を使う実ワークスペース検証を用意
-
-## 読む順番
-
-- [scope.md](scope.md)
-  Phase 1 の対象と非対象
-- [architecture.md](architecture.md)
-  Domain / Application / Plugin / Infrastructure の責務分割
-- [ir.md](ir.md)
-  Phase 1 の IR
-- [entry_resolution.md](entry_resolution.md)
-  `entry=file/symbol/auto` の解決規則
-- [wpf_net8_extraction_targets.md](wpf_net8_extraction_targets.md)
-  WPF 固有の抽出対象
-- [context_pack_rules.md](context_pack_rules.md)
-  Pack の構成と snippet / file 選定規則
-- [implementation_plan.md](implementation_plan.md)
-  現在の実装状態、出口条件、次の backlog
-- [examples/sample_shell_pack_example.md](examples/sample_shell_pack_example.md)
-  `RealWorkspace` を題材にした Pack 例
+- プロジェクト構成
+  - `Rulixa.Domain`
+  - `Rulixa.Application`
+  - `Rulixa.Infrastructure`
+  - `Rulixa.Plugin.WpfNet8`
+  - `Rulixa.Cli`
+- CLI
+  - `scan`
+  - `resolve-entry`
+  - `pack`
+  - `compare-evidence`
+- `entry=file` / `entry=symbol` / `entry=auto`
+- root binding / view binding / `DataTemplate` 抽出
+- command の 直接呼び出しと helper 1 hop の追跡
+- evidence bundle の出力と比較
 
 ## 実行例
 
@@ -59,21 +40,10 @@ dotnet run --project src\Rulixa.Cli -- pack `
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace <modern-real-workspace> `
   --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "設定画面を開きたい"
+  --goal "設計全体を把握したい"
 ```
 
-### command helper 導線を確認したい場合
-
-```powershell
-dotnet run --project src\Rulixa.Cli -- pack `
-  --workspace <modern-real-workspace> `
-  --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "project"
-```
-
-この場合、Pack の `Command` 契約と index で `execute -> helper -> service/dialog` の経路が詳細化されます。
-
-### evidence bundle を残したい場合
+### evidence bundle
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
@@ -83,10 +53,13 @@ dotnet run --project src\Rulixa.Cli -- pack `
   --evidence-dir artifacts\evidence
 ```
 
-### evidence bundle を比較したい場合
+## ドキュメント構成
 
-```powershell
-dotnet run --project src\Rulixa.Cli -- compare-evidence `
-  --base artifacts\evidence\<base-bundle> `
-  --target artifacts\evidence\<target-bundle>
-```
+- [scope.md](scope.md)
+- [architecture.md](architecture.md)
+- [ir.md](ir.md)
+- [entry_resolution.md](entry_resolution.md)
+- [wpf_net8_extraction_targets.md](wpf_net8_extraction_targets.md)
+- [context_pack_rules.md](context_pack_rules.md)
+- [implementation_plan.md](implementation_plan.md)
+- [examples/sample_shell_pack_example.md](examples/sample_shell_pack_example.md)

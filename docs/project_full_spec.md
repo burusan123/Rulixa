@@ -3,131 +3,89 @@
 ## 0. 位置づけ
 
 この文書は `Rulixa` の全体仕様です。  
-Phase 1 の実装仕様や抽出規則よりも上位にあり、製品の目的、価値、アーキテクチャ、ライセンス、セキュリティ方針を定義します。
+Phase ごとの詳細仕様より上位にあり、目的、主機能、アーキテクチャ、品質方針、運用方針をまとめます。
 
-## 1. 製品定義
+## 1. 目的
 
-`Rulixa` は、設計知の成果物を継続生成し、PR レビュー、監査、差分確認、ドリフト検知に使える形で保持するためのローカル基盤です。  
-AI 入力正規化はその重要な一部ですが、製品全体を表す主目的ではありません。
+`Rulixa` は、設計レビュー、保守、移行、調査に使える高密度な Context Pack を生成するためのツールです。  
+全文検索を置き換えることではなく、「最初に何を理解すべきか」を圧縮して返すことを主目的にします。
 
-Rulixa が中核として扱う成果物は次です。
+## 2. 主な機能
 
-- `Contracts`
-- `Index / Map`
-- `Context Pack`
-- `Security Gate`
+### 2.1 Context Pack の生成
 
-このうち `Context Pack` は、AI が変更開始時に使う最小文脈束です。  
-一方で、製品としての中心価値は、これらの成果物を継続生成し、レビュー・監査・運用に使える状態を保つことにあります。
+- WPF / .NET ワークスペースを scan する
+- `entry=file` / `entry=symbol` / `entry=auto` で入口を解決する
+- root binding、navigation、dialog activation、dependency injection、workflow の要点を pack にまとめる
 
-## 2. 主な価値
+### 2.2 Evidence bundle
 
-### 2.1 設計成果物の継続生成
+- `pack --evidence-dir` で scan / resolved-entry / pack をまとめて出力する
+- `compare-evidence` で 2 つの bundle の差分を読む
 
-- 実装、設定、依存関係、変更理由を説明可能な形で出力する
-- 人やツールが都度読み直さなくても使える設計成果物を残す
-- 実装と設計成果物を継続的に同期し、後工程へ受け渡す
+### 2.3 Quality artifact
 
-### 2.2 PR レビューと差分確認
+- local quality gate と GitHub Actions で `kpi.json` / `gate.json` / `summary.md` を出力する
+- required gate と advisory 指標を分離して継続運用する
 
-- 変更に関連する因果と影響範囲を差分成果物として提示する
-- レビュー時に「何が変わり、どこを見るべきか」を短時間で判断できる
-- AI レビューでも人間レビューでも同じ成果物を参照できる
+### 2.4 Handoff
 
-### 2.3 監査証跡
+- `Rulixa -> 全文検索` handoff を前提にする
+- `unknowns` と next candidates で「次にどこを掘るか」を返す
+- handoff outcome と performance を artifact に記録する
 
-- いつ、どの入力から、どの成果物が生成されたかを追える
-- secret や危険設定の扱いを含め、監査可能な形で残せる
-- 設計判断の根拠と変更差分を成果物として保持する
+## 3. 技術構成
 
-### 2.4 CI 継続生成
+### 3.1 プロジェクト
 
-- リポジトリ更新に追従して成果物を再生成する
-- 実装、設計、レビュー用成果物のずれを減らす
-- Pack だけでなく Contracts / Index も継続更新する
+- `src/Rulixa.Domain`
+- `src/Rulixa.Application`
+- `src/Rulixa.Infrastructure`
+- `src/Rulixa.Plugin.WpfNet8`
+- `src/Rulixa.Cli`
+- `plugins/rulixa`
 
-### 2.5 ドリフト検知
+### 3.2 アーキテクチャ
 
-- 実装、設定、設計成果物の差分を継続的に比較する
-- 変更が意図どおり設計へ反映されたかを検出する
+- Domain
+  - ルールとモデル
+- Application
+  - ユースケース
+- Infrastructure
+  - ファイルシステム、artifact、rendering
+- Plugin
+  - WPF / .NET 8 抽出
+- CLI / Plugin
+  - 外部入出力
 
-### 2.6 AI 入力正規化
+## 4. 品質方針
 
-- 変更対象ごとに必要最小限の文脈を構造化して渡す
-- 人による手動収集を減らし、AI 入力品質を安定させる
-- Context Pack を通して変更開始を速くする
+- crash-free を最優先にする
+- false confidence を許容しない
+- degraded でも diagnostics と next candidates を返す
+- local quality gate と GitHub Actions で required gate を回す
+- optional smoke は observation-only として扱う
 
-ここでの位置づけは明確です。  
-AI 入力正規化は重要ですが、上位の目的は「設計知の継続生成・レビュー・監査基盤」であり、Context Pack はその運用成果物のひとつです。
+## 5. セキュリティと公開方針
 
-## 3. 対象領域
+- secret を docs や artifact に残さない
+- public-facing docs にローカル絶対パスを残さない
+- 固有 workspace 名より構造カテゴリを主語にする
+- plugin metadata と examples は GitHub 上で読める形を維持する
 
-### 3.1 主戦場
+## 6. 現在の到達点
 
-- GCP / IaC
-  - Cloud Run
-  - Pub/Sub
-  - Workflows
-  - IAM
-  - Terraform
-  - Cloud Build
-
-### 3.2 言語
-
-- C#
-- TypeScript
-- Python
-- Rust
-
-## 4. Phase 1 の役割
-
-Phase 1 は製品全体を定義するものではなく、最初の実戦投入先として `Windows` 上の `WPF + .NET 8` を扱う段階です。  
-この段階では `scan -> resolve-entry -> pack` を通し、レビューや AI 変更開始に使える最小成果物を安定して生成できる状態を目指します。
-
-つまり Phase 1 は `WPF + .NET 8 Pack 生成ツール` を製品定義とするものではありません。  
-Rulixa 全体の一部を、具体攻略対象で先に実装している段階です。
-
-## 5. アーキテクチャ方針
-
-- Core に主価値を置く
-- Front は薄く保つ
-- Plugin は対象別抽出を担い、Core を侵食しない
-- ローカルで解析と成果物生成を完結できるようにする
-- 後から入口や対象言語を増やしても、成果物モデルを保てるようにする
-
-## 6. ライセンスと価格
-
-現時点の価格想定は次です。
-
-- 年間契約
-- `49,800円 / 人 / 年`
-- 最低 3 人
-- チーム利用前提
-- PR レビュー、監査、AI 変更開始の運用価値に対して課金する
-
-詳細は今後の正式仕様で定義する。ここでは価格の考え方だけを置く。
-
-## 7. セキュリティとライセンス
-
-- secret 持ち出し防止
-- 危険設定の検出
-- 監査対象差分の保持
-- ライセンス状態の確認
-
-Rulixa の本質はライセンス制御自体ではなく、成果物を安全に継続生成できる運用基盤にあります。
-
-## 8. 成功条件
-
-- AI に Pack だけを渡して変更開始できる
-- PR レビューで差分確認が速くなる
-- 監査で設計判断の根拠を追える
-- CI で成果物を継続生成できる
-- ドリフトを差分として見つけられる
-
-## 9. 文書の正本順位
-
-1. `polaris.md`
-2. `project_full_spec.md`
-3. `docs/spec/phase1/*`
-
-Phase 1 仕様は具体攻略対象の仕様であり、製品全体の正本ではありません。
+- Phase 1
+  scan / resolve-entry / pack の土台
+- Phase 2
+  高シグナル sections
+- Phase 3
+  system pack
+- Phase 4
+  legacy WPF compatibility
+- Phase 5
+  quality artifact と local quality gate
+- Phase 6
+  GitHub Actions と release gate
+- Phase 7
+  handoff scoring と corpus / case 比較

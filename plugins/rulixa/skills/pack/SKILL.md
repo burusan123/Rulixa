@@ -5,9 +5,9 @@ description: `Rulixa.Cli` を使って、WPF / .NET ワークスペースの Con
 
 # Rulixa Pack
 
-`Rulixa.Cli` の `pack` を使って system map を取得するときの最小ガイドです。
+`Rulixa.Cli` の `pack` は、WPF / .NET ワークスペースの system map を素早く得るための入口です。
 
-## 使い分け
+## 入力
 
 - `entry=symbol`
   root ViewModel や主要サービスの symbol が分かっているときに使います。
@@ -31,7 +31,7 @@ dotnet run --project src\Rulixa.Cli -- pack `
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace <target-workspace> `
   --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "システム全体の構造を理解する"
+  --goal "システム全体の地図を理解する"
 ```
 
 ### file entry
@@ -43,13 +43,15 @@ dotnet run --project src\Rulixa.Cli -- pack `
   --goal "Shell 画面の workflow と persistence map を理解する"
 ```
 
-### 補助コマンド
+### entry 解決だけ確認する
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- resolve-entry `
   --workspace <target-workspace> `
   --entry <entry>
 ```
+
+### scan のみ実行する
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- scan `
@@ -58,8 +60,8 @@ dotnet run --project src\Rulixa.Cli -- scan `
 
 ## 効果的な使い方
 
-1. まず `pack` で system map を取ります。
-2. `unknowns` と next candidates を読みます。
-3. 必要な箇所だけ全文検索で深掘りします。
+1. まず `pack` で system map を取得します。
+2. `unknowns` と next candidates を見て、未確定部分の次候補を確認します。
+3. 本当に詳細が必要な箇所だけ全文検索で深掘りします。
 
-`Rulixa` は「全文を説明する」ツールではなく、「どこから理解すべきかを圧縮して返す」ツールです。
+`Rulixa` は「全文を説明しきる」ツールではなく、「どこから読むべきかを整理して返す」ツールです。

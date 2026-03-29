@@ -1,15 +1,15 @@
 # Rulixa
 
-`Rulixa` は、WPF / .NET ワークスペースから高密度な Context Pack を生成するツールです。  
+`Rulixa` は、WPF / .NET ワークスペースから高密度な Context Pack を生成するためのツールです。  
 目的は全文検索の代替ではなく、LLM や人間が短いコンテキストで正しく理解を始められる system map を返すことです。
 
 ## できること
 
-- `entry=file` と `entry=symbol` の 2 方式で pack を生成
-- root ViewModel や root XAML から system map を圧縮して返す
-- `unknowns` と next candidates で次に掘る候補を案内
-- evidence bundle と quality gate artifact を生成
-- Codex plugin から `pack` を呼び出し可能
+- `entry=file` と `entry=symbol` の 2 方式で `pack` を生成する
+- root ViewModel や root XAML から system map をまとめて返す
+- `unknowns` と next candidates で次に掘る候補を示す
+- evidence bundle と quality artifact で比較・回帰確認を行う
+- Codex plugin から `pack` を直接呼び出す
 
 ## 主なコマンド
 
@@ -35,10 +35,10 @@ dotnet run --project src\Rulixa.Cli -- pack `
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace <target-workspace> `
   --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "システム全体の構造を理解する"
+  --goal "システム全体の地図を理解する"
 ```
 
-### evidence bundle を保存
+### evidence bundle を出力する
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
@@ -48,7 +48,7 @@ dotnet run --project src\Rulixa.Cli -- pack `
   --evidence-dir artifacts\evidence
 ```
 
-### evidence bundle を比較
+### evidence bundle を比較する
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- compare-evidence `

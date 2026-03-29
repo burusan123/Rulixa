@@ -36,13 +36,16 @@ public sealed class LocalQualityGateRunWriterTests
             var summary = await File.ReadAllTextAsync(result.SummaryPath);
             Assert.Contains("## Gate", summary, StringComparison.Ordinal);
             Assert.Contains("## Synthetic Corpus", summary, StringComparison.Ordinal);
-            Assert.Contains("## Optional Smoke", summary, StringComparison.Ordinal);
+            Assert.Contains("## Observed Corpus", summary, StringComparison.Ordinal);
             Assert.Contains("## Handoff Observations", summary, StringComparison.Ordinal);
+            Assert.Contains("## Case Handoff Details", summary, StringComparison.Ordinal);
             Assert.Contains("## Performance Baseline", summary, StringComparison.Ordinal);
             Assert.Contains("## Unknown Guidance Details", summary, StringComparison.Ordinal);
             Assert.Contains("## Degraded Diagnostics", summary, StringComparison.Ordinal);
             Assert.Contains("smoke-env-disabled", summary, StringComparison.Ordinal);
             Assert.Contains("synthetic corpus is the handoff quality baseline", summary, StringComparison.Ordinal);
+            Assert.Contains("`dialog-heavy-root` hit=`1` miss=`0` unknown=`0` total=`1`", summary, StringComparison.Ordinal);
+            Assert.Contains("`legacy-codebehind-root` / `real-workspace-legacy-root`: `skipped`", summary, StringComparison.Ordinal);
             Assert.Contains("TemplateHeavyResources.SettingsWindow", summary, StringComparison.Ordinal);
             Assert.Contains("handoff_warnings: `0`", summary, StringComparison.Ordinal);
             Assert.Contains("baseline: `none`", summary, StringComparison.Ordinal);
@@ -72,6 +75,9 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Equal(1, runArtifact.HandoffSummary.HitCount);
             Assert.Equal(0, runArtifact.HandoffSummary.MissCount);
             Assert.Equal(1, runArtifact.HandoffSummary.UnknownCount);
+            Assert.Single(runArtifact.SyntheticCorpusHandoffs, static item => item.CorpusCategory == "dialog-heavy-root");
+            Assert.Single(runArtifact.ObservedCorpusHandoffs, static item => item.CorpusCategory == "legacy-codebehind-root");
+            Assert.Single(runArtifact.MissOrUnknownCases);
             Assert.Null(runArtifact.PerformanceBaseline);
         }
         finally
@@ -143,8 +149,10 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.NotNull(runArtifact);
             Assert.NotNull(runArtifact!.PerformanceBaseline);
             Assert.Contains("regression_warnings: `first_useful_map_time_ms`, `representative_chain_count`, `degraded_reason_count`", summary, StringComparison.Ordinal);
+            Assert.Contains("case_comparisons:", summary, StringComparison.Ordinal);
             Assert.True(runArtifact.PerformanceBaseline!.RegressionWarnings.Count > 0);
             Assert.True(runArtifact.PerformanceBaseline.FirstUsefulMapTimeMs!.RegressionWarning);
+            Assert.NotEmpty(runArtifact.PerformanceBaseline.CaseComparisons);
         }
         finally
         {
@@ -162,6 +170,7 @@ public sealed class LocalQualityGateRunWriterTests
             new QualityCaseArtifact(
                 CaseId: "synthetic-root",
                 CorpusName: "LegacyDialogHeavy",
+                CorpusCategory: "dialog-heavy-root",
                 WorkspaceType: "synthetic-legacy",
                 Entry: "file:ShellWindow.xaml",
                 Goal: "legacy system",
@@ -189,6 +198,7 @@ public sealed class LocalQualityGateRunWriterTests
             new QualityCaseArtifact(
                 CaseId: "synthetic-weak-signal",
                 CorpusName: "TemplateHeavyResources",
+                CorpusCategory: "weak-signal-root",
                 WorkspaceType: "synthetic-legacy",
                 Entry: "symbol:TemplateHeavyResources.ViewModels.ShellViewModel",
                 Goal: "legacy system",
@@ -237,6 +247,7 @@ public sealed class LocalQualityGateRunWriterTests
             new QualityCaseArtifact(
                 CaseId: "real-workspace-legacy-root",
                 CorpusName: "LegacyRealWorkspace",
+                CorpusCategory: "legacy-codebehind-root",
                 WorkspaceType: "legacy-real",
                 Entry: "file:Configured/LegacyEntry.xaml",
                 Goal: "legacy system",

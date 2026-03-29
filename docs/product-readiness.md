@@ -2,139 +2,94 @@
 
 ## 目的
 
-この文書は、`Rulixa` を「試作」から「市販できるレベル」へ引き上げるための出荷判定チェックリストである。  
-Phase 1〜4 の仕様書は機能進化を扱うが、本書は **製品として何が揃っていればよいか** を確認するために使う。
+この文書は、`Rulixa` を実運用できる品質に仕上げるためのチェックリストです。  
+Phase 1 以降の実装結果を踏まえつつ、「動く」ではなく「公開して継続運用できる」状態に達しているかを確認します。
 
-## 前提
+## 評価軸
 
-- `Rulixa` の主価値は「全文検索の代替」ではない
-- 主価値は「LLM が短いコンテキストで理解を始められる高密度な地図を返すこと」
-- そのため、出荷判定では賢さだけでなく
+- 技術
   - 互換性
   - 安定性
-  - 診断性
+  - 設計一貫性
+  - 観測可能性
+- 品質保証
+  - corpus
+  - regression
+  - release gate
+- UX
+  - pack の読みやすさ
+  - unknown guidance の使いやすさ
+- サポート運用
+  - diagnostics
+  - evidence bundle
   - 再現性
-  - サポート可能性
-  を同等に扱う
-
-## 出荷判定の原則
-
-- `modern WPF で強い` だけでは不可
-- `legacy WPF でも落ちない` ことが必要
-- 未対応構成でも crash せず、partial pack と diagnostics を返せること
-- 同じ入力で同じ pack と diagnostics が出ること
-- 「分からないのに分かったふり」をしないこと
 
 ## KPI
 
-| 指標 | 目的 | 最低条件 | 証跡 |
+| 指標 | 意味 | 最低基準 | 観測方法 |
 |---|---|---|---|
-| `pack success rate` | pack が返る率 | modern / legacy corpus の両方で継続計測されている | smoke / regression レポート |
-| `partial pack rate` | degraded でも有用な出力が返る率 | failure と区別して計測されている | diagnostics / evidence |
-| `crash-free rate` | 例外で落ちない率 | release gate に含まれている | CI / optional smoke |
-| `first useful map time` | 初動理解の速さ | 大規模 workspace でも許容時間内 | benchmark |
-| `unknown guidance hit rate` | handoff 品質 | unknown から全文検索で正答に届くかを検証 | acceptance |
-| `false confidence rate` | 分かったふりの抑制 | 低いことを確認する | golden review |
-| `deterministic rate` | 再現性 | 同じ入力で同じ結果が出る | regression |
+| `pack success rate` | pack が返る割合 | required corpus で 100% | regression / smoke |
+| `partial pack rate` | degraded だが有用な pack が返る割合 | failure との差分として観測 | diagnostics / artifact |
+| `crash-free rate` | 例外で止まらない割合 | release gate で 100% | CI / local gate |
+| `first useful map time` | 最初の有用な map が返るまでの時間 | baseline 比較で退行しない | benchmark / artifact |
+| `unknown guidance hit rate` | handoff 候補が次の探索に効く割合 | advisory で継続観測 | case assertion / review |
+| `false confidence rate` | 分かったふりをした割合 | required corpus で 0% | regression |
+| `deterministic rate` | 同一入力で同一結果が返る割合 | required corpus で 100% | regression |
 
 ## チェックリスト
 
 ### 1. 技術
 
-- [ ] modern WPF + DI 構成で system pack が安定して返る
+- [ ] modern WPF + DI 構成で system pack が返る
 - [ ] legacy WPF + code-behind 構成で crash しない
 - [ ] `App.xaml StartupUri` を root 解決に使える
-- [ ] `DataContext = new XxxViewModel()` を root / binding 解決に使える
-- [ ] service locator / static resolver を limited support できる
-- [ ] `new Window()` / `ShowDialog()` を route 候補として拾える
-- [ ] ResourceDictionary / merged dictionaries で parse failure になりにくい
-- [ ] partial class / partial record の統合が安定している
-- [ ] unsupported construct で top-level failure ではなく degraded pack を返せる
-- [ ] diagnostics が failure reason と next candidates を返せる
+- [ ] `DataContext = new XxxViewModel()` を root binding として扱える
+- [ ] service locator を限定的に扱える
+- [ ] `new Window()` / `ShowDialog()` を route として扱える
+- [ ] ResourceDictionary / merged dictionaries で top-level failure にならない
+- [ ] unsupported construct でも degraded pack と diagnostics を返せる
 - [ ] false confidence を抑制できている
-- [ ] compare-evidence で改善内容を追える
 
 ### 2. 品質保証
 
-- [ ] modern corpus がある
-- [ ] legacy corpus がある
-- [ ] synthetic fixture が root / dialog / service locator / code-behind を含む
-- [ ] `RealWorkspace` の acceptance がある
-- [ ] `LegacyRealWorkspace` の acceptance がある
-- [ ] pack 本文の golden test がある
-- [ ] diagnostics の golden test がある
-- [ ] decision trace の regression test がある
+- [ ] synthetic corpus が modern / legacy / dialog-heavy / weak-signal を含む
+- [ ] observed corpus が複数カテゴリで観測できる
+- [ ] pack 本文の regression テストがある
+- [ ] diagnostics の regression テストがある
 - [ ] deterministic regression がある
-- [ ] failure taxonomy が固定されている
-- [ ] release ごとに KPI を記録できる
+- [ ] release gate が CI で実行される
+- [ ] advisory 指標が artifact に残る
 
 ### 3. UX
 
-- [ ] plugin 説明が日本語で一貫している
-- [ ] `pack -> 必要時のみ全文検索` の使い分けが明確
-- [ ] `entry=file` / `entry=symbol` の選び方が説明されている
-- [ ] root entry では system map が先に読める
-- [ ] unknowns を「次の探索ガイド」として読める
-- [ ] diagnostics が exception text ではなく説明文になっている
-- [ ] 初回ユーザーが `ShellViewModel` や main screen を起点に選びやすい
-- [ ] 成功時の期待値が正しく伝わる
-  - 「全実装を説明する」ではなく「高密度な地図を返す」
+- [ ] plugin 説明が日本語で読める
+- [ ] `pack -> 必要時のみ全文検索` の導線が明確
+- [ ] `entry=file` / `entry=symbol` の選び方が分かる
+- [ ] system map が root entry で読める
+- [ ] `unknowns` が「次に見る候補」として読める
+- [ ] docs / examples が GitHub でそのまま読める
 
 ### 4. サポート運用
 
-- [ ] issue template がある
-- [ ] 再現に必要な入力が定義されている
-  - workspace
-  - entry
-  - goal
-  - diagnostics
-  - evidence bundle
-- [ ] diagnostics から再現調査を始められる
-- [ ] degraded pack をサポート時に説明できる
-- [ ] evidence bundle の保全方針がある
-- [ ] 対応済み / 部分対応 / 未対応の互換性表がある
-- [ ] release note で互換性改善を追える
+- [ ] diagnostics から再現に必要な情報を取れる
+- [ ] evidence bundle を比較に使える
+- [ ] local quality gate を開発者が毎回回せる
+- [ ] GitHub Actions の required gate が運用されている
+- [ ] optional smoke が observation-only として分離されている
 
 ## フェーズとの関係
 
 - Phase 1
-  基盤と evidence
+  基礎と evidence
 - Phase 2
-  高シグナル抽出
+  高シグナル sections
 - Phase 3
   system pack
 - Phase 4
   legacy WPF compatibility
-
-本書は Phase 4 の次に参照するものではなく、Phase 4 を実装しながら継続的に更新する。
-
-## 優先順位
-
-1. crash-free
-2. legacy compatibility
-3. diagnostics quality
-4. acceptance corpus
-5. UX / supportability
-6. deeper drilldown
-
-## Phase 6 で完了した項目
-
-- [x] local quality gate を GitHub Actions に載せた
-- [x] required gate を `pull_request` と `main` push で実行する前提を固定した
-- [x] `gate.json` を release gate の正本として扱う運用を入れた
-- [x] `kpi.json` / `gate.json` / `summary.md` を artifact として保存する前提を整えた
-- [x] optional smoke を gate ではなく observation-only として分離した
-- [x] handoff warning を `summary.md` で確認できるようにした
-
-## Phase 6 完了条件
-
-- GitHub 上で required gate が動く
-- artifact と step summary が確認できる
-- required gate の fail が workflow fail に反映される
-- optional smoke が fail しても required gate を落とさない
-- release review で `summary.md` を正本として使える
-
-## メモ
-
-- `mode 分離` や `deep drilldown` は重要だが、product readiness の観点では crash-free と互換性の後に来る
-- 市販レベルを目指すなら、まず「使える workspace の範囲」と「壊れたときの説明可能性」を完成させる
+- Phase 5
+  quality artifact と local quality gate
+- Phase 6
+  GitHub Actions と release gate
+- Phase 7
+  handoff scoring と corpus / performance 比較

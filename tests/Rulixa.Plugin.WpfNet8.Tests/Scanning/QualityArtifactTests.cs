@@ -50,6 +50,12 @@ public sealed class QualityArtifactTests
             Assert.True(artifact.HandoffUnknownCount > 0);
             Assert.True(artifact.HandoffMissCount >= 0);
             Assert.Contains(artifact.Cases, static item => item.HandoffOutcome is "hit" or "unknown");
+            Assert.True(
+                artifact.Cases
+                    .Where(static item => item.Tags.Contains("optional-smoke", StringComparer.OrdinalIgnoreCase))
+                    .Select(static item => item.CorpusCategory)
+                    .Distinct(StringComparer.Ordinal)
+                    .Count() >= 4);
             Assert.True(File.Exists(filePath));
             Assert.NotNull(artifact.QualityGate);
         }
@@ -78,6 +84,7 @@ public sealed class QualityArtifactTests
         var definition = new QualityCaseDefinition(
             CaseId: "missing-optional-smoke",
             CorpusName: "MissingWorkspace",
+            CorpusCategory: "legacy-codebehind-root",
             WorkspaceType: "legacy-real",
             WorkspaceRoot: @"D:\does-not-exist",
             Entry: new Rulixa.Domain.Entries.Entry(Rulixa.Domain.Entries.EntryKind.File, "Missing.xaml"),

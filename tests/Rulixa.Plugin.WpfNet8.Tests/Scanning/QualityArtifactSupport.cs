@@ -25,6 +25,7 @@ internal static class QualityArtifactSupport
         new(
             CaseId: "dialog-heavy-root",
             CorpusName: "DialogHeavyRoot",
+            CorpusCategory: "dialog-heavy-root",
             WorkspaceType: "synthetic-legacy",
             WorkspaceRoot: LegacyDialogHeavyRoot,
             Entry: new Entry(EntryKind.File, "ShellWindow.xaml"),
@@ -37,6 +38,7 @@ internal static class QualityArtifactSupport
         new(
             CaseId: "legacy-dialog-root",
             CorpusName: "LegacyDialogHeavy",
+            CorpusCategory: "dialog-heavy-root",
             WorkspaceType: "synthetic-legacy",
             WorkspaceRoot: LegacyDialogHeavyRoot,
             Entry: new Entry(EntryKind.File, "ShellWindow.xaml"),
@@ -49,6 +51,7 @@ internal static class QualityArtifactSupport
         new(
             CaseId: "legacy-dialog-non-root",
             CorpusName: "LegacyDialogHeavy",
+            CorpusCategory: "dialog-heavy-root",
             WorkspaceType: "synthetic-legacy",
             WorkspaceRoot: LegacyDialogHeavyRoot,
             Entry: new Entry(EntryKind.Symbol, "LegacyDialogHeavy.SettingsWindowAdapter"),
@@ -61,6 +64,7 @@ internal static class QualityArtifactSupport
         new(
             CaseId: "service-locator-root",
             CorpusName: "ServiceLocatorRoot",
+            CorpusCategory: "service-locator-root",
             WorkspaceType: "synthetic-legacy",
             WorkspaceRoot: LegacyServiceLocatorRoot,
             Entry: new Entry(EntryKind.File, "ShellWindow.xaml"),
@@ -73,6 +77,7 @@ internal static class QualityArtifactSupport
         new(
             CaseId: "legacy-service-locator-root",
             CorpusName: "LegacyServiceLocator",
+            CorpusCategory: "service-locator-root",
             WorkspaceType: "synthetic-legacy",
             WorkspaceRoot: LegacyServiceLocatorRoot,
             Entry: new Entry(EntryKind.File, "ShellWindow.xaml"),
@@ -85,6 +90,7 @@ internal static class QualityArtifactSupport
         new(
             CaseId: "modern-sibling-root",
             CorpusName: "ModernSiblingRoot",
+            CorpusCategory: "modern-sibling-root",
             WorkspaceType: "synthetic-modern",
             WorkspaceRoot: ModernSiblingRootRoot,
             Entry: new Entry(EntryKind.Symbol, "ModernSiblingRoot.ViewModels.ShellViewModel"),
@@ -97,6 +103,7 @@ internal static class QualityArtifactSupport
         new(
             CaseId: "weak-signal-root",
             CorpusName: "WeakSignalRoot",
+            CorpusCategory: "weak-signal-root",
             WorkspaceType: "synthetic-legacy",
             WorkspaceRoot: TemplateHeavyResourcesRoot,
             Entry: new Entry(EntryKind.File, "ShellWindow.xaml"),
@@ -109,6 +116,7 @@ internal static class QualityArtifactSupport
         new(
             CaseId: "template-heavy-root",
             CorpusName: "TemplateHeavyResources",
+            CorpusCategory: "template-heavy-root",
             WorkspaceType: "synthetic-legacy",
             WorkspaceRoot: TemplateHeavyResourcesRoot,
             Entry: new Entry(EntryKind.File, "ShellWindow.xaml"),
@@ -121,6 +129,7 @@ internal static class QualityArtifactSupport
         new(
             CaseId: "template-heavy-weak-signal",
             CorpusName: "TemplateHeavyResources",
+            CorpusCategory: "template-heavy-root",
             WorkspaceType: "synthetic-legacy",
             WorkspaceRoot: TemplateHeavyResourcesRoot,
             Entry: new Entry(EntryKind.Symbol, "TemplateHeavyResources.ViewModels.ShellViewModel"),
@@ -135,8 +144,9 @@ internal static class QualityArtifactSupport
     internal static IReadOnlyList<QualityCaseDefinition> CreateOptionalSmokeCaseDefinitions() =>
     [
         new(
-            CaseId: "real-workspace-modern-root",
-            CorpusName: "RealWorkspace",
+            CaseId: "observed-modern-di-root",
+            CorpusName: "ObservedWorkspace",
+            CorpusCategory: "modern-di-root",
             WorkspaceType: "modern-real",
             WorkspaceRoot: RealWorkspaceOptionalSmokeTests.GetConfiguredWorkspaceRoot() ?? string.Empty,
             Entry: new Entry(
@@ -149,8 +159,9 @@ internal static class QualityArtifactSupport
             ExpectUnknownGuidance: false,
             DisallowedRepresentativeSections: []),
         new(
-            CaseId: "real-workspace-modern-secondary",
-            CorpusName: "RealWorkspace",
+            CaseId: "observed-dialog-heavy-root",
+            CorpusName: "ObservedWorkspace",
+            CorpusCategory: "dialog-heavy-root",
             WorkspaceType: "modern-real",
             WorkspaceRoot: RealWorkspaceOptionalSmokeTests.GetConfiguredWorkspaceRoot() ?? string.Empty,
             Entry: new Entry(
@@ -163,8 +174,24 @@ internal static class QualityArtifactSupport
             ExpectUnknownGuidance: true,
             DisallowedRepresentativeSections: []),
         new(
-            CaseId: "real-workspace-legacy-root",
-            CorpusName: "LegacyRealWorkspace",
+            CaseId: "observed-settings-report-heavy-root",
+            CorpusName: "ObservedWorkspace",
+            CorpusCategory: "settings-report-heavy-root",
+            WorkspaceType: "modern-real",
+            WorkspaceRoot: RealWorkspaceOptionalSmokeTests.GetConfiguredWorkspaceRoot() ?? string.Empty,
+            Entry: new Entry(
+                EntryKind.Symbol,
+                RealWorkspaceOptionalSmokeTests.GetConfiguredRootSymbol() ?? "Configured.Root.Symbol"),
+            Goal: "settings report export",
+            Tags: ["root-case", "optional-smoke"],
+            RequiredFamilies: ["Settings", "Report/Export"],
+            RequireCenterState: false,
+            ExpectUnknownGuidance: true,
+            DisallowedRepresentativeSections: []),
+        new(
+            CaseId: "observed-legacy-codebehind-root",
+            CorpusName: "ObservedLegacyWorkspace",
+            CorpusCategory: "legacy-codebehind-root",
             WorkspaceType: "legacy-real",
             WorkspaceRoot: LegacyRealWorkspaceOptionalSmokeTests.GetConfiguredWorkspaceRoot() ?? string.Empty,
             Entry: new Entry(
@@ -186,6 +213,7 @@ internal static class QualityArtifactSupport
             return new QualityCaseArtifact(
                 CaseId: definition.CaseId,
                 CorpusName: definition.CorpusName,
+                CorpusCategory: definition.CorpusCategory,
                 WorkspaceType: definition.WorkspaceType,
                 Entry: definition.Entry.ToString(),
                 Goal: definition.Goal,
@@ -244,6 +272,7 @@ internal static class QualityArtifactSupport
             return new QualityCaseArtifact(
                 CaseId: definition.CaseId,
                 CorpusName: definition.CorpusName,
+                CorpusCategory: definition.CorpusCategory,
                 WorkspaceType: definition.WorkspaceType,
                 Entry: definition.Entry.ToString(),
                 Goal: definition.Goal,
@@ -284,6 +313,7 @@ internal static class QualityArtifactSupport
             return new QualityCaseArtifact(
                 CaseId: definition.CaseId,
                 CorpusName: definition.CorpusName,
+                CorpusCategory: definition.CorpusCategory,
                 WorkspaceType: definition.WorkspaceType,
                 Entry: definition.Entry.ToString(),
                 Goal: definition.Goal,
@@ -566,6 +596,7 @@ internal static class QualityArtifactSupport
 internal sealed record QualityCaseDefinition(
     string CaseId,
     string CorpusName,
+    string CorpusCategory,
     string WorkspaceType,
     string WorkspaceRoot,
     Entry Entry,

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Rulixa.Application.Tests.Docs;
 
 public sealed class PublicDocsHardeningTests
@@ -5,9 +7,9 @@ public sealed class PublicDocsHardeningTests
     private static readonly string RepositoryRoot = GetRepositoryRoot();
 
     [Fact]
-    public void PublicDocs_DoNotContainLocalAbsoluteLinks()
+    public void PublicFacingDocs_DoNotContainLocalAbsoluteLinks()
     {
-        var files = EnumeratePublicMarkdownFiles().ToArray();
+        var files = EnumeratePublicFacingFiles().ToArray();
 
         Assert.NotEmpty(files);
         foreach (var file in files)
@@ -19,20 +21,40 @@ public sealed class PublicDocsHardeningTests
     }
 
     [Fact]
-    public void SampleDocs_ContainMeaningfulExamples()
+    public void PublicFacingExamples_ContainInputReadingAndOutputGuidance()
     {
         var sample = File.ReadAllText(Path.Combine(RepositoryRoot, "docs", "spec", "phase1", "examples", "sample_shell_pack_example.md"));
         var skill = File.ReadAllText(Path.Combine(RepositoryRoot, "plugins", "rulixa", "skills", "pack", "SKILL.md"));
 
         Assert.Contains("## 入力", sample, StringComparison.Ordinal);
-        Assert.Contains("## 期待する selected snippets", sample, StringComparison.Ordinal);
+        Assert.Contains("## 期待する読み方", sample, StringComparison.Ordinal);
+        Assert.Contains("## 出力の見方", sample, StringComparison.Ordinal);
+
+        Assert.Contains("## 入力", skill, StringComparison.Ordinal);
         Assert.Contains("## 基本コマンド", skill, StringComparison.Ordinal);
         Assert.Contains("## 効果的な使い方", skill, StringComparison.Ordinal);
     }
 
-    private static IEnumerable<string> EnumeratePublicMarkdownFiles()
+    [Fact]
+    public void PluginMetadata_IsValidJsonAndDoesNotContainLocalAbsoluteLinks()
+    {
+        var pluginJsonPath = Path.Combine(RepositoryRoot, "plugins", "rulixa", ".codex-plugin", "plugin.json");
+        var json = File.ReadAllText(pluginJsonPath);
+
+        Assert.DoesNotContain("/D:/", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/C:/", json, StringComparison.OrdinalIgnoreCase);
+
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("rulixa", document.RootElement.GetProperty("name").GetString());
+        Assert.Equal("Rulixa", document.RootElement.GetProperty("interface").GetProperty("displayName").GetString());
+    }
+
+    private static IEnumerable<string> EnumeratePublicFacingFiles()
     {
         yield return Path.Combine(RepositoryRoot, "README.md");
+        yield return Path.Combine(RepositoryRoot, "docs", "product-readiness.md");
+        yield return Path.Combine(RepositoryRoot, "docs", "project_full_spec.md");
+        yield return Path.Combine(RepositoryRoot, "plugins", "rulixa", ".codex-plugin", "plugin.json");
 
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepositoryRoot, "docs", "spec"), "*.md", SearchOption.AllDirectories))
         {

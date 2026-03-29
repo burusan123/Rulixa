@@ -1,7 +1,7 @@
 {
   "name": "rulixa",
   "version": "0.1.0",
-  "description": "Rulixa.Cli を使って WPF / .NET ワークスペースの高密度なコンテキストパックを生成します。",
+  "description": "Rulixa.Cli を使って WPF / .NET ワークスペースの高密度な Context Pack を生成します。",
   "author": {
     "name": "Rulixa"
   },
@@ -16,8 +16,8 @@
   "apps": "./.app.json",
   "interface": {
     "displayName": "Rulixa",
-    "shortDescription": "Rulixa.Cli で高密度な system map を生成します。",
-    "longDescription": "まず pack を使って root ViewModel や主要画面から system map を作り、全体像を短時間で把握してください。実装レベルの検証や深掘りが必要なときだけ全文検索に進むのが効果的です。entry=file と entry=symbol の両方を使えます。scan と resolve-entry は補助用の CLI コマンドです。",
+    "shortDescription": "Rulixa.Cli で system map を素早く生成します。",
+    "longDescription": "pack を使って root ViewModel や root XAML から system map を取得し、必要な箇所だけ全文検索で深掘りできるようにします。entry=file と entry=symbol の両方を使えます。scan と resolve-entry で事前確認もできます。",
     "developerName": "Rulixa",
     "category": "Coding",
     "capabilities": [
@@ -26,9 +26,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "ShellViewModel の system pack を作成し、主要サブシステムを要約してください。",
-      "ShellView.xaml を file entry として解決し、pack を実行して workflow と persistence map を説明してください。",
-      "まず Rulixa.Cli の pack を実行し、その後に全文検索で検証すべき点を指摘してください。"
+      "ShellViewModel の system pack を生成し、主要なサブシステムを説明してください。",
+      "ShellView.xaml を file entry として解析し、workflow と persistence map を要約してください。",
+      "まず Rulixa.Cli の pack を実行し、その後に必要な箇所だけ全文検索で確認してください。"
     ],
     "brandColor": "#0F766E"
   }

@@ -25,6 +25,9 @@ public sealed record LocalQualityRunArtifact(
     QualityGateArtifact QualityGate,
     LocalQualityObservationSummary SyntheticSummary,
     LocalQualityObservationSummary OptionalSmokeSummary,
+    IReadOnlyList<CorpusHandoffSummaryArtifact> SyntheticCorpusHandoffs,
+    IReadOnlyList<CorpusHandoffSummaryArtifact> ObservedCorpusHandoffs,
+    IReadOnlyList<CaseHandoffSummaryArtifact> MissOrUnknownCases,
     LocalUnknownGuidanceSummaryArtifact UnknownGuidanceSummary,
     LocalHandoffSummaryArtifact HandoffSummary,
     long? FirstUsefulMapTimeMs,
@@ -41,6 +44,7 @@ public sealed record LocalQualityRunArtifact(
 public sealed record QualityCaseArtifact(
     string CaseId,
     string CorpusName,
+    string CorpusCategory,
     string WorkspaceType,
     string Entry,
     string Goal,
@@ -94,6 +98,22 @@ public sealed record LocalUnknownGuidanceSummaryArtifact(
     IReadOnlyList<string> Families,
     IReadOnlyList<string> FirstCandidates);
 
+public sealed record CorpusHandoffSummaryArtifact(
+    string CorpusCategory,
+    string Scope,
+    int TotalCases,
+    int HitCount,
+    int MissCount,
+    int UnknownCount);
+
+public sealed record CaseHandoffSummaryArtifact(
+    string CaseId,
+    string CorpusCategory,
+    string Scope,
+    string Outcome,
+    string? FirstCandidate,
+    string? Reason);
+
 public sealed record LocalHandoffSummaryArtifact(
     int HitCount,
     int MissCount,
@@ -111,6 +131,7 @@ public sealed record PerformanceBaselineArtifact(
     MetricBaselineArtifact? RepresentativeChainCount,
     MetricBaselineArtifact? UnknownGuidanceCaseCount,
     MetricBaselineArtifact? DegradedReasonCount,
+    IReadOnlyList<CasePerformanceBaselineArtifact> CaseComparisons,
     IReadOnlyList<string> RegressionWarnings);
 
 public sealed record MetricBaselineArtifact(
@@ -118,6 +139,17 @@ public sealed record MetricBaselineArtifact(
     long? Baseline,
     long? Delta,
     bool RegressionWarning);
+
+public sealed record CasePerformanceBaselineArtifact(
+    string CaseId,
+    string CorpusCategory,
+    string Entry,
+    string Goal,
+    MetricBaselineArtifact? FirstUsefulMapTimeMs,
+    MetricBaselineArtifact? RepresentativeChainCount,
+    MetricBaselineArtifact? UnknownGuidanceCaseCount,
+    MetricBaselineArtifact? DegradedReasonCount,
+    IReadOnlyList<string> RegressionWarnings);
 
 public sealed record QualityGateArtifact(
     bool Passed,

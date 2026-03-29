@@ -52,8 +52,9 @@ public sealed class LocalQualityGateRunnerTests
             var summary = await File.ReadAllTextAsync(result.SummaryPath);
             Assert.Contains("## Gate", summary, StringComparison.Ordinal);
             Assert.Contains("## Synthetic Corpus", summary, StringComparison.Ordinal);
-            Assert.Contains("## Optional Smoke", summary, StringComparison.Ordinal);
+            Assert.Contains("## Observed Corpus", summary, StringComparison.Ordinal);
             Assert.Contains("## Handoff Observations", summary, StringComparison.Ordinal);
+            Assert.Contains("## Case Handoff Details", summary, StringComparison.Ordinal);
             Assert.Contains("## Performance Baseline", summary, StringComparison.Ordinal);
             Assert.Contains("## Unknown Guidance Details", summary, StringComparison.Ordinal);
             Assert.Contains("## Degraded Diagnostics", summary, StringComparison.Ordinal);

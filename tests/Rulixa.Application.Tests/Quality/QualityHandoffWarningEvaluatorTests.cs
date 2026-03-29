@@ -13,6 +13,7 @@ public sealed class QualityHandoffWarningEvaluatorTests
             new QualityCaseArtifact(
                 CaseId: "drafting-case",
                 CorpusName: "Synthetic",
+                CorpusCategory: "service-locator-root",
                 WorkspaceType: "synthetic-modern",
                 Entry: "symbol:Drafting.Root",
                 Goal: "drafting ai analyze",
@@ -55,6 +56,7 @@ public sealed class QualityHandoffWarningEvaluatorTests
             new QualityCaseArtifact(
                 CaseId: "settings-case",
                 CorpusName: "Synthetic",
+                CorpusCategory: "weak-signal-root",
                 WorkspaceType: "synthetic-legacy",
                 Entry: "file:ShellWindow.xaml",
                 Goal: "legacy system",
