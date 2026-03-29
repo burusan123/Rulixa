@@ -5,7 +5,13 @@ public sealed record QualityArtifact(
     string SuiteName,
     string GeneratedAtUtc,
     IReadOnlyList<QualityCaseArtifact> Cases,
-    QualityGateArtifact QualityGate);
+    QualityGateArtifact QualityGate,
+    long? FirstUsefulMapTimeMs,
+    int UnknownGuidanceCaseCount,
+    int UnknownGuidanceItemCount,
+    int UnknownGuidanceFamilyCount,
+    int RepresentativeChainCount,
+    int DegradedReasonCount);
 
 public sealed record LocalQualityRunArtifact(
     string SchemaVersion,
@@ -17,6 +23,12 @@ public sealed record LocalQualityRunArtifact(
     LocalQualityObservationSummary SyntheticSummary,
     LocalQualityObservationSummary OptionalSmokeSummary,
     LocalUnknownGuidanceSummaryArtifact UnknownGuidanceSummary,
+    long? FirstUsefulMapTimeMs,
+    int UnknownGuidanceCaseCount,
+    int UnknownGuidanceItemCount,
+    int UnknownGuidanceFamilyCount,
+    int RepresentativeChainCount,
+    int DegradedReasonCount,
     int TotalDegradedDiagnosticCount,
     IReadOnlyList<string> RelatedArtifacts);
 
@@ -35,9 +47,12 @@ public sealed record QualityCaseArtifact(
     bool? FalseConfidenceDetected,
     bool? Deterministic,
     long DurationMilliseconds,
+    long? FirstUsefulMapTimeMs,
     string? FailureReason,
     string? SkipReason,
     int DegradedDiagnosticCount,
+    int RepresentativeChainCount,
+    int DegradedReasonCount,
     IReadOnlyList<UnknownGuidanceArtifact> UnknownGuidance);
 
 public sealed record UnknownGuidanceArtifact(

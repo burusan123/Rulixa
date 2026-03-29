@@ -37,7 +37,12 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Contains("## Gate", summary, StringComparison.Ordinal);
             Assert.Contains("## Synthetic Corpus", summary, StringComparison.Ordinal);
             Assert.Contains("## Optional Smoke", summary, StringComparison.Ordinal);
+            Assert.Contains("## Handoff Observations", summary, StringComparison.Ordinal);
+            Assert.Contains("## Unknown Guidance Details", summary, StringComparison.Ordinal);
+            Assert.Contains("## Degraded Diagnostics", summary, StringComparison.Ordinal);
             Assert.Contains("smoke-env-disabled", summary, StringComparison.Ordinal);
+            Assert.Contains("synthetic corpus is the handoff quality baseline", summary, StringComparison.Ordinal);
+            Assert.Contains("TemplateHeavyResources.SettingsWindow", summary, StringComparison.Ordinal);
 
             var gate = JsonSerializer.Deserialize<QualityGateArtifact>(await File.ReadAllTextAsync(result.GatePath), new JsonSerializerOptions
             {
@@ -54,6 +59,12 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Equal(QualityArtifactConventions.RunSchemaVersion, runArtifact!.SchemaVersion);
             Assert.Contains(runArtifact.Suites, static suite => suite.IncludedInGate);
             Assert.Contains(runArtifact.Suites, static suite => !suite.IncludedInGate);
+            Assert.Equal(1, runArtifact.UnknownGuidanceCaseCount);
+            Assert.Equal(1, runArtifact.UnknownGuidanceItemCount);
+            Assert.Equal(1, runArtifact.UnknownGuidanceFamilyCount);
+            Assert.Equal(2, runArtifact.DegradedReasonCount);
+            Assert.Equal(2, runArtifact.RepresentativeChainCount);
+            Assert.Equal(25, runArtifact.FirstUsefulMapTimeMs);
         }
         finally
         {
@@ -113,9 +124,12 @@ public sealed class LocalQualityGateRunWriterTests
                 FalseConfidenceDetected: false,
                 Deterministic: true,
                 DurationMilliseconds: 25,
+                FirstUsefulMapTimeMs: 25,
                 FailureReason: null,
                 SkipReason: null,
                 DegradedDiagnosticCount: 0,
+                RepresentativeChainCount: 1,
+                DegradedReasonCount: 0,
                 UnknownGuidance: []),
             new QualityCaseArtifact(
                 CaseId: "synthetic-weak-signal",
@@ -132,9 +146,12 @@ public sealed class LocalQualityGateRunWriterTests
                 FalseConfidenceDetected: false,
                 Deterministic: true,
                 DurationMilliseconds: 32,
+                FirstUsefulMapTimeMs: 32,
                 FailureReason: null,
                 SkipReason: null,
                 DegradedDiagnosticCount: 2,
+                RepresentativeChainCount: 1,
+                DegradedReasonCount: 2,
                 UnknownGuidance:
                 [
                     new UnknownGuidanceArtifact(
@@ -172,9 +189,12 @@ public sealed class LocalQualityGateRunWriterTests
                 FalseConfidenceDetected: smokeFalseConfidence,
                 Deterministic: smokeDeterministic,
                 DurationMilliseconds: 0,
+                FirstUsefulMapTimeMs: null,
                 FailureReason: smokeFailureReason,
                 SkipReason: smokeSkipReason,
                 DegradedDiagnosticCount: 0,
+                RepresentativeChainCount: 0,
+                DegradedReasonCount: 0,
                 UnknownGuidance: [])
         };
 

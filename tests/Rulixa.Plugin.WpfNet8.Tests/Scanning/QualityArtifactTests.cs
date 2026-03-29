@@ -40,6 +40,12 @@ public sealed class QualityArtifactTests
             Assert.Contains(artifact.Cases, static item =>
                 item.Tags.Contains("deterministic", StringComparer.OrdinalIgnoreCase)
                 && item.Deterministic == true);
+            Assert.True(artifact.RepresentativeChainCount > 0);
+            Assert.True(artifact.UnknownGuidanceCaseCount > 0);
+            Assert.True(artifact.UnknownGuidanceItemCount > 0);
+            Assert.True(artifact.UnknownGuidanceFamilyCount > 0);
+            Assert.True(artifact.DegradedReasonCount > 0);
+            Assert.NotNull(artifact.FirstUsefulMapTimeMs);
             Assert.True(File.Exists(filePath));
             Assert.NotNull(artifact.QualityGate);
         }

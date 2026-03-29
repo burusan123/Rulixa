@@ -156,9 +156,12 @@ internal static class QualityArtifactSupport
                 FalseConfidenceDetected: null,
                 Deterministic: null,
                 DurationMilliseconds: 0,
+                FirstUsefulMapTimeMs: null,
                 FailureReason: null,
                 SkipReason: skipReason,
                 DegradedDiagnosticCount: 0,
+                RepresentativeChainCount: 0,
+                DegradedReasonCount: 0,
                 UnknownGuidance: []);
         }
 
@@ -176,6 +179,9 @@ internal static class QualityArtifactSupport
                 || firstRun.Pack!.Unknowns.Count > 0;
             var hasUnknownGuidance = firstRun.Pack!.Unknowns.Any(static unknown => unknown.Candidates.Count > 0);
             var falseConfidenceDetected = DetectFalseConfidence(definition, firstRun.Pack);
+            var degradedDiagnosticCount = firstRun.ScanResult.Diagnostics.Count(static diagnostic => diagnostic.Severity != DiagnosticSeverity.Error);
+            var representativeChainCount = CountRepresentativeChains(firstRun.Pack);
+            var degradedReasonCount = CountDegradedReasons(firstRun.ScanResult, firstRun.Pack);
 
             return new QualityCaseArtifact(
                 CaseId: definition.CaseId,
@@ -192,9 +198,12 @@ internal static class QualityArtifactSupport
                 FalseConfidenceDetected: falseConfidenceDetected,
                 Deterministic: deterministic,
                 DurationMilliseconds: stopwatch.ElapsedMilliseconds,
+                FirstUsefulMapTimeMs: packSuccess ? stopwatch.ElapsedMilliseconds : null,
                 FailureReason: null,
                 SkipReason: null,
-                DegradedDiagnosticCount: firstRun.ScanResult.Diagnostics.Count(static diagnostic => diagnostic.Severity != DiagnosticSeverity.Error),
+                DegradedDiagnosticCount: degradedDiagnosticCount,
+                RepresentativeChainCount: representativeChainCount,
+                DegradedReasonCount: degradedReasonCount,
                 UnknownGuidance: firstRun.Pack.Unknowns.Select(ToUnknownGuidance).ToArray());
         }
         catch (Exception exception)
@@ -215,9 +224,12 @@ internal static class QualityArtifactSupport
                 FalseConfidenceDetected: false,
                 Deterministic: false,
                 DurationMilliseconds: stopwatch.ElapsedMilliseconds,
+                FirstUsefulMapTimeMs: null,
                 FailureReason: exception.Message,
                 SkipReason: null,
                 DegradedDiagnosticCount: 0,
+                RepresentativeChainCount: 0,
+                DegradedReasonCount: 0,
                 UnknownGuidance: []);
         }
     }
@@ -371,6 +383,20 @@ internal static class QualityArtifactSupport
 
     private static string InferFamily(Diagnostic diagnostic)
     {
+        if (diagnostic.Candidates.Any(static candidate =>
+                candidate.Contains("Algorithm", StringComparison.OrdinalIgnoreCase)
+                || candidate.Contains("Runner", StringComparison.OrdinalIgnoreCase)
+                || candidate.Contains("Pipeline", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Algorithm";
+        }
+
+        if (diagnostic.Candidates.Any(static candidate =>
+                candidate.Contains("Analyzer", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Analyzer";
+        }
+
         if (diagnostic.Candidates.Any(static candidate => candidate.Contains("Drafting", StringComparison.OrdinalIgnoreCase)))
         {
             return "Drafting";
@@ -400,8 +426,25 @@ internal static class QualityArtifactSupport
             return "Architecture";
         }
 
+        if (diagnostic.Candidates.Any(static candidate =>
+                candidate.Contains("Repository", StringComparison.OrdinalIgnoreCase)
+                || candidate.Contains("Query", StringComparison.OrdinalIgnoreCase)
+                || candidate.Contains("Store", StringComparison.OrdinalIgnoreCase)
+                || candidate.Contains("Saver", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Persistence";
+        }
+
         return "Shell";
     }
+
+    private static int CountRepresentativeChains(ContextPack pack) =>
+        pack.Indexes.Sum(static index => index.Lines.Count)
+        + pack.Contracts.Count(static contract => contract.Title != "System Pack");
+
+    private static int CountDegradedReasons(WorkspaceScanResult scanResult, ContextPack pack) =>
+        scanResult.Diagnostics.Count(static diagnostic => diagnostic.Severity != DiagnosticSeverity.Error)
+        + pack.Unknowns.Count;
 }
 
 internal sealed record QualityCaseDefinition(

@@ -64,6 +64,13 @@ public sealed class AssessMeisterLegacyOptionalSmokeTests
             || pack.Unknowns.Any(unknown =>
                 unknown.Code == "persistence.missing-owner"
                 || unknown.Code.StartsWith("workflow.", StringComparison.Ordinal)));
+        Assert.True(
+            !pack.Unknowns.Any()
+            || pack.Unknowns.Any(unknown =>
+                unknown.Candidates.Count > 0
+                && unknown.Candidates.All(candidate =>
+                    !candidate.Contains("Overlay", StringComparison.OrdinalIgnoreCase)
+                    && !candidate.Contains("Prompt", StringComparison.OrdinalIgnoreCase))));
         Assert.Contains("Predict3DWindow", markdown, StringComparison.Ordinal);
     }
 }

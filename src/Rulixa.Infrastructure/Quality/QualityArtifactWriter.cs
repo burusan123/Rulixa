@@ -25,12 +25,19 @@ public sealed class QualityArtifactWriter
 
         var timestamp = generatedAtUtc ?? DateTimeOffset.UtcNow;
         var gate = new QualityGateEvaluator().Evaluate(cases);
+        var observation = new QualityObservationCalculator().Calculate(cases);
         var artifact = new QualityArtifact(
             SchemaVersion: QualityArtifactConventions.SchemaVersion,
             SuiteName: suiteName,
             GeneratedAtUtc: timestamp.UtcDateTime.ToString("O"),
             Cases: cases,
-            QualityGate: gate);
+            QualityGate: gate,
+            FirstUsefulMapTimeMs: observation.FirstUsefulMapTimeMs,
+            UnknownGuidanceCaseCount: observation.UnknownGuidanceCaseCount,
+            UnknownGuidanceItemCount: observation.UnknownGuidanceItemCount,
+            UnknownGuidanceFamilyCount: observation.UnknownGuidanceFamilyCount,
+            RepresentativeChainCount: observation.RepresentativeChainCount,
+            DegradedReasonCount: observation.DegradedReasonCount);
         var json = JsonSerializer.Serialize(artifact, JsonOptions);
 
         var fullOutputRoot = Path.GetFullPath(outputRootDirectory);

@@ -70,6 +70,7 @@ public sealed class LocalQualityGateRunWriter
         QualityGateArtifact gate,
         IReadOnlyList<string> relatedArtifacts)
     {
+        var observation = new QualityObservationCalculator().Calculate(cases);
         var suiteArtifacts = suites
             .Select(static suite => new LocalQualitySuiteArtifact(
                 Name: suite.Name,
@@ -91,20 +92,6 @@ public sealed class LocalQualityGateRunWriter
             .SelectMany(static suite => suite.Cases)
             .ToArray();
 
-        var unknownItems = cases.SelectMany(static item => item.UnknownGuidance).ToArray();
-        var unknownFamilies = unknownItems
-            .Select(static item => item.Family)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(static item => item, StringComparer.Ordinal)
-            .ToArray();
-        var unknownCandidates = unknownItems
-            .Select(static item => item.FirstCandidate)
-            .OfType<string>()
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(static item => item, StringComparer.Ordinal)
-            .Take(5)
-            .ToArray();
-
         return new LocalQualityRunArtifact(
             SchemaVersion: QualityArtifactConventions.RunSchemaVersion,
             RunId: runId,
@@ -115,10 +102,16 @@ public sealed class LocalQualityGateRunWriter
             SyntheticSummary: BuildObservationSummary(syntheticCases),
             OptionalSmokeSummary: BuildObservationSummary(optionalSmokeCases),
             UnknownGuidanceSummary: new LocalUnknownGuidanceSummaryArtifact(
-                CaseCount: cases.Count(static item => item.UnknownGuidance.Count > 0),
-                GuidanceItemCount: unknownItems.Length,
-                Families: unknownFamilies,
-                FirstCandidates: unknownCandidates),
+                CaseCount: observation.UnknownGuidanceCaseCount,
+                GuidanceItemCount: observation.UnknownGuidanceItemCount,
+                Families: observation.Families,
+                FirstCandidates: observation.FirstCandidates),
+            FirstUsefulMapTimeMs: observation.FirstUsefulMapTimeMs,
+            UnknownGuidanceCaseCount: observation.UnknownGuidanceCaseCount,
+            UnknownGuidanceItemCount: observation.UnknownGuidanceItemCount,
+            UnknownGuidanceFamilyCount: observation.UnknownGuidanceFamilyCount,
+            RepresentativeChainCount: observation.RepresentativeChainCount,
+            DegradedReasonCount: observation.DegradedReasonCount,
             TotalDegradedDiagnosticCount: cases.Sum(static item => item.DegradedDiagnosticCount),
             RelatedArtifacts: relatedArtifacts.OrderBy(static item => item, StringComparer.Ordinal).ToArray());
     }
@@ -185,13 +178,37 @@ public sealed class LocalQualityGateRunWriter
         }
 
         builder.AppendLine();
-        builder.AppendLine("## Unknown Guidance");
+        builder.AppendLine("## Handoff Observations");
         builder.AppendLine();
-        builder.AppendLine($"- cases_with_guidance: `{artifact.UnknownGuidanceSummary.CaseCount}`");
-        builder.AppendLine($"- guidance_items: `{artifact.UnknownGuidanceSummary.GuidanceItemCount}`");
-        builder.AppendLine($"- families: `{FormatInlineList(artifact.UnknownGuidanceSummary.Families)}`");
-        builder.AppendLine($"- first_candidates: `{FormatInlineList(artifact.UnknownGuidanceSummary.FirstCandidates)}`");
+        builder.AppendLine("- synthetic corpus is the handoff quality baseline. optional smoke remains observation-only.");
+        builder.AppendLine($"- representative_chains: `{artifact.RepresentativeChainCount}`");
+        builder.AppendLine($"- first_useful_map_time_ms: `{artifact.FirstUsefulMapTimeMs?.ToString() ?? "none"}`");
+        builder.AppendLine($"- unknown_guidance_families: `{FormatInlineList(artifact.UnknownGuidanceSummary.Families)}`");
+        builder.AppendLine($"- next_candidates: `{FormatInlineList(artifact.UnknownGuidanceSummary.FirstCandidates)}`");
+
+        builder.AppendLine();
+        builder.AppendLine("## Unknown Guidance Details");
+        builder.AppendLine();
+        builder.AppendLine($"- cases_with_guidance: `{artifact.UnknownGuidanceCaseCount}`");
+        builder.AppendLine($"- guidance_items: `{artifact.UnknownGuidanceItemCount}`");
+        builder.AppendLine($"- family_count: `{artifact.UnknownGuidanceFamilyCount}`");
+        foreach (var item in artifact.Cases
+                     .Where(static item => item.UnknownGuidance.Count > 0)
+                     .OrderBy(static item => item.CaseId, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- `{item.CaseId}`");
+            foreach (var guidance in item.UnknownGuidance.OrderBy(static guidance => guidance.Code, StringComparer.Ordinal))
+            {
+                builder.AppendLine(
+                    $"  `{guidance.Code}` family=`{guidance.Family}` candidates=`{guidance.CandidateCount}` first=`{guidance.FirstCandidate ?? "none"}`");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Degraded Diagnostics");
+        builder.AppendLine();
         builder.AppendLine($"- degraded_diagnostics: `{artifact.TotalDegradedDiagnosticCount}`");
+        builder.AppendLine($"- degraded_reasons: `{artifact.DegradedReasonCount}`");
 
         builder.AppendLine();
         builder.AppendLine("## Deterministic / False Confidence");

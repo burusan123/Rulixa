@@ -53,6 +53,9 @@ public sealed class LocalQualityGateRunnerTests
             Assert.Contains("## Gate", summary, StringComparison.Ordinal);
             Assert.Contains("## Synthetic Corpus", summary, StringComparison.Ordinal);
             Assert.Contains("## Optional Smoke", summary, StringComparison.Ordinal);
+            Assert.Contains("## Handoff Observations", summary, StringComparison.Ordinal);
+            Assert.Contains("## Unknown Guidance Details", summary, StringComparison.Ordinal);
+            Assert.Contains("## Degraded Diagnostics", summary, StringComparison.Ordinal);
             Assert.Contains("tests\\Rulixa.Application.Tests\\Cli\\CompareEvidenceBundleTests.cs", summary, StringComparison.Ordinal);
 
             var latestSummaryPath = Path.Combine(result.LatestDirectory, "summary.md");
