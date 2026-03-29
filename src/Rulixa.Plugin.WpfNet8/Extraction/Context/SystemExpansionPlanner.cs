@@ -7,10 +7,12 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 internal sealed class SystemExpansionPlanner
 {
     private readonly IWorkspaceFileSystem workspaceFileSystem;
+    private readonly SystemRouteAnalyzer systemRouteAnalyzer;
 
     internal SystemExpansionPlanner(IWorkspaceFileSystem workspaceFileSystem)
     {
         this.workspaceFileSystem = workspaceFileSystem ?? throw new ArgumentNullException(nameof(workspaceFileSystem));
+        systemRouteAnalyzer = new SystemRouteAnalyzer(workspaceFileSystem);
     }
 
     internal async Task<SystemPackContext?> PlanAsync(
@@ -72,6 +74,9 @@ internal sealed class SystemExpansionPlanner
             RelatedSymbols: relatedSymbols,
             FamilyBySymbol: familyBySymbol,
             FamilyCandidatesBySymbol: familyCandidatesBySymbol,
+            PersistenceFamilies: DiscoverPersistenceFamilies(relatedSymbols),
+            AssetFamilies: DiscoverAssetFamilies(relatedSymbols),
+            RegressionConstraintFamily: DiscoverRegressionConstraintFamily(scanResult),
             SubMaps: subMaps);
     }
 
@@ -122,42 +127,9 @@ internal sealed class SystemExpansionPlanner
         string rootSymbol,
         IReadOnlyList<string> rootFilePaths,
         CancellationToken cancellationToken)
-    {
-        var symbols = new Dictionary<string, SystemRouteCandidate>(StringComparer.OrdinalIgnoreCase);
-        var rootTypeName = PackExtractionConventions.GetSimpleTypeName(rootSymbol);
-
-        foreach (var filePath in rootFilePaths)
-        {
-            var source = await ReadSourceAsync(workspaceRoot, filePath, cancellationToken).ConfigureAwait(false);
-            foreach (var dependency in PackAnalysisHelpers.ExtractConstructorDependencyTypeNames(
-                         source,
-                         rootTypeName))
-            {
-                var resolved = PackAnalysisHelpers.ResolveTypeSymbol(scanResult, dependency);
-                if (!string.IsNullOrWhiteSpace(resolved)
-                    && PackAnalysisHelpers.IsSystemExpansionRelevantName(PackExtractionConventions.GetSimpleTypeName(resolved)))
-                {
-                    symbols[resolved] = new SystemRouteCandidate(resolved, resolved);
-                }
-            }
-
-            foreach (var referenced in PackAnalysisHelpers.FindReferencedTypeCandidates(
-                         scanResult,
-                         source,
-                         PackAnalysisHelpers.IsSystemExpansionRelevantName))
-            {
-                if (!string.IsNullOrWhiteSpace(referenced.ResolvedSymbol))
-                {
-                    symbols[referenced.ResolvedSymbol] = new SystemRouteCandidate(referenced.ResolvedSymbol, referenced.ResolvedSymbol);
-                }
-            }
-        }
-
-        return symbols.Values
-            .OrderBy(candidate => PackAnalysisHelpers.GetSystemFamilyPriority(SystemFamilyRoutingSupport.ResolveFamily(candidate.FirstHopSymbol, candidate.Symbol)))
-            .ThenBy(static candidate => candidate.Symbol, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
+        => await systemRouteAnalyzer
+            .AnalyzeAsync(workspaceRoot, scanResult, rootSymbol, rootFilePaths, cancellationToken)
+            .ConfigureAwait(false);
 
     private static void AddDialogSymbols(
         WorkspaceScanResult scanResult,
@@ -262,6 +234,51 @@ internal sealed class SystemExpansionPlanner
         return subMaps;
     }
 
+    private static IReadOnlyList<string> DiscoverPersistenceFamilies(IEnumerable<string> relatedSymbols) =>
+        relatedSymbols
+            .Select(PackAnalysisHelpers.ClassifyPersistenceFamily)
+            .Where(static family => !string.Equals(family, "other", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static family => family, StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToArray();
+
+    private static IReadOnlyList<string> DiscoverAssetFamilies(IEnumerable<string> relatedSymbols)
+    {
+        var families = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var symbol in relatedSymbols)
+        {
+            var simpleName = PackExtractionConventions.GetSimpleTypeName(symbol);
+            if (PackAnalysisHelpers.IsSettingsLikeName(simpleName))
+            {
+                families.Add("excel");
+            }
+
+            if (PackAnalysisHelpers.IsReportLikeName(simpleName))
+            {
+                families.Add("template");
+            }
+
+            if (PackAnalysisHelpers.IsAlgorithmLikeName(simpleName) || PackAnalysisHelpers.IsAnalyzerLikeName(simpleName))
+            {
+                families.Add("onnx-model");
+            }
+        }
+
+        return families
+            .OrderBy(static family => family, StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToArray();
+    }
+
+    private static string? DiscoverRegressionConstraintFamily(WorkspaceScanResult scanResult)
+    {
+        var hasArchitectureTests = scanResult.Files.Any(static file =>
+            file.Path.StartsWith("tests/", StringComparison.OrdinalIgnoreCase)
+            || file.Path.Contains("/tests/", StringComparison.OrdinalIgnoreCase));
+        return hasArchitectureTests ? "Architecture" : null;
+    }
+
     private static string SelectRepresentativeSymbol(
         string family,
         IEnumerable<string> symbols,
@@ -296,17 +313,8 @@ internal sealed class SystemExpansionPlanner
             : candidateFamilies;
         familyBySymbol[targetSymbol] = SystemFamilyRoutingSupport.SelectPreferredFamily(familyCandidatesBySymbol[targetSymbol]);
     }
-
-    private async Task<string> ReadSourceAsync(
-        string workspaceRoot,
-        string relativePath,
-        CancellationToken cancellationToken)
-    {
-        var absolutePath = Path.Combine(workspaceRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        return await workspaceFileSystem.ReadAllTextAsync(absolutePath, cancellationToken).ConfigureAwait(false);
-    }
-
-    private sealed record SystemRouteCandidate(
-        string Symbol,
-        string? FirstHopSymbol);
 }
+
+internal sealed record SystemRouteCandidate(
+    string Symbol,
+    string? FirstHopSymbol);

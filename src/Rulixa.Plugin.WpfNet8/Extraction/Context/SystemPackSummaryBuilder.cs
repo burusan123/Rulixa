@@ -4,6 +4,8 @@ namespace Rulixa.Plugin.WpfNet8.Extraction;
 
 internal static class SystemPackSummaryBuilder
 {
+    private const int MaxSummaryFamilies = 5;
+
     internal static Contract? BuildContract(
         RelevantPackContext relevantContext,
         IReadOnlyList<IndexSection> indexes)
@@ -13,36 +15,43 @@ internal static class SystemPackSummaryBuilder
             return null;
         }
 
-        var families = relevantContext.SystemPack.SubMaps
+        var systemPack = relevantContext.SystemPack;
+        var families = systemPack.SubMaps
             .Select(static subMap => subMap.Family)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(PackAnalysisHelpers.GetSystemFamilyPriority)
             .ThenBy(static family => family, StringComparer.OrdinalIgnoreCase)
+            .Take(MaxSummaryFamilies)
             .ToArray();
-        var hubObjects = ExtractRepresentativeNames(indexes, "Hub Objects");
-        var persistenceFamilies = ExtractPersistenceFamilies(indexes);
-        var assetFamilies = ExtractAssetFamilies(indexes);
-        var regressionConstraint = indexes.Any(static index => index.Title == "Architecture Tests")
-            ? "回帰拘束は Architecture Tests で確認できます"
-            : null;
+        var centerState = ExtractRepresentativeNames(indexes, "Hub Objects").FirstOrDefault();
+        var persistenceFamilies = SelectFamilies(
+            systemPack.PersistenceFamilies,
+            ExtractPersistenceFamilies(indexes),
+            maxCount: 3);
+        var assetFamilies = SelectFamilies(
+            systemPack.AssetFamilies,
+            ExtractAssetFamilies(indexes),
+            maxCount: 3);
+        var regressionConstraint = ResolveRegressionConstraint(systemPack, indexes);
 
         var summaryParts = new List<string>
         {
-            $"{PackExtractionConventions.GetSimpleTypeName(relevantContext.SystemPack.RootSymbol)} から {string.Join(" / ", families)} の局所地図を束ねます"
+            $"{PackExtractionConventions.GetSimpleTypeName(systemPack.RootSymbol)} を起点に {string.Join(" / ", families)} の system map を束ねています。"
         };
-        if (hubObjects.Count > 0)
+
+        if (!string.IsNullOrWhiteSpace(centerState))
         {
-            summaryParts.Add($"中心状態は {string.Join(" / ", hubObjects)} です");
+            summaryParts.Add($"中心状態は {centerState} です。");
         }
 
         if (persistenceFamilies.Count > 0)
         {
-            summaryParts.Add($"永続化境界は {string.Join(" / ", persistenceFamilies)} family に触れます");
+            summaryParts.Add($"永続化は {string.Join(" / ", persistenceFamilies)} family に触れます。");
         }
 
         if (assetFamilies.Count > 0)
         {
-            summaryParts.Add($"外部資産は {string.Join(" / ", assetFamilies)} family を解決します");
+            summaryParts.Add($"外部資産は {string.Join(" / ", assetFamilies)} family を解決します。");
         }
 
         if (!string.IsNullOrWhiteSpace(regressionConstraint))
@@ -53,12 +62,12 @@ internal static class SystemPackSummaryBuilder
         return new Contract(
             ContractKind.Startup,
             "System Pack",
-            string.Join("。", summaryParts) + "。",
-            relevantContext.SystemPack.SubMaps
+            string.Join(" ", summaryParts),
+            systemPack.SubMaps
                 .SelectMany(static subMap => subMap.FilePaths.Take(1))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
-            relevantContext.SystemPack.SubMaps
+            systemPack.SubMaps
                 .Select(static subMap => subMap.RepresentativeSymbol)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray());
@@ -79,6 +88,34 @@ internal static class SystemPackSummaryBuilder
             .ToArray();
     }
 
+    private static IReadOnlyList<string> SelectFamilies(
+        IReadOnlyList<string> preferredFamilies,
+        IReadOnlyList<string> fallbackFamilies,
+        int maxCount)
+    {
+        var selected = preferredFamilies
+            .Concat(fallbackFamilies)
+            .Where(static family => !string.IsNullOrWhiteSpace(family))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(maxCount)
+            .ToArray();
+        return selected;
+    }
+
+    private static string? ResolveRegressionConstraint(
+        SystemPackContext systemPack,
+        IReadOnlyList<IndexSection> indexes)
+    {
+        if (!string.IsNullOrWhiteSpace(systemPack.RegressionConstraintFamily))
+        {
+            return $"{systemPack.RegressionConstraintFamily} family の回帰拘束があります。";
+        }
+
+        return indexes.Any(static index => index.Title == "Architecture Tests")
+            ? "Architecture family の回帰拘束があります。"
+            : null;
+    }
+
     private static IReadOnlyList<string> ExtractRepresentativeNames(
         IReadOnlyList<IndexSection> indexes,
         string title)
@@ -91,7 +128,7 @@ internal static class SystemPackSummaryBuilder
             .Select(static line => line.Split('(', StringSplitOptions.TrimEntries)[0].Trim())
             .Where(static line => !string.IsNullOrWhiteSpace(line))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(2)
+            .Take(1)
             .ToArray();
     }
 

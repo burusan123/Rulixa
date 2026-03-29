@@ -39,7 +39,7 @@ public sealed class CompareEvidenceBundleTests
                     new Contract(
                         ContractKind.Startup,
                         "System Pack",
-                        "ShellViewModel から Shell / Settings の局所地図を束ねます。中心状態は ProjectDocument です。",
+                        "ShellViewModel を起点に Shell / Settings の system map を束ねています。 中心状態は ProjectDocument です。",
                         ["src/Sample.App/ViewModels/ShellViewModel.cs"],
                         ["Sample.App.ShellViewModel"]),
                     new Contract(
@@ -72,7 +72,7 @@ public sealed class CompareEvidenceBundleTests
                         "command-selection",
                         "OpenProjectCommand",
                         "selected-all",
-                        "OpenProjectCommand は command 群を要約したため選定されました。",
+                        "OpenProjectCommand は command 地図に含まれます。",
                         0,
                         1,
                         1,
@@ -90,7 +90,7 @@ public sealed class CompareEvidenceBundleTests
                     new Contract(
                         ContractKind.Startup,
                         "System Pack",
-                        "ShellViewModel から Shell / Settings / Report/Export の局所地図を束ねます。中心状態は ProjectDocument です。",
+                        "ShellViewModel を起点に Shell / Settings / Report/Export の system map を束ねています。 中心状態は ProjectDocument です。",
                         ["src/Sample.App/ViewModels/ShellViewModel.cs"],
                         ["Sample.App.ShellViewModel"]),
                     new Contract(
@@ -130,7 +130,7 @@ public sealed class CompareEvidenceBundleTests
                         "command-selection",
                         "OpenSettingsCommand",
                         "selected-by-goal",
-                        "OpenSettingsCommand は goal と一致するため選定されました。",
+                        "OpenSettingsCommand は goal と一致するため選ばれました。",
                         5,
                         1,
                         7,
@@ -141,7 +141,7 @@ public sealed class CompareEvidenceBundleTests
                         "workflow-selection",
                         "workflow.missing-downstream",
                         "unknown-raised",
-                        "既知の範囲: DraftingWorkflowPort。停止点: algorithm / analyzer に到達する入口を 2 hop 以内で追跡できませんでした。 次に見る候補: DiagramAnalyzer, WallAlgorithmRunner",
+                        "既知の範囲: DraftingWorkflowPort。停止点: algorithm / analyzer に到達する前に 2 hop で停止しました。次に見る候補: DiagramAnalyzer, WallAlgorithmRunner",
                         0,
                         0,
                         3,
@@ -166,10 +166,10 @@ public sealed class CompareEvidenceBundleTests
             var diff = await File.ReadAllTextAsync(diffPath);
 
             Assert.Equal(0, exitCode);
-            Assert.Contains("## システム地図の差分", diff, StringComparison.Ordinal);
+            Assert.Contains("## System Pack 差分", diff, StringComparison.Ordinal);
             Assert.Contains("Shell / Settings / Report/Export", diff, StringComparison.Ordinal);
-            Assert.Contains("## 未解決ガイド差分", diff, StringComparison.Ordinal);
-            Assert.Contains("workflow-selection: 既知の範囲: DraftingWorkflowPort", diff, StringComparison.Ordinal);
+            Assert.Contains("## Unknown Guidance 差分", diff, StringComparison.Ordinal);
+            Assert.Contains("Drafting: 既知の範囲: DraftingWorkflowPort。停止点: algorithm / analyzer に到達する前に 2 hop で停止しました。次に見る候補: DiagramAnalyzer, WallAlgorithmRunner", diff, StringComparison.Ordinal);
             Assert.Contains("## メタデータ差分", diff, StringComparison.Ordinal);
             Assert.Contains("goal: `project` -> `settings`", diff, StringComparison.Ordinal);
             Assert.Contains("## 契約差分", diff, StringComparison.Ordinal);
@@ -181,7 +181,7 @@ public sealed class CompareEvidenceBundleTests
             Assert.Contains("## 選択スニペット差分", diff, StringComparison.Ordinal);
             Assert.Contains("before: 4-12, reason=root-binding-source, required=required", diff, StringComparison.Ordinal);
             Assert.Contains("after: 4-14, reason=root-binding-source, required=required", diff, StringComparison.Ordinal);
-            Assert.Contains("## 選定理由差分", diff, StringComparison.Ordinal);
+            Assert.Contains("## 判断差分", diff, StringComparison.Ordinal);
             Assert.Contains("[command-selection] OpenSettingsCommand (selected-by-goal, score: 5, rank: 1, matched: setting)", diff, StringComparison.Ordinal);
             Assert.Contains("DiagramAnalyzer, WallAlgorithmRunner", diff, StringComparison.Ordinal);
         }

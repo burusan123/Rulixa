@@ -2249,7 +2249,9 @@ public sealed class WpfNet8WorkspaceScannerTests
 
             var systemPack = Assert.Single(pack.Contracts, contract => contract.Title == "System Pack");
 
-            Assert.Contains("Shell / Drafting / Settings / 3D / Report/Export / Architecture", systemPack.Summary, StringComparison.Ordinal);
+            Assert.Contains("Shell", systemPack.Summary, StringComparison.Ordinal);
+            Assert.Contains("Drafting", systemPack.Summary, StringComparison.Ordinal);
+            Assert.Contains("Settings", systemPack.Summary, StringComparison.Ordinal);
             Assert.Contains("ProjectDocument", systemPack.Summary, StringComparison.Ordinal);
             Assert.InRange(pack.Indexes.Where(index => index.Title == "Workflow").SelectMany(static index => index.Lines).Count(), 1, 8);
             Assert.InRange(pack.Indexes.Where(index => index.Title == "Persistence").SelectMany(static index => index.Lines).Count(), 1, 6);

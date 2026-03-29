@@ -42,7 +42,7 @@ internal sealed class EvidenceBundleDiffRenderer
             return;
         }
 
-        builder.AppendLine("## システム地図の差分");
+        builder.AppendLine("## System Pack 差分");
         builder.AppendLine($"- before: {beforeSystem?.Summary ?? "なし"}");
         builder.AppendLine($"- after: {afterSystem?.Summary ?? "なし"}");
         builder.AppendLine();
@@ -53,27 +53,74 @@ internal sealed class EvidenceBundleDiffRenderer
         IReadOnlyList<EvidenceDecisionTraceDto> beforeTraces,
         IReadOnlyList<EvidenceDecisionTraceDto> afterTraces)
     {
-        var beforeGuidance = beforeTraces
-            .Where(static trace => string.Equals(trace.DecisionKind, "unknown-raised", StringComparison.Ordinal))
-            .OrderBy(static trace => trace.Category, StringComparer.Ordinal)
-            .ThenBy(static trace => trace.ItemKey, StringComparer.Ordinal)
-            .ToArray();
-        var afterGuidance = afterTraces
-            .Where(static trace => string.Equals(trace.DecisionKind, "unknown-raised", StringComparison.Ordinal))
-            .OrderBy(static trace => trace.Category, StringComparer.Ordinal)
-            .ThenBy(static trace => trace.ItemKey, StringComparer.Ordinal)
-            .ToArray();
-        if (beforeGuidance.Length == 0 && afterGuidance.Length == 0)
+        var beforeGuidance = SummarizeUnknownGuidance(beforeTraces);
+        var afterGuidance = SummarizeUnknownGuidance(afterTraces);
+        if (beforeGuidance.Count == 0 && afterGuidance.Count == 0)
         {
             return;
         }
 
-        builder.AppendLine("## 未解決ガイド差分");
+        builder.AppendLine("## Unknown Guidance 差分");
         builder.AppendLine("### before");
-        AppendDifferenceList(builder, beforeGuidance.Select(static trace => $"{trace.Category}: {trace.Summary}"));
+        AppendDifferenceList(builder, beforeGuidance.Select(static item => $"{item.Key}: {item.Value}"));
         builder.AppendLine("### after");
-        AppendDifferenceList(builder, afterGuidance.Select(static trace => $"{trace.Category}: {trace.Summary}"));
+        AppendDifferenceList(builder, afterGuidance.Select(static item => $"{item.Key}: {item.Value}"));
         builder.AppendLine();
+    }
+
+    private static IReadOnlyDictionary<string, string> SummarizeUnknownGuidance(
+        IReadOnlyList<EvidenceDecisionTraceDto> traces)
+    {
+        return traces
+            .Where(static trace => string.Equals(trace.DecisionKind, "unknown-raised", StringComparison.Ordinal))
+            .GroupBy(trace => InferUnknownFamily(trace), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                static group => group.Key,
+                static group => string.Join(
+                    " / ",
+                    group.OrderBy(static trace => trace.ItemKey, StringComparer.Ordinal)
+                        .Select(static trace => trace.Summary)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray()),
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string InferUnknownFamily(EvidenceDecisionTraceDto trace)
+    {
+        var category = trace.Category;
+        var summary = trace.Summary;
+        if (category.Contains("architecture", StringComparison.OrdinalIgnoreCase)
+            || summary.Contains("Architecture", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Architecture";
+        }
+
+        if (summary.Contains("Drafting", StringComparison.OrdinalIgnoreCase)
+            || summary.Contains("Algorithm", StringComparison.OrdinalIgnoreCase)
+            || summary.Contains("Analyzer", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Drafting";
+        }
+
+        if (summary.Contains("Setting", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Settings";
+        }
+
+        if (summary.Contains("Report", StringComparison.OrdinalIgnoreCase)
+            || summary.Contains("Export", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Report/Export";
+        }
+
+        if (summary.Contains("ThreeD", StringComparison.OrdinalIgnoreCase)
+            || summary.Contains("3D", StringComparison.OrdinalIgnoreCase))
+        {
+            return "3D";
+        }
+
+        return "Shell";
     }
 
     private static void AppendMetadataDiff(StringBuilder builder, EvidenceManifestDto before, EvidenceManifestDto after)
@@ -161,7 +208,7 @@ internal sealed class EvidenceBundleDiffRenderer
         IReadOnlyList<EvidenceDecisionTraceDto> after)
     {
         builder.AppendLine();
-        builder.AppendLine("## 選定理由差分");
+        builder.AppendLine("## 判断差分");
         var beforeMap = BuildIndexedMap(before, static item => $"{item.Category}|{item.ItemKey}");
         var afterMap = BuildIndexedMap(after, static item => $"{item.Category}|{item.ItemKey}");
         AppendAddedRemovedChanged(
@@ -170,9 +217,18 @@ internal sealed class EvidenceBundleDiffRenderer
             afterMap,
             static item => $"{FormatTrace(item)}{Environment.NewLine}summary: {item.Summary}",
             static (oldItem, newItem) =>
-                oldItem == newItem
-                    ? null
-                    : $"[{oldItem.Category}] {oldItem.ItemKey}{Environment.NewLine}before: {FormatTraceDetails(oldItem)}{Environment.NewLine}after: {FormatTraceDetails(newItem)}{Environment.NewLine}before summary: {oldItem.Summary}{Environment.NewLine}after summary: {newItem.Summary}");
+            {
+                if (oldItem == newItem)
+                {
+                    return null;
+                }
+
+                var transitionHint = string.Equals(oldItem.DecisionKind, "selected", StringComparison.Ordinal)
+                    && newItem.DecisionKind.StartsWith("omitted-", StringComparison.Ordinal)
+                    ? $"{Environment.NewLine}transition: representative route was compressed as {newItem.DecisionKind}"
+                    : string.Empty;
+                return $"[{oldItem.Category}] {oldItem.ItemKey}{Environment.NewLine}before: {FormatTraceDetails(oldItem)}{Environment.NewLine}after: {FormatTraceDetails(newItem)}{Environment.NewLine}before summary: {oldItem.Summary}{Environment.NewLine}after summary: {newItem.Summary}{transitionHint}";
+            });
     }
 
     private static void AppendAddedRemovedChanged<T>(

@@ -6,6 +6,9 @@ internal sealed record SystemPackContext(
     IReadOnlySet<string> RelatedSymbols,
     IReadOnlyDictionary<string, string> FamilyBySymbol,
     IReadOnlyDictionary<string, IReadOnlyList<string>> FamilyCandidatesBySymbol,
+    IReadOnlyList<string> PersistenceFamilies,
+    IReadOnlyList<string> AssetFamilies,
+    string? RegressionConstraintFamily,
     IReadOnlyList<SystemSubMap> SubMaps)
 {
     internal bool IsEnabled => !string.IsNullOrWhiteSpace(RootSymbol);
