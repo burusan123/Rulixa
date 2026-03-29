@@ -38,6 +38,7 @@ internal static class Program
             var contractExtractor = new WpfNet8ContractExtractor(workspaceFileSystem);
             var renderer = new MarkdownContextPackRenderer();
             var humanOutputRenderer = new HumanOutputMarkdownRenderer();
+            var visualOutputRenderer = new VisualOutputRenderer();
             var evidenceBundleWriter = new EvidenceBundleWriter(JsonOptions);
             var evidenceBundleReader = new EvidenceBundleReader(JsonOptions);
             var evidenceBundleDiffRenderer = new EvidenceBundleDiffRenderer();
@@ -46,6 +47,7 @@ internal static class Program
             var resolveEntryUseCase = new ResolveEntryUseCase(entryResolver);
             var buildContextPackUseCase = new BuildContextPackUseCase(contractExtractor);
             var renderHumanOutputUseCase = new RenderHumanOutputUseCase(humanOutputRenderer);
+            var renderVisualOutputUseCase = new RenderVisualOutputUseCase(visualOutputRenderer);
 
             return args[0].ToLowerInvariant() switch
             {
@@ -53,6 +55,7 @@ internal static class Program
                 "resolve-entry" => await RunResolveEntryAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase).ConfigureAwait(false),
                 "pack" => await RunPackAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase, buildContextPackUseCase, renderer, evidenceBundleWriter).ConfigureAwait(false),
                 "render-human" => await RunRenderHumanAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase, buildContextPackUseCase, renderer, renderHumanOutputUseCase, evidenceBundleWriter).ConfigureAwait(false),
+                "render-visual" => await RunRenderVisualAsync(args[1..], scanWorkspaceUseCase, resolveEntryUseCase, buildContextPackUseCase, renderer, renderVisualOutputUseCase, evidenceBundleWriter).ConfigureAwait(false),
                 "compare-evidence" => await RunCompareEvidenceAsync(args[1..], evidenceBundleReader, evidenceBundleDiffRenderer).ConfigureAwait(false),
                 _ => Fail(CliMessages.UnknownCommand(args[0]))
             };
@@ -196,6 +199,59 @@ internal static class Program
         var diff = evidenceBundleDiffRenderer.Render(baseDirectory, before, targetDirectory, after);
 
         return await WriteOutputAsync(diff, outputPath).ConfigureAwait(false);
+    }
+
+    private static async Task<int> RunRenderVisualAsync(
+        string[] args,
+        ScanWorkspaceUseCase scanUseCase,
+        ResolveEntryUseCase resolveUseCase,
+        BuildContextPackUseCase packUseCase,
+        IContextPackRenderer packRenderer,
+        RenderVisualOutputUseCase renderVisualOutputUseCase,
+        EvidenceBundleWriter evidenceBundleWriter)
+    {
+        var workspace = GetOption(args, "--workspace") ?? Directory.GetCurrentDirectory();
+        var entryText = GetRequiredOption(args, "--entry");
+        var goal = GetRequiredOption(args, "--goal");
+        var outputDirectory = GetRequiredOption(args, "--out-dir");
+        var evidenceDirectory = GetOption(args, "--evidence-dir");
+
+        var scanResult = await scanUseCase.ExecuteAsync(workspace).ConfigureAwait(false);
+        var entry = Entry.Parse(entryText);
+        var resolvedEntry = await resolveUseCase.ExecuteAsync(entry, scanResult).ConfigureAwait(false);
+        var contextPack = await packUseCase.ExecuteAsync(
+                workspace,
+                scanResult,
+                entry,
+                resolvedEntry,
+                goal,
+                Budget.Default)
+            .ConfigureAwait(false);
+
+        string? writtenEvidenceDirectory = null;
+        if (!string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            var packMarkdown = packRenderer.Render(contextPack);
+            writtenEvidenceDirectory = await evidenceBundleWriter.WriteAsync(
+                    evidenceDirectory,
+                    workspace,
+                    Budget.Default,
+                    scanResult,
+                    resolvedEntry,
+                    contextPack,
+                    packMarkdown)
+                .ConfigureAwait(false);
+            Console.Error.WriteLine(CliMessages.EvidenceWritten(writtenEvidenceDirectory));
+        }
+
+        var result = await renderVisualOutputUseCase.ExecuteAsync(
+                contextPack,
+                scanResult,
+                outputDirectory,
+                new VisualOutputRenderOptions(writtenEvidenceDirectory))
+            .ConfigureAwait(false);
+        Console.WriteLine(CliMessages.OutputWritten(result.IndexPath));
+        return 0;
     }
 
     private static string GetRequiredOption(IReadOnlyList<string> args, string optionName) =>

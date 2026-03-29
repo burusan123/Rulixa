@@ -1,12 +1,12 @@
 ---
 name: pack
-description: `Rulixa.Cli` を使って、WPF / .NET ワークスペースの Context Pack と人間向け Markdown を生成します。
+description: `Rulixa.Cli` を使って、WPF / .NET ワークスペースの Context Pack と人間向け出力を生成します。
 ---
 
 # Rulixa Pack
 
 `Rulixa.Cli` は、WPF / .NET ワークスペースの system map を短時間で掴むための CLI です。  
-まず `pack` で地図を取り、必要に応じて `render-human` で review / audit / knowledge 文書へ変換する使い方を推奨します。
+まず `pack` で地図を取り、必要に応じて `render-human` で文章資料へ、`render-visual` で探索型 UI へ展開します。
 
 ## 入力
 
@@ -26,13 +26,13 @@ dotnet run --project src\Rulixa.Cli -- pack `
 
 ## 例
 
-### symbol entry で system map を出す
+### symbol entry で system map を取る
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace <target-workspace> `
   --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "システム全体の地図を確認する"
+  --goal "システム全体の地図を把握する"
 ```
 
 ### file entry で root XAML から入る
@@ -44,7 +44,7 @@ dotnet run --project src\Rulixa.Cli -- pack `
   --goal "Shell 画面の workflow と persistence map を確認する"
 ```
 
-### review brief を生成する
+### review brief を出す
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- render-human `
@@ -54,25 +54,23 @@ dotnet run --project src\Rulixa.Cli -- render-human `
   --mode review
 ```
 
-### audit snapshot を evidence bundle と一緒に保存する
+### visual output を出す
 
 ```powershell
-dotnet run --project src\Rulixa.Cli -- render-human `
+dotnet run --project src\Rulixa.Cli -- render-visual `
   --workspace <target-workspace> `
   --entry <entry> `
   --goal "<goal>" `
-  --mode audit `
-  --out artifacts\audit.md `
-  --evidence-dir artifacts\evidence
+  --out-dir artifacts\visual
 ```
 
 ## 出力の読み方
 
 ### `pack`
 
-1. まず system summary と indexes を読みます。
-2. `unknowns` と next candidates から、次に全文検索する候補を選びます。
-3. 必要になった範囲だけ selected snippets / selected files を確認します。
+1. system summary と indexes を読む
+2. `unknowns` と next candidates から次に見る候補を選ぶ
+3. selected snippets / selected files を根拠として確認する
 
 ### `render-human`
 
@@ -83,10 +81,18 @@ dotnet run --project src\Rulixa.Cli -- render-human `
 - `knowledge`
   subsystem map、dependency seams、architectural constraints、known unknowns をまとめます。
 
-## 効果的な使い方
+### `render-visual`
 
-1. `pack` で最初の地図を取ります。
-2. `unknowns` と next candidates を見て、必要な範囲だけ全文検索します。
-3. 人間向けに共有したいときは `render-human` を使います。
+- `index.html`
+  探索用の本体です。
+- `app.css`
+  visual artifact の見た目を定義します。
+- `app.js`
+  埋め込み JSON を読み、検索、折りたたみ、inspector 更新を行います。
 
-`Rulixa` は「全部読むツール」ではなく、「どこから読むべきかを圧縮して返すツール」です。
+## 使い分けの目安
+
+1. `pack` で最初の地図を取る
+2. `unknowns` と next candidates を見て、どこを読むか決める
+3. 人間向けの説明が必要なら `render-human` を使う
+4. 局所 graph や evidence を探索したいなら `render-visual` を使う

@@ -10,6 +10,7 @@ internal static class CliMessages
         "  rulixa resolve-entry --entry <entry> [--workspace <path>]",
         "  rulixa pack --entry <entry> --goal <goal> [--workspace <path>] [--out <path>] [--evidence-dir <path>] [--max-files <n>] [--max-total-lines <n>] [--max-snippets-per-file <n>]",
         "  rulixa render-human --entry <entry> --goal <goal> --mode <review|audit|knowledge> [--workspace <path>] [--out <path>] [--evidence-dir <path>]",
+        "  rulixa render-visual --entry <entry> --goal <goal> --out-dir <path> [--workspace <path>] [--evidence-dir <path>]",
         "  rulixa compare-evidence --base <bundle-dir> --target <bundle-dir> [--out <path>]"
     ];
 

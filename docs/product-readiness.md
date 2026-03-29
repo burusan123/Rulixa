@@ -1,46 +1,48 @@
 # Rulixa Product Readiness
 
-## 位置づけ
+## 現在地
 
-この文書は、`Rulixa` を継続利用できる製品として仕上げるためのチェックリストです。  
-単に `pack` が動くことではなく、`理解の入口を安定して返せること`、`比較・監査に使えること`、`人間向け出力まで含めて運用できること` を確認対象にします。
+`Rulixa` は、WPF / .NET ワークスペース理解の入口を短時間で作るプロダクトとして仕上げを進めています。  
+主軸は `pack`、quality artifact、release review、human outputs、visual outputs の 5 系統です。
 
 ## 現在の到達点
 
 - `pack` / `scan` / `resolve-entry` / `compare-evidence` がある
 - local quality gate と GitHub Actions の required gate がある
-- handoff / corpus / performance の advisory 指標がある
+- handoff / corpus / performance の advisory 観測がある
 - `render-human` で `review` / `audit` / `knowledge` の Markdown を出せる
-- local quality gate で `release-review.md` と synthetic root cases 向け `human-outputs/` まで揃えられる
-- release review の一次資料は `summary.md`、補助資料は `release-review.md` と `human-outputs/` に固定している
+- `render-visual` で `Overview` / `Workflow` / `Evidence` / `Unknowns` / `Architecture` を持つ visual artifact を出せる
+- local quality gate で `release-review.md` と synthetic root cases 向け `human-outputs/` を出せる
+- release review の一次資料は `summary.md`、補助資料は `release-review.md` と `human-outputs/`
 
 ## KPI
 
-| 指標 | 意味 | 現在の扱い | 確認方法 |
+| 指標 | 内容 | 現在の扱い | 確認方法 |
 |---|---|---|---|
-| `pack success rate` | pack が返る割合 | required corpus で 100% を目標 | regression / smoke |
-| `partial pack rate` | degraded だが有用な pack が返る割合 | advisory | diagnostics / artifact |
-| `crash-free rate` | 実行中に未処理例外が出ない割合 | release gate で 100% | CI / local gate |
+| `pack success rate` | pack が返る割合 | required corpus で 100% を維持 | regression / smoke |
+| `partial pack rate` | degraded ながら pack が返る割合 | advisory | diagnostics / artifact |
+| `crash-free rate` | 実行中に未処理例外が出ない割合 | required gate で 100% | CI / local gate |
 | `first useful map time` | 最初の有用な map が返るまでの時間 | advisory | baseline 比較 |
-| `unknown guidance hit rate` | handoff 候補が次の調査に効く割合 | advisory | case review |
-| `false confidence rate` | 分かったふりをした割合 | required corpus で 0% | regression |
+| `unknown guidance hit rate` | handoff 候補が次の探索に効いた割合 | advisory | case review |
+| `false confidence rate` | 根拠の薄い断定をした割合 | required corpus で 0% | regression |
 | `deterministic rate` | 同一入力で同一結果が返る割合 | required corpus で 100% | regression |
 
 ## チェックリスト
 
-### 1. 技術
+### 1. 互換性
 
 - [ ] modern WPF + DI で system pack が安定して返る
 - [ ] legacy WPF + code-behind で crash せず返る
 - [ ] root entry を `App.xaml` / `DataContext` / `new Window()` から解決できる
 - [ ] unsupported construct は degraded pack + diagnostics に落とせる
-- [ ] false confidence を抑止できる
-- [ ] `render-human` が review / audit / knowledge を生成できる
+- [ ] false confidence を抑制できる
+- [ ] `render-human` の 3 mode を安定して出せる
+- [ ] `render-visual` の 5 view を安定して出せる
 
-### 2. 品質保証
+### 2. 測定と回帰
 
-- [ ] synthetic corpus が modern / legacy / dialog-heavy / weak-signal を含む
-- [ ] observed corpus を observation-only で継続観測できる
+- [ ] synthetic corpus の modern / legacy / dialog-heavy / weak-signal を守る
+- [ ] observed corpus を observation-only で運用できる
 - [ ] required gate が CI で動く
 - [ ] advisory 指標が artifact に残る
 - [ ] compare-evidence の regression が維持される
@@ -48,26 +50,29 @@
 ### 3. UX
 
 - [ ] `entry=file` / `entry=symbol` の選び方が docs で明確
-- [ ] `pack -> 必要時のみ全文検索` の導線が分かる
+- [ ] `pack -> 人間が読む文章` の流れが docs で説明されている
+- [ ] `pack -> 探索型 UI` の流れが docs で説明されている
 - [ ] `render-human` の 3 mode の違いが README と skill で分かる
-- [ ] unknown guidance の読み方が public docs で説明されている
-- [ ] GitHub 上で壊れるローカル絶対パスが public docs に残っていない
+- [ ] `render-visual` の 5 view と artifact 構成が README と skill で分かる
+- [ ] unknown guidance の読み方が public docs にある
+- [ ] GitHub 上で読めるローカル依存なしの docs になっている
 
 ### 4. サポート運用
 
-- [ ] evidence bundle を監査の根拠として保存できる
-- [ ] `summary.md` / `gate.json` / `kpi.json` が release review に使える
-- [ ] `release-review.md` と `human-outputs/` を release review の補助資料として使える
+- [ ] evidence bundle を比較の根拠として使える
+- [ ] `summary.md` / `gate.json` / `kpi.json` を release review に使える
+- [ ] `release-review.md` と `human-outputs/` を補助資料として使える
+- [ ] `render-visual` を探索補助資料としてローカルで開ける
 - [ ] optional smoke を observation-only として運用できる
-- [ ] `render-human --mode audit` を監査ドラフトとして使える
+- [ ] `render-human --mode audit` を根拠ドラフトとして使える
 - [ ] `render-human --mode knowledge` を設計知の叩き台として使える
 
 ## フェーズとの関係
 
 - Phase 1
-  土台と evidence
+  scan / resolve-entry / pack の基盤
 - Phase 2
-  高シグナル sections
+  高信号 sections
 - Phase 3
   system pack
 - Phase 4
@@ -80,3 +85,5 @@
   handoff scoring と corpus / performance 比較
 - Phase 8
   human output (`render-human`)
+- Phase 9
+  visual output (`render-visual`)

@@ -1,17 +1,17 @@
 # Rulixa
 
-`Rulixa` は、WPF / .NET ワークスペースから高密度な Context Pack と人間向けの要約文書を生成するツールです。  
-全文検索の代替ではなく、`どこから理解し始めるべきか` を短いコンテキストで返すことを目的にしています。
+`Rulixa` は、WPF / .NET ワークスペースから高密度な Context Pack と人間向け出力を生成するツールです。  
+最初に `pack` で地図を取り、必要に応じて `render-human` で文章資料へ、`render-visual` で探索型 UI artifact へ展開します。
 
 ## できること
 
 - `entry=file` と `entry=symbol` の 2 方式で `pack` を生成する
-- root ViewModel や root XAML から system map をまとめて返す
-- `unknowns` と next candidates で次に読む候補を案内する
-- evidence bundle と quality artifact で比較・監査を支える
-- `render-human` で人間向けの review / audit / knowledge 文書を出す
+- root ViewModel / root XAML から system map をまとめる
+- `unknowns` と next candidates で次に読む候補を出す
+- evidence bundle と quality artifact で比較・追跡を支える
+- `render-human` で `review` / `audit` / `knowledge` の文章資料を出す
+- `render-visual` で `index.html` / `app.css` / `app.js` の探索型 artifact を出す
 - local quality gate から `release-review.md` と `human-outputs/` をまとめて出す
-- Codex plugin から `pack` skill を利用できる
 
 ## 主なコマンド
 
@@ -19,6 +19,7 @@
 - `resolve-entry`
 - `pack`
 - `render-human`
+- `render-visual`
 - `compare-evidence`
 
 ## 例
@@ -29,10 +30,10 @@
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace <target-workspace> `
   --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "システム全体の地図を確認する"
+  --goal "システム全体の地図を把握する"
 ```
 
-### 人間向けの review brief を生成する
+### Review Brief を生成する
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- render-human `
@@ -42,7 +43,17 @@ dotnet run --project src\Rulixa.Cli -- render-human `
   --mode review
 ```
 
-### evidence bundle と一緒に audit snapshot を保存する
+### Visual Output を生成する
+
+```powershell
+dotnet run --project src\Rulixa.Cli -- render-visual `
+  --workspace <target-workspace> `
+  --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
+  --goal "project" `
+  --out-dir artifacts\visual
+```
+
+### Evidence Bundle つきで Audit Snapshot を保存する
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- render-human `
@@ -54,7 +65,7 @@ dotnet run --project src\Rulixa.Cli -- render-human `
   --evidence-dir artifacts\evidence
 ```
 
-### evidence bundle を比較する
+### Evidence Bundle を比較する
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- compare-evidence `
@@ -65,11 +76,20 @@ dotnet run --project src\Rulixa.Cli -- compare-evidence `
 ## `render-human` の mode
 
 - `review`
-  システム概要、中心状態、主要 workflow、unknown / risk、次に読む候補をまとめます。
+  概要、中心状態、主要 workflow、unknown / risk、次に読む file / symbol をまとめます。
 - `audit`
   root entry、observed facts、evidence source、degraded diagnostics、未確定事項をまとめます。
 - `knowledge`
   subsystem map、dependency seams、architectural constraints、known unknowns、将来変更時の注目点をまとめます。
+
+## `render-visual` の artifact
+
+- `index.html`
+  Overview / Workflow / Evidence / Unknowns / Architecture の 5 view を持つ探索 UI 本体です。
+- `app.css`
+  visual artifact の見た目を定義します。
+- `app.js`
+  埋め込みデータを読み、検索、折りたたみ、inspector 更新を行います。
 
 ## local quality gate の成果物
 
@@ -84,16 +104,8 @@ dotnet run --project src\Rulixa.Cli -- compare-evidence `
   - `audit-snapshot-<synthetic-root-case>.md`
   - `design-knowledge-snapshot-<synthetic-root-case>.md`
 
-release review では `summary.md` を一次資料に使い、必要に応じて `release-review.md` と synthetic root cases 用の `human-outputs/` を読む運用を想定しています。observed corpus の human outputs は optional smoke 実行時のみ観測対象として加算されます。
-
-## リポジトリ構成
-
-- `src/Rulixa.Domain`
-- `src/Rulixa.Application`
-- `src/Rulixa.Infrastructure`
-- `src/Rulixa.Plugin.WpfNet8`
-- `src/Rulixa.Cli`
-- `plugins/rulixa`
+release review では `summary.md` を一次資料として読み、必要に応じて `release-review.md` と synthetic root case 向け `human-outputs/` を補助資料として参照します。  
+`render-visual` は required artifact ではありませんが、文章資料を読んだ後に探索したい場合の補助資料です。
 
 ## ドキュメント
 

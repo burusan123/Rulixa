@@ -1,7 +1,7 @@
 {
   "name": "rulixa",
   "version": "0.1.0",
-  "description": "Rulixa.Cli を使って WPF / .NET ワークスペースの Context Pack と人間向け Markdown を生成します。",
+  "description": "Rulixa.Cli を使って WPF / .NET ワークスペースの Context Pack と人間向け出力を生成します。",
   "author": {
     "name": "Rulixa"
   },
@@ -16,8 +16,8 @@
   "apps": "./.app.json",
   "interface": {
     "displayName": "Rulixa",
-    "shortDescription": "Rulixa.Cli で system map と人間向け文書を生成します。",
-    "longDescription": "pack で root ViewModel や root XAML から system map を生成し、render-human で review / audit / knowledge 文書へ変換します。entry=file と entry=symbol の両方を使えます。scan と resolve-entry で事前確認もできます。",
+    "shortDescription": "Rulixa.Cli で system map、human output、visual output を生成します。",
+    "longDescription": "pack で root ViewModel や root XAML から system map を生成し、render-human で review / audit / knowledge 文章へ、render-visual で探索型 visual artifact へ展開します。entry=file と entry=symbol の両方を使えます。scan と resolve-entry で事前確認もできます。",
     "developerName": "Rulixa",
     "category": "Coding",
     "capabilities": [
@@ -26,9 +26,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "ShellViewModel の system pack を生成し、主要なサブシステムを要約してください。",
+      "ShellViewModel の system pack を生成し、主要なサブシステムを抽出してください。",
       "ShellView.xaml を file entry として解析し、workflow と persistence map を説明してください。",
-      "まず Rulixa.Cli の pack を実行し、その後に必要な範囲だけ全文検索してください。"
+      "Rulixa.Cli の pack を実行し、その後に必要な file / symbol を提案してください。"
     ],
     "brandColor": "#0F766E"
   }
