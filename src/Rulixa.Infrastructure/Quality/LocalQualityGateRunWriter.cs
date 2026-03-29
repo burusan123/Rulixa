@@ -18,6 +18,8 @@ public sealed class LocalQualityGateRunWriter
         string runId,
         IReadOnlyList<LocalQualitySuiteInput> suites,
         IReadOnlyList<string>? relatedArtifacts = null,
+        IReadOnlyList<HumanOutputArtifactReference>? humanOutputs = null,
+        string? releaseReviewPath = null,
         DateTimeOffset? generatedAtUtc = null,
         CancellationToken cancellationToken = default)
     {
@@ -41,7 +43,15 @@ public sealed class LocalQualityGateRunWriter
             .ToArray();
 
         var gate = new QualityGateEvaluator().Evaluate(gateCases);
-        var runArtifact = BuildRunArtifact(runId, timestamp, suites, flattenedCases, gate, relatedArtifacts ?? []);
+        var runArtifact = BuildRunArtifact(
+            runId,
+            timestamp,
+            suites,
+            flattenedCases,
+            gate,
+            relatedArtifacts ?? [],
+            humanOutputs ?? [],
+            releaseReviewPath);
         var performanceBaseline = await new QualityPerformanceBaselineComparer()
             .TryLoadAndCompareAsync(fullOutputRoot, runArtifact, cancellationToken)
             .ConfigureAwait(false);
@@ -72,7 +82,9 @@ public sealed class LocalQualityGateRunWriter
         IReadOnlyList<LocalQualitySuiteInput> suites,
         IReadOnlyList<QualityCaseArtifact> cases,
         QualityGateArtifact gate,
-        IReadOnlyList<string> relatedArtifacts)
+        IReadOnlyList<string> relatedArtifacts,
+        IReadOnlyList<HumanOutputArtifactReference> humanOutputs,
+        string? releaseReviewPath)
     {
         var observation = new QualityObservationCalculator().Calculate(cases);
         var handoffWarnings = new QualityHandoffWarningEvaluator().Evaluate(cases);
@@ -129,6 +141,12 @@ public sealed class LocalQualityGateRunWriter
             TotalDegradedDiagnosticCount: cases.Sum(static item => item.DegradedDiagnosticCount),
             HandoffWarnings: handoffWarnings,
             PerformanceBaseline: null,
+            HumanOutputs: humanOutputs
+                .OrderBy(static item => item.Mode, StringComparer.Ordinal)
+                .ThenBy(static item => item.CorpusCategory, StringComparer.Ordinal)
+                .ThenBy(static item => item.CaseId, StringComparer.Ordinal)
+                .ToArray(),
+            ReleaseReviewPath: releaseReviewPath,
             RelatedArtifacts: relatedArtifacts.OrderBy(static item => item, StringComparer.Ordinal).ToArray());
     }
 
@@ -212,6 +230,27 @@ public sealed class LocalQualityGateRunWriter
         {
             builder.AppendLine($"  `{warning.CaseId}` [{warning.Category}] {warning.Message}");
         }
+
+        builder.AppendLine();
+        builder.AppendLine("## Release Review");
+        builder.AppendLine();
+        if (artifact.HumanOutputs.Count == 0)
+        {
+            builder.AppendLine("- human_outputs: none");
+        }
+        else
+        {
+            foreach (var humanOutput in artifact.HumanOutputs)
+            {
+                builder.AppendLine(
+                    $"- `{humanOutput.Mode}` / `{humanOutput.CorpusCategory}` / `{humanOutput.CaseId}`: `{humanOutput.Path}`");
+            }
+        }
+
+        builder.AppendLine(
+            !string.IsNullOrWhiteSpace(artifact.ReleaseReviewPath)
+                ? $"- release_review: `{artifact.ReleaseReviewPath}`"
+                : "- release_review: none");
 
         builder.AppendLine();
         builder.AppendLine("## Case Handoff Details");

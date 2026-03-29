@@ -14,6 +14,14 @@ public sealed class LocalQualityGateRunWriterTests
         {
             var suites = CreateSuites(includeFailedSmoke: false);
             var writer = new LocalQualityGateRunWriter();
+            HumanOutputArtifactReference[] humanOutputs =
+            [
+                new HumanOutputArtifactReference(
+                    CaseId: "synthetic-root",
+                    CorpusCategory: "dialog-heavy-root",
+                    Mode: "review",
+                    Path: @"artifacts\local-quality\run\human-outputs\review-brief.md")
+            ];
 
             var result = await writer.WriteAsync(
                 outputRoot,
@@ -23,6 +31,8 @@ public sealed class LocalQualityGateRunWriterTests
                 [
                     @"tests\Rulixa.Application.Tests\Cli\CompareEvidenceBundleTests.cs"
                 ],
+                humanOutputs: humanOutputs,
+                releaseReviewPath: @"artifacts\local-quality\run\release-review.md",
                 generatedAtUtc: new DateTimeOffset(2026, 03, 29, 12, 0, 0, TimeSpan.Zero));
 
             Assert.True(File.Exists(result.KpiPath));
@@ -38,6 +48,7 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Contains("## Synthetic Corpus", summary, StringComparison.Ordinal);
             Assert.Contains("## Observed Corpus", summary, StringComparison.Ordinal);
             Assert.Contains("## Handoff Observations", summary, StringComparison.Ordinal);
+            Assert.Contains("## Release Review", summary, StringComparison.Ordinal);
             Assert.Contains("## Case Handoff Details", summary, StringComparison.Ordinal);
             Assert.Contains("## Performance Baseline", summary, StringComparison.Ordinal);
             Assert.Contains("## Unknown Guidance Details", summary, StringComparison.Ordinal);
@@ -49,6 +60,8 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Contains("TemplateHeavyResources.SettingsWindow", summary, StringComparison.Ordinal);
             Assert.Contains("handoff_warnings: `0`", summary, StringComparison.Ordinal);
             Assert.Contains("baseline: `none`", summary, StringComparison.Ordinal);
+            Assert.Contains("review-brief.md", summary, StringComparison.Ordinal);
+            Assert.Contains("release-review.md", summary, StringComparison.Ordinal);
 
             var gate = JsonSerializer.Deserialize<QualityGateArtifact>(await File.ReadAllTextAsync(result.GatePath), new JsonSerializerOptions
             {
@@ -79,6 +92,8 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Single(runArtifact.ObservedCorpusHandoffs, static item => item.CorpusCategory == "legacy-codebehind-root");
             Assert.Single(runArtifact.MissOrUnknownCases);
             Assert.Null(runArtifact.PerformanceBaseline);
+            Assert.Single(runArtifact.HumanOutputs);
+            Assert.Equal(@"artifacts\local-quality\run\release-review.md", runArtifact.ReleaseReviewPath);
         }
         finally
         {

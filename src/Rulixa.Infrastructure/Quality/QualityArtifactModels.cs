@@ -39,6 +39,8 @@ public sealed record LocalQualityRunArtifact(
     int TotalDegradedDiagnosticCount,
     IReadOnlyList<HandoffWarningArtifact> HandoffWarnings,
     PerformanceBaselineArtifact? PerformanceBaseline,
+    IReadOnlyList<HumanOutputArtifactReference> HumanOutputs,
+    string? ReleaseReviewPath,
     IReadOnlyList<string> RelatedArtifacts);
 
 public sealed record QualityCaseArtifact(
@@ -125,6 +127,12 @@ public sealed record HandoffWarningArtifact(
     string CaseId,
     string Category,
     string Message);
+
+public sealed record HumanOutputArtifactReference(
+    string CaseId,
+    string CorpusCategory,
+    string Mode,
+    string Path);
 
 public sealed record PerformanceBaselineArtifact(
     MetricBaselineArtifact? FirstUsefulMapTimeMs,

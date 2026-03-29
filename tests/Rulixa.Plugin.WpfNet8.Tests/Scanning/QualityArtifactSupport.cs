@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Rulixa.Application.HumanOutputs;
 using Rulixa.Application.UseCases;
 using Rulixa.Domain.Diagnostics;
 using Rulixa.Domain.Entries;
@@ -7,6 +8,7 @@ using Rulixa.Domain.Scanning;
 using Rulixa.Infrastructure.FileSystem;
 using Rulixa.Infrastructure.Quality;
 using Rulixa.Infrastructure.Resolution;
+using Rulixa.Infrastructure.Rendering;
 using Rulixa.Plugin.WpfNet8.Extraction;
 using Rulixa.Plugin.WpfNet8.Scanning;
 
@@ -360,6 +362,39 @@ internal static class QualityArtifactSupport
         return results;
     }
 
+    internal static async Task<HumanOutputArtifactReference> WriteHumanOutputAsync(
+        QualityCaseDefinition definition,
+        HumanOutputMode mode,
+        string outputPath,
+        string? evidenceDirectory = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+
+        var context = await BuildPackContextAsync(definition, cancellationToken).ConfigureAwait(false);
+        var renderUseCase = new RenderHumanOutputUseCase(new HumanOutputMarkdownRenderer());
+        var markdown = renderUseCase.Execute(
+            context.Pack,
+            context.ScanResult,
+            mode,
+            new HumanOutputRenderOptions(evidenceDirectory));
+
+        var fullOutputPath = Path.GetFullPath(outputPath);
+        var directory = Path.GetDirectoryName(fullOutputPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        await File.WriteAllTextAsync(fullOutputPath, markdown, cancellationToken).ConfigureAwait(false);
+        return new HumanOutputArtifactReference(
+            CaseId: definition.CaseId,
+            CorpusCategory: definition.CorpusCategory,
+            Mode: mode.ToString().ToLowerInvariant(),
+            Path: fullOutputPath);
+    }
+
     internal static string GetFixtureRoot(string fixtureName) =>
         Path.GetFullPath(Path.Combine(RepositoryRoot, "tests", "Rulixa.Plugin.WpfNet8.Tests", "Fixtures", fixtureName));
 
@@ -369,7 +404,7 @@ internal static class QualityArtifactSupport
     internal static string GetRepositoryRoot() =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
-    private static async Task<(WorkspaceScanResult ScanResult, ContextPack Pack)> BuildPackAsync(
+    private static async Task<(WorkspaceScanResult ScanResult, ContextPack Pack)> BuildPackContextAsync(
         QualityCaseDefinition definition,
         CancellationToken cancellationToken)
     {
@@ -391,6 +426,11 @@ internal static class QualityArtifactSupport
             .ConfigureAwait(false);
         return (scanResult, pack);
     }
+
+    private static Task<(WorkspaceScanResult ScanResult, ContextPack Pack)> BuildPackAsync(
+        QualityCaseDefinition definition,
+        CancellationToken cancellationToken) =>
+        BuildPackContextAsync(definition, cancellationToken);
 
     private static async Task<bool> IsDeterministicAsync(
         QualityCaseDefinition definition,
