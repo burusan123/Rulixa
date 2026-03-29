@@ -1,6 +1,6 @@
 ---
 name: pack
-description: `Rulixa.Cli` を使って、WPF / .NET ワークスペースの Context Pack と人間向け出力を生成します。
+description: `Rulixa.Cli` を使って、WPF / .NET ワークスペースの Context Pack と人間向け補助資料を生成します。
 ---
 
 # Rulixa Pack
@@ -11,9 +11,9 @@ description: `Rulixa.Cli` を使って、WPF / .NET ワークスペースの Con
 ## 入力
 
 - `entry=symbol`
-  root ViewModel や主要サービスの symbol が分かっているときに使います。
+  root ViewModel や主要サービスの symbol が分かっているときに使います
 - `entry=file`
-  root XAML や code-behind から入りたいときに使います。
+  root XAML や code-behind から入りたいときに使います
 
 ## 基本コマンド
 
@@ -32,7 +32,7 @@ dotnet run --project src\Rulixa.Cli -- pack `
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace <target-workspace> `
   --entry symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "システム全体の地図を把握する"
+  --goal "システム全体の地図を作る"
 ```
 
 ### file entry で root XAML から入る
@@ -41,7 +41,7 @@ dotnet run --project src\Rulixa.Cli -- pack `
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace <target-workspace> `
   --entry file:src/ReferenceWorkspace.Presentation.Wpf/Views/ShellView.xaml `
-  --goal "Shell 画面の workflow と persistence map を確認する"
+  --goal "Shell 画面の workflow と persistence map を説明する"
 ```
 
 ### review brief を出す
@@ -75,20 +75,20 @@ dotnet run --project src\Rulixa.Cli -- render-visual `
 ### `render-human`
 
 - `review`
-  概要、中心状態、主要 workflow、unknown / risk、次に読む file / symbol をまとめます。
+  概要、中心状態、workflow、unknown / risk、次に読む file / symbol をまとめる
 - `audit`
-  root entry、observed facts、evidence source、degraded diagnostics、未確定事項をまとめます。
+  root entry、observed facts、evidence source、degraded diagnostics、未確定事項をまとめる
 - `knowledge`
-  subsystem map、dependency seams、architectural constraints、known unknowns をまとめます。
+  subsystem map、dependency seams、architectural constraints、known unknowns をまとめる
 
 ### `render-visual`
 
 - `index.html`
-  探索用の本体です。
+  探索用の本体です
 - `app.css`
-  visual artifact の見た目を定義します。
+  visual artifact の見た目を定義します
 - `app.js`
-  埋め込み JSON を読み、検索、折りたたみ、inspector 更新を行います。
+  埋め込み JSON を読み、検索、折りたたみ、inspector 更新を行います
 
 ## 使い分けの目安
 

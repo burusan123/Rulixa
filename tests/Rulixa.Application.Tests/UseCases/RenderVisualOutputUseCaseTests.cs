@@ -72,7 +72,7 @@ public sealed class RenderVisualOutputUseCaseTests
                 new Contract(
                     ContractKind.Navigation,
                     "System Pack",
-                    "ShellViewModel から Shell / Drafting / Settings / Report/Export を束ねます。中心状態は ProjectDocument です。",
+                    "ShellViewModel が Shell / Drafting / Settings / Report/Export を束ねます。中心状態は ProjectDocument です。",
                     ["src/App/ViewModels/ShellViewModel.cs"],
                     ["App.ViewModels.ShellViewModel"]),
                 new Contract(
@@ -90,7 +90,7 @@ public sealed class RenderVisualOutputUseCaseTests
                 new Contract(
                     ContractKind.DependencyInjection,
                     "Architecture Tests",
-                    "LayerGuardTests が layer 境界を守ります。",
+                    "LayerGuardTests が layer 制約を守ります。",
                     ["tests/App.Architecture.Tests/LayerGuardTests.cs"],
                     ["App.Architecture.Tests.LayerGuardTests"])
             ],
@@ -131,7 +131,7 @@ public sealed class RenderVisualOutputUseCaseTests
             [
                 new Diagnostic(
                     "workflow.missing-downstream",
-                    "既知の限界: Drafting downstream は 2 hop 以内で確定できません。",
+                    "既知の限界: Drafting downstream は 2 hop 以内では確定できません。",
                     null,
                     DiagnosticSeverity.Info,
                     ["App.Services.DraftingAnalyzer", "App.Services.DraftingPersistenceAdapter"])
@@ -154,7 +154,12 @@ public sealed class RenderVisualOutputUseCaseTests
             [],
             [],
             [
-                new Diagnostic("xaml.parse-degraded", "既知の限界: commented block を無視して scan を継続しました。", null, DiagnosticSeverity.Warning, ["ShellWindow.xaml"])
+                new Diagnostic(
+                    "xaml.parse-degraded",
+                    "既知の限界: commented block を無視して scan を継続しました。",
+                    null,
+                    DiagnosticSeverity.Warning,
+                    ["ShellWindow.xaml"])
             ]);
 
     private sealed class CapturingVisualOutputRenderer : IVisualOutputRenderer

@@ -77,7 +77,7 @@ public sealed class RenderHumanOutputUseCase
         {
             !string.IsNullOrWhiteSpace(facts.SystemSummary)
                 ? $"断定: {facts.SystemSummary}"
-                : $"推定: `{facts.Entry}` を起点に `{facts.Goal}` を理解するための review です。"
+                : $"推定: `{facts.Entry}` を起点に `{facts.Goal}` を説明する review です。"
         };
 
         bullets.Add($"断定: 解決種別は `{facts.ResolvedKind}` です。");
@@ -100,7 +100,7 @@ public sealed class RenderHumanOutputUseCase
             [],
             facts.CenterStates.Count > 0
                 ? facts.CenterStates.Select(static item => $"断定: `{item}`").ToArray()
-                : ["unknown: 中心状態は pack からは確定できません。"]);
+                : ["unknown: 中心状態は pack だけでは確定できません。"]);
 
     private static HumanOutputSection BuildWorkflowSection(HumanOutputFactSet facts) =>
         new(
@@ -108,7 +108,7 @@ public sealed class RenderHumanOutputUseCase
             [],
             facts.WorkflowLines.Count > 0
                 ? facts.WorkflowLines.Select(static line => $"断定: {line}").ToArray()
-                : ["unknown: workflow を示す signal は不足しています。"]);
+                : ["unknown: workflow を示す signal は十分ではありません。"]);
 
     private static HumanOutputSection BuildPersistenceAndAssetsSection(HumanOutputFactSet facts)
     {
@@ -116,11 +116,11 @@ public sealed class RenderHumanOutputUseCase
         bullets.AddRange(
             facts.PersistenceLines.Count > 0
                 ? facts.PersistenceLines.Select(static line => $"断定: {line}")
-                : ["unknown: persistence は pack からは確定できません。"]);
+                : ["unknown: persistence は pack だけでは確定できません。"]);
         bullets.AddRange(
             facts.ExternalAssetLines.Count > 0
                 ? facts.ExternalAssetLines.Select(static line => $"断定: {line}")
-                : ["推定: external assets を示す強い signal は見えていません。"]);
+                : ["推定: external assets を示す signal は少なめです。"]);
 
         return new HumanOutputSection("Persistence / External Assets", [], bullets);
     }
@@ -138,8 +138,8 @@ public sealed class RenderHumanOutputUseCase
             "次に読む file / symbol",
             [],
             facts.NextCandidates.Count > 0
-                ? facts.NextCandidates.Select(static candidate => $"推定: `{candidate}`").ToArray()
-                : ["unknown: 次に読む候補はまだ整理できていません。"]);
+                ? facts.NextCandidates.Select(static candidate => $"断定: `{candidate}`").ToArray()
+                : ["unknown: 次に読む候補はまだ十分に挙げられていません。"]);
 
     private static HumanOutputSection BuildRootEntrySection(HumanOutputFactSet facts)
     {
@@ -176,7 +176,7 @@ public sealed class RenderHumanOutputUseCase
         bullets.AddRange(
             facts.EvidenceSources.Count > 0
                 ? facts.EvidenceSources.Select(static item => $"断定: {item}")
-                : ["unknown: evidence source を列挙できません。"]);
+                : ["unknown: evidence source を十分に列挙できません。"]);
 
         return new HumanOutputSection("Evidence Source", [], bullets);
     }
@@ -198,11 +198,11 @@ public sealed class RenderHumanOutputUseCase
         var bullets = new List<string>();
         if (!string.IsNullOrWhiteSpace(facts.CompareEvidenceReference))
         {
-            bullets.Add($"断定: compare-evidence 参照先は `{facts.CompareEvidenceReference}` です。");
+            bullets.Add($"断定: compare-evidence の参照先は `{facts.CompareEvidenceReference}` です。");
         }
         else if (!string.IsNullOrWhiteSpace(facts.EvidenceDirectory))
         {
-            bullets.Add($"推定: compare-evidence は `{facts.EvidenceDirectory}` を基点に利用できます。");
+            bullets.Add($"推定: `{facts.EvidenceDirectory}` を compare-evidence の比較元に使えます。");
         }
         else
         {
@@ -226,7 +226,7 @@ public sealed class RenderHumanOutputUseCase
         bullets.AddRange(
             facts.WorkflowLines.Count > 0
                 ? facts.WorkflowLines.Select(static line => $"推定: {line}")
-                : ["unknown: subsystem map を補強する workflow signal が不足しています。"]);
+                : ["unknown: subsystem map を補う workflow signal は十分ではありません。"]);
 
         return new HumanOutputSection("Subsystem Map", [], bullets);
     }
@@ -237,7 +237,7 @@ public sealed class RenderHumanOutputUseCase
             [],
             facts.DependencySeams.Count > 0
                 ? facts.DependencySeams
-                : ["unknown: dependency seam は pack からは確定できません。"]);
+                : ["unknown: dependency seam は pack だけでは確定できません。"]);
 
     private static HumanOutputSection BuildArchitecturalConstraintsSection(HumanOutputFactSet facts) =>
         new("Architectural Constraints", [], facts.ArchitecturalConstraints);
@@ -250,8 +250,8 @@ public sealed class RenderHumanOutputUseCase
         var bullets = new List<string>();
         bullets.AddRange(
             facts.NextCandidates.Count > 0
-                ? facts.NextCandidates.Select(static item => $"推定: `{item}`")
-                : ["unknown: change focus に使える next candidate が不足しています。"]);
+                ? facts.NextCandidates.Select(static item => $"断定: `{item}`")
+                : ["unknown: 変更時の注目候補はまだ十分ではありません。"]);
         bullets.AddRange(
             facts.EvidenceSources.Take(3).Select(static item => $"断定: {item}"));
         return new HumanOutputSection("将来変更時の注目点", [], bullets);

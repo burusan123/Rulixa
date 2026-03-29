@@ -113,6 +113,10 @@ public sealed class ReleaseReviewArtifactWriterTests
                     new HumanOutputArtifactReference("synthetic-root", "modern-sibling-root", "review", @"artifacts\local-quality\run\human-outputs\review-brief.md"),
                     new HumanOutputArtifactReference("synthetic-root", "modern-sibling-root", "audit", @"artifacts\local-quality\run\human-outputs\audit-snapshot.md")
                 ],
+                VisualOutputs:
+                [
+                    new VisualOutputArtifactReference("synthetic-root", "modern-sibling-root", @"artifacts\local-quality\run\visual-outputs\synthetic-root\index.html")
+                ],
                 ReleaseReviewPath: @"artifacts\local-quality\run\release-review.md",
                 RelatedArtifacts:
                 [
@@ -131,9 +135,12 @@ public sealed class ReleaseReviewArtifactWriterTests
             Assert.Contains("## Observed Corpus", markdown, StringComparison.Ordinal);
             Assert.Contains("smoke-env-disabled", markdown, StringComparison.Ordinal);
             Assert.Contains("human outputs: `none (observation-only)`", markdown, StringComparison.Ordinal);
+            Assert.Contains("visual outputs: `none (observation-only)`", markdown, StringComparison.Ordinal);
             Assert.Contains("## Performance", markdown, StringComparison.Ordinal);
             Assert.Contains("## Human Outputs", markdown, StringComparison.Ordinal);
+            Assert.Contains("## Visual Outputs", markdown, StringComparison.Ordinal);
             Assert.Contains("review-brief.md", markdown, StringComparison.Ordinal);
+            Assert.Contains(@"visual-outputs\synthetic-root\index.html", markdown, StringComparison.Ordinal);
         }
         finally
         {

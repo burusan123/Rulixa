@@ -78,12 +78,8 @@ internal sealed partial class HumanOutputFactAnalyzer
             {
                 var value = match.Value;
                 if (value.EndsWith("ViewModel", StringComparison.Ordinal)
-                    || value.EndsWith("Window", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (string.Equals(value, "DataContext", StringComparison.Ordinal))
+                    || value.EndsWith("Window", StringComparison.Ordinal)
+                    || string.Equals(value, "DataContext", StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -175,7 +171,7 @@ internal sealed partial class HumanOutputFactAnalyzer
         var facts = new List<string>
         {
             $"断定: entry は `{contextPack.Entry}` です。",
-            $"断定: 解決結果は `{contextPack.ResolvedEntry.ResolvedKind}` です。"
+            $"断定: 解決種別は `{contextPack.ResolvedEntry.ResolvedKind}` です。"
         };
 
         if (!string.IsNullOrWhiteSpace(contextPack.ResolvedEntry.Symbol))
@@ -214,8 +210,7 @@ internal sealed partial class HumanOutputFactAnalyzer
 
         foreach (var snippet in contextPack.SelectedSnippets.Take(5))
         {
-            sources.Add(
-                $"snippet: `{NormalizePath(snippet.Path)}:{snippet.StartLine}-{snippet.EndLine}` ({snippet.Reason})");
+            sources.Add($"snippet: `{NormalizePath(snippet.Path)}:{snippet.StartLine}-{snippet.EndLine}` ({snippet.Reason})");
         }
 
         return sources
@@ -236,8 +231,7 @@ internal sealed partial class HumanOutputFactAnalyzer
 
         var seams = contextPack.SelectedSnippets
             .Where(snippet => seamReasons.Contains(snippet.Reason, StringComparer.Ordinal))
-            .Select(snippet =>
-                $"推定: `{NormalizePath(snippet.Path)}:{snippet.StartLine}-{snippet.EndLine}` は `{snippet.Reason}` の seam です。")
+            .Select(snippet => $"断定: `{NormalizePath(snippet.Path)}:{snippet.StartLine}-{snippet.EndLine}` は `{snippet.Reason}` の seam です。")
             .Distinct(StringComparer.Ordinal)
             .Take(5)
             .ToArray();
@@ -249,7 +243,7 @@ internal sealed partial class HumanOutputFactAnalyzer
 
         return contextPack.Contracts
             .Where(contract => contract.Kind is ContractKind.DependencyInjection or ContractKind.DialogActivation or ContractKind.Navigation)
-            .Select(static contract => $"推定: {contract.Title}: {contract.Summary}")
+            .Select(static contract => $"断定: {contract.Title}: {contract.Summary}")
             .Distinct(StringComparer.Ordinal)
             .Take(4)
             .ToArray();
@@ -278,14 +272,13 @@ internal sealed partial class HumanOutputFactAnalyzer
 
         return fromContracts.Length > 0
             ? fromContracts
-            : ["unknown: Architecture constraints は pack からは確定できません。"];
+            : ["unknown: Architecture constraints は pack だけでは確定できません。"];
     }
 
     private static IReadOnlyList<string> ExtractKnownUnknowns(IReadOnlyList<Diagnostic> unknowns) =>
         unknowns.Count == 0
             ? ["断定: 既知の unknown はありません。"]
-            : unknowns.Select(diagnostic =>
-                    $"unknown: `{diagnostic.Code}` {TrimKnownPrefix(diagnostic.Message)}")
+            : unknowns.Select(diagnostic => $"unknown: `{diagnostic.Code}` {TrimKnownPrefix(diagnostic.Message)}")
                 .Take(6)
                 .ToArray();
 
@@ -298,7 +291,7 @@ internal sealed partial class HumanOutputFactAnalyzer
         var degradedDiagnostics = scanResult.Diagnostics.Count(static diagnostic => diagnostic.Severity != DiagnosticSeverity.Error);
         if (degradedDiagnostics > 0)
         {
-            risks.Add($"推定: degraded diagnostics が `{degradedDiagnostics}` 件あります。");
+            risks.Add($"推定: degraded diagnostics は `{degradedDiagnostics}` 件です。");
         }
 
         if (contextPack.Unknowns.Count > 0)
@@ -308,10 +301,12 @@ internal sealed partial class HumanOutputFactAnalyzer
 
         if (nextCandidates.Count == 0 && contextPack.Unknowns.Count > 0)
         {
-            risks.Add("unknown: 次に読む候補を十分に抽出できていません。");
+            risks.Add("unknown: 次に読む候補を十分に特定できていません。");
         }
 
-        return risks.Count == 0 ? ["断定: 現時点で追加のリスク signal は見えていません。"] : risks;
+        return risks.Count == 0
+            ? ["断定: 現状では追加のリスク signal は見えていません。"]
+            : risks;
     }
 
     private static IReadOnlyList<string> ExtractNextCandidates(
@@ -360,7 +355,7 @@ internal sealed partial class HumanOutputFactAnalyzer
 
     private static string TrimKnownPrefix(string message)
     {
-        const string prefix = "既知の状況: ";
+        const string prefix = "既知の限界: ";
         return message.StartsWith(prefix, StringComparison.Ordinal)
             ? message[prefix.Length..]
             : message;

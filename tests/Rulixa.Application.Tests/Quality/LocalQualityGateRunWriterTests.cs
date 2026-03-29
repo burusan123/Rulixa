@@ -22,6 +22,13 @@ public sealed class LocalQualityGateRunWriterTests
                     Mode: "review",
                     Path: @"artifacts\local-quality\run\human-outputs\review-brief.md")
             ];
+            VisualOutputArtifactReference[] visualOutputs =
+            [
+                new VisualOutputArtifactReference(
+                    CaseId: "synthetic-root",
+                    CorpusCategory: "dialog-heavy-root",
+                    Path: @"artifacts\local-quality\run\visual-outputs\synthetic-root\index.html")
+            ];
 
             var result = await writer.WriteAsync(
                 outputRoot,
@@ -32,6 +39,7 @@ public sealed class LocalQualityGateRunWriterTests
                     @"tests\Rulixa.Application.Tests\Cli\CompareEvidenceBundleTests.cs"
                 ],
                 humanOutputs: humanOutputs,
+                visualOutputs: visualOutputs,
                 releaseReviewPath: @"artifacts\local-quality\run\release-review.md",
                 generatedAtUtc: new DateTimeOffset(2026, 03, 29, 12, 0, 0, TimeSpan.Zero));
 
@@ -61,6 +69,7 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Contains("handoff_warnings: `0`", summary, StringComparison.Ordinal);
             Assert.Contains("baseline: `none`", summary, StringComparison.Ordinal);
             Assert.Contains("review-brief.md", summary, StringComparison.Ordinal);
+            Assert.Contains(@"visual-outputs\synthetic-root\index.html", summary, StringComparison.Ordinal);
             Assert.Contains("release-review.md", summary, StringComparison.Ordinal);
 
             var gate = JsonSerializer.Deserialize<QualityGateArtifact>(await File.ReadAllTextAsync(result.GatePath), new JsonSerializerOptions
@@ -93,6 +102,7 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Single(runArtifact.MissOrUnknownCases);
             Assert.Null(runArtifact.PerformanceBaseline);
             Assert.Single(runArtifact.HumanOutputs);
+            Assert.Single(runArtifact.VisualOutputs);
             Assert.Equal(@"artifacts\local-quality\run\release-review.md", runArtifact.ReleaseReviewPath);
         }
         finally

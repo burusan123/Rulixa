@@ -1,7 +1,7 @@
 {
   "name": "rulixa",
   "version": "0.1.0",
-  "description": "Rulixa.Cli を使って WPF / .NET ワークスペースの Context Pack と人間向け出力を生成します。",
+  "description": "Rulixa.Cli を使って WPF / .NET ワークスペースの Context Pack と人間向け補助資料を生成します。",
   "author": {
     "name": "Rulixa"
   },
@@ -27,7 +27,7 @@
     ],
     "defaultPrompt": [
       "ShellViewModel の system pack を生成し、主要なサブシステムを抽出してください。",
-      "ShellView.xaml を file entry として解析し、workflow と persistence map を説明してください。",
+      "ShellView.xaml を file entry として解決し、workflow と persistence map を説明してください。",
       "Rulixa.Cli の pack を実行し、その後に必要な file / symbol を提案してください。"
     ],
     "brandColor": "#0F766E"

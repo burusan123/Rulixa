@@ -19,6 +19,7 @@ public sealed class LocalQualityGateRunWriter
         IReadOnlyList<LocalQualitySuiteInput> suites,
         IReadOnlyList<string>? relatedArtifacts = null,
         IReadOnlyList<HumanOutputArtifactReference>? humanOutputs = null,
+        IReadOnlyList<VisualOutputArtifactReference>? visualOutputs = null,
         string? releaseReviewPath = null,
         DateTimeOffset? generatedAtUtc = null,
         CancellationToken cancellationToken = default)
@@ -51,6 +52,7 @@ public sealed class LocalQualityGateRunWriter
             gate,
             relatedArtifacts ?? [],
             humanOutputs ?? [],
+            visualOutputs ?? [],
             releaseReviewPath);
         var performanceBaseline = await new QualityPerformanceBaselineComparer()
             .TryLoadAndCompareAsync(fullOutputRoot, runArtifact, cancellationToken)
@@ -84,6 +86,7 @@ public sealed class LocalQualityGateRunWriter
         QualityGateArtifact gate,
         IReadOnlyList<string> relatedArtifacts,
         IReadOnlyList<HumanOutputArtifactReference> humanOutputs,
+        IReadOnlyList<VisualOutputArtifactReference> visualOutputs,
         string? releaseReviewPath)
     {
         var observation = new QualityObservationCalculator().Calculate(cases);
@@ -145,6 +148,11 @@ public sealed class LocalQualityGateRunWriter
                 .OrderBy(static item => item.Mode, StringComparer.Ordinal)
                 .ThenBy(static item => item.CorpusCategory, StringComparer.Ordinal)
                 .ThenBy(static item => item.CaseId, StringComparer.Ordinal)
+                .ToArray(),
+            VisualOutputs: visualOutputs
+                .OrderBy(static item => item.CorpusCategory, StringComparer.Ordinal)
+                .ThenBy(static item => item.CaseId, StringComparer.Ordinal)
+                .ThenBy(static item => item.Path, StringComparer.Ordinal)
                 .ToArray(),
             ReleaseReviewPath: releaseReviewPath,
             RelatedArtifacts: relatedArtifacts.OrderBy(static item => item, StringComparer.Ordinal).ToArray());
@@ -234,6 +242,7 @@ public sealed class LocalQualityGateRunWriter
         builder.AppendLine();
         builder.AppendLine("## Release Review");
         builder.AppendLine();
+        builder.AppendLine("- `summary.md` を一次資料とし、`release-review.md`、`human-outputs/`、`visual-outputs/` を補助資料として読む。");
         if (artifact.HumanOutputs.Count == 0)
         {
             builder.AppendLine("- human_outputs: none");
@@ -244,6 +253,19 @@ public sealed class LocalQualityGateRunWriter
             {
                 builder.AppendLine(
                     $"- `{humanOutput.Mode}` / `{humanOutput.CorpusCategory}` / `{humanOutput.CaseId}`: `{humanOutput.Path}`");
+            }
+        }
+
+        if (artifact.VisualOutputs.Count == 0)
+        {
+            builder.AppendLine("- visual_outputs: none");
+        }
+        else
+        {
+            foreach (var visualOutput in artifact.VisualOutputs)
+            {
+                builder.AppendLine(
+                    $"- visual / `{visualOutput.CorpusCategory}` / `{visualOutput.CaseId}`: `{visualOutput.Path}`");
             }
         }
 

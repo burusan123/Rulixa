@@ -18,10 +18,14 @@ public sealed class RenderHumanCommandTests
             "ReferenceWorkspaceLike"));
 
     [Theory]
-    [InlineData("review", "Review Brief")]
-    [InlineData("audit", "Audit Snapshot")]
-    [InlineData("knowledge", "Design Knowledge Snapshot")]
-    public async Task Main_RenderHuman_WritesMarkdownForEachMode(string mode, string title)
+    [InlineData("review", "Review Brief", "## 概要", "## Unknown / Risk")]
+    [InlineData("audit", "Audit Snapshot", "## Root Entry", "## Degraded Diagnostics")]
+    [InlineData("knowledge", "Design Knowledge Snapshot", "## Subsystem Map", "## Known Unknowns")]
+    public async Task Main_RenderHuman_WritesMarkdownForEachMode(
+        string mode,
+        string title,
+        string expectedSection1,
+        string expectedSection2)
     {
         var outputRoot = Path.Combine(Path.GetTempPath(), $"rulixa-render-human-{Guid.NewGuid():N}");
         Directory.CreateDirectory(outputRoot);
@@ -45,22 +49,8 @@ public sealed class RenderHumanCommandTests
             Assert.Equal(0, exitCode);
             Assert.Contains($"# {title}", markdown, StringComparison.Ordinal);
             Assert.Contains($"- mode: `{mode}`", markdown, StringComparison.Ordinal);
-
-            switch (mode)
-            {
-                case "review":
-                    Assert.Contains("## 概要", markdown, StringComparison.Ordinal);
-                    Assert.Contains("## Unknown / Risk", markdown, StringComparison.Ordinal);
-                    break;
-                case "audit":
-                    Assert.Contains("## Root Entry", markdown, StringComparison.Ordinal);
-                    Assert.Contains("## Degraded Diagnostics", markdown, StringComparison.Ordinal);
-                    break;
-                case "knowledge":
-                    Assert.Contains("## Subsystem Map", markdown, StringComparison.Ordinal);
-                    Assert.Contains("## Known Unknowns", markdown, StringComparison.Ordinal);
-                    break;
-            }
+            Assert.Contains(expectedSection1, markdown, StringComparison.Ordinal);
+            Assert.Contains(expectedSection2, markdown, StringComparison.Ordinal);
         }
         finally
         {
@@ -98,7 +88,7 @@ public sealed class RenderHumanCommandTests
 
             Assert.Equal(0, exitCode);
             Assert.Contains("# Audit Snapshot", markdown, StringComparison.Ordinal);
-            Assert.Contains("Evidence Source", markdown, StringComparison.Ordinal);
+            Assert.Contains("## Evidence Source", markdown, StringComparison.Ordinal);
             Assert.Contains(evidenceDirectory.Replace('\\', '/'), markdown.Replace('\\', '/'), StringComparison.Ordinal);
             Assert.True(File.Exists(Path.Combine(evidenceDirectory, "manifest.json")));
             Assert.True(File.Exists(Path.Combine(evidenceDirectory, "pack.md")));

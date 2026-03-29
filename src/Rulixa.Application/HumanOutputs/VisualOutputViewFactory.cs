@@ -18,7 +18,7 @@ internal static class VisualOutputViewFactory
         new(
             Id: "overview",
             Label: "Overview",
-            Summary: "root と中心状態、主要サブマップ、次の候補を確認します。",
+            Summary: "root、中心状態、サブシステム、次に読む候補を要約します。",
             Sections:
             [
                 new VisualSection(
@@ -58,7 +58,7 @@ internal static class VisualOutputViewFactory
         return new VisualView(
             Id: "workflow",
             Label: "Workflow",
-            Summary: "代表チェーンと dependency seam を局所図で探索します。",
+            Summary: "代表チェーンと dependency seam を局所図で確認します。",
             Sections:
             [
                 new VisualSection(
@@ -90,7 +90,7 @@ internal static class VisualOutputViewFactory
         new(
             Id: "evidence",
             Label: "Evidence",
-            Summary: "selected files と selected snippets の根拠へ戻ります。",
+            Summary: "selected files と selected snippets の根拠を確認します。",
             Sections:
             [
                 new VisualSection(
@@ -175,7 +175,7 @@ internal static class VisualOutputViewFactory
         new(
             Id: "architecture",
             Label: "Architecture",
-            Summary: "constraints と known unknowns を分けて読みます。",
+            Summary: "constraints と known unknowns を分けて確認します。",
             Sections:
             [
                 new VisualSection(
@@ -234,7 +234,7 @@ internal static class VisualOutputViewFactory
             VisualOutputFormatting.CreateItem(
                 "root-entry",
                 facts.Entry,
-                facts.SystemSummary ?? "system summary は未確定です。",
+                facts.SystemSummary ?? "system summary はまだ確定できていません。",
                 $"{facts.Entry} {facts.SystemSummary}",
                 "root-entry",
                 ["root"]),
@@ -248,7 +248,7 @@ internal static class VisualOutputViewFactory
             VisualOutputFormatting.CreateItem(
                 "primary-unknown",
                 "Primary Unknown",
-                facts.KnownUnknowns.FirstOrDefault() ?? "未確定事項は見つかっていません。",
+                facts.KnownUnknowns.FirstOrDefault() ?? "unknown: 未確定事項は見つかっていません。",
                 string.Join(' ', facts.KnownUnknowns),
                 null,
                 ["unknown"])

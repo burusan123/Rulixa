@@ -4,7 +4,7 @@
 
 ```text
 entry=symbol:ReferenceWorkspace.Presentation.Wpf.ViewModels.ShellViewModel
-goal=Shell 画面の全体ハブと主要 workflow を把握する
+goal=Shell 画面の全体ハブと主要 workflow を理解する
 budget.maxFiles=8
 budget.maxTotalLines=1600
 budget.maxSnippetsPerFile=3
@@ -20,10 +20,10 @@ budget.maxSnippetsPerFile=3
 ## 出力の見方
 
 - `contracts`
-  pack が保持する高密度な要約です。system map と主要 binding / workflow を読みます。
+  pack が返す高密度な要約です。system map と主要 binding / workflow を読みます
 - `selected snippets`
-  contracts を裏付ける根拠です。entry に近い signal から確認します。
+  contracts を裏づける根拠です。entry に近い signal から確認します
 - `selected files`
-  次に読むコードの入口です。理由付きで採用されます。
+  次に読むコードの入口です。深掘り時の順序づけに使います
 - `unknowns`
-  未確定事項です。candidate がある場合は次の調査順序に使います。
+  未確定事項です。candidate がある場合は次の探索起点に使います

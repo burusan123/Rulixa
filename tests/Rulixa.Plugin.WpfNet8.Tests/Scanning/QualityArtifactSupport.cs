@@ -425,6 +425,59 @@ internal static class QualityArtifactSupport
         return results;
     }
 
+    internal static async Task<VisualOutputArtifactReference> WriteVisualOutputAsync(
+        QualityCaseDefinition definition,
+        string outputDirectory,
+        string? evidenceDirectory = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+
+        var context = await BuildPackContextAsync(definition, cancellationToken).ConfigureAwait(false);
+        var renderUseCase = new RenderVisualOutputUseCase(new VisualOutputRenderer());
+        var result = await renderUseCase.ExecuteAsync(
+                context.Pack,
+                context.ScanResult,
+                outputDirectory,
+                new VisualOutputRenderOptions(evidenceDirectory),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return new VisualOutputArtifactReference(
+            CaseId: definition.CaseId,
+            CorpusCategory: definition.CorpusCategory,
+            Path: result.IndexPath);
+    }
+
+    internal static async Task<IReadOnlyList<VisualOutputArtifactReference>> WriteAutomaticVisualOutputsAsync(
+        IReadOnlyList<QualityCaseDefinition> definitions,
+        IReadOnlyList<QualityCaseArtifact> caseArtifacts,
+        string outputDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        ArgumentNullException.ThrowIfNull(caseArtifacts);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+
+        Directory.CreateDirectory(outputDirectory);
+        var results = new List<VisualOutputArtifactReference>();
+
+        foreach (var definition in definitions.Where(IsRootCase))
+        {
+            var caseArtifact = caseArtifacts.FirstOrDefault(item => string.Equals(item.CaseId, definition.CaseId, StringComparison.Ordinal));
+            if (caseArtifact is null || !ShouldGenerateHumanOutput(definition, caseArtifact))
+            {
+                continue;
+            }
+
+            var caseOutputDirectory = Path.Combine(outputDirectory, definition.CaseId);
+            results.Add(await WriteVisualOutputAsync(definition, caseOutputDirectory, cancellationToken: cancellationToken).ConfigureAwait(false));
+        }
+
+        return results;
+    }
+
     internal static string GetFixtureRoot(string fixtureName) =>
         Path.GetFullPath(Path.Combine(RepositoryRoot, "tests", "Rulixa.Plugin.WpfNet8.Tests", "Fixtures", fixtureName));
 

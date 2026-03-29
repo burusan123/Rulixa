@@ -22,6 +22,7 @@ public sealed class ReleaseReviewArtifactWriter
     {
         var builder = new StringBuilder();
         var humanOutputLookup = BuildHumanOutputLookup(artifact.HumanOutputs);
+        var visualOutputLookup = BuildVisualOutputLookup(artifact.VisualOutputs);
 
         builder.AppendLine("# Release Review");
         builder.AppendLine();
@@ -86,6 +87,15 @@ public sealed class ReleaseReviewArtifactWriter
                 builder.AppendLine("  human outputs: `none (observation-only)`");
             }
 
+            if (visualOutputLookup.TryGetValue(caseArtifact.CaseId, out var visualPaths))
+            {
+                builder.AppendLine($"  visual outputs: `{string.Join("`, `", visualPaths)}`");
+            }
+            else
+            {
+                builder.AppendLine("  visual outputs: `none (observation-only)`");
+            }
+
             if (!string.IsNullOrWhiteSpace(caseArtifact.SkipReason))
             {
                 builder.AppendLine($"  skip reason: `{caseArtifact.SkipReason}`");
@@ -138,6 +148,24 @@ public sealed class ReleaseReviewArtifactWriter
         }
 
         builder.AppendLine();
+        builder.AppendLine("## Visual Outputs");
+        builder.AppendLine();
+        if (artifact.VisualOutputs.Count == 0)
+        {
+            builder.AppendLine("- none");
+        }
+        else
+        {
+            foreach (var visualOutput in artifact.VisualOutputs
+                         .OrderBy(static item => item.CorpusCategory, StringComparer.Ordinal)
+                         .ThenBy(static item => item.CaseId, StringComparer.Ordinal))
+            {
+                builder.AppendLine(
+                    $"- `{visualOutput.CorpusCategory}` / `{visualOutput.CaseId}`: `{visualOutput.Path}`");
+            }
+        }
+
+        builder.AppendLine();
         builder.AppendLine("## Artifacts");
         builder.AppendLine();
         builder.AppendLine("- `kpi.json`");
@@ -163,6 +191,19 @@ public sealed class ReleaseReviewArtifactWriter
                 static group => group.Key,
                 static group => (IReadOnlyList<string>)group
                     .Select(static item => item.Mode)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static item => item, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildVisualOutputLookup(
+        IReadOnlyList<VisualOutputArtifactReference> visualOutputs) =>
+        visualOutputs
+            .GroupBy(static item => item.CaseId, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static group => (IReadOnlyList<string>)group
+                    .Select(static item => item.Path)
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(static item => item, StringComparer.Ordinal)
                     .ToArray(),

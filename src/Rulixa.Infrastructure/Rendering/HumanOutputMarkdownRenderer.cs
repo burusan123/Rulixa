@@ -26,14 +26,13 @@ public sealed class HumanOutputMarkdownRenderer : IHumanOutputRenderer
                 builder.AppendLine(paragraph);
             }
 
+            builder.AppendLine();
             if (section.BulletPoints.Count == 0)
             {
-                builder.AppendLine();
                 builder.AppendLine("- なし");
                 continue;
             }
 
-            builder.AppendLine();
             foreach (var bulletPoint in section.BulletPoints)
             {
                 builder.AppendLine($"- {bulletPoint}");

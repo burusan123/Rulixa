@@ -40,6 +40,7 @@ public sealed record LocalQualityRunArtifact(
     IReadOnlyList<HandoffWarningArtifact> HandoffWarnings,
     PerformanceBaselineArtifact? PerformanceBaseline,
     IReadOnlyList<HumanOutputArtifactReference> HumanOutputs,
+    IReadOnlyList<VisualOutputArtifactReference> VisualOutputs,
     string? ReleaseReviewPath,
     IReadOnlyList<string> RelatedArtifacts);
 
@@ -132,6 +133,11 @@ public sealed record HumanOutputArtifactReference(
     string CaseId,
     string CorpusCategory,
     string Mode,
+    string Path);
+
+public sealed record VisualOutputArtifactReference(
+    string CaseId,
+    string CorpusCategory,
     string Path);
 
 public sealed record PerformanceBaselineArtifact(

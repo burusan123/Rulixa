@@ -36,14 +36,21 @@ public sealed class PublicDocsHardeningTests
 
         var readme = File.ReadAllText(Path.Combine(RepositoryRoot, "README.md"));
         var fullSpec = File.ReadAllText(Path.Combine(RepositoryRoot, "docs", "project_full_spec.md"));
+        var readiness = File.ReadAllText(Path.Combine(RepositoryRoot, "docs", "product-readiness.md"));
 
+        Assert.Contains("summary.md", readme, StringComparison.Ordinal);
         Assert.Contains("release-review.md", readme, StringComparison.Ordinal);
         Assert.Contains("human-outputs", readme, StringComparison.Ordinal);
-        Assert.Contains("summary.md", readme, StringComparison.Ordinal);
+        Assert.Contains("visual-outputs", readme, StringComparison.Ordinal);
         Assert.Contains("render-visual", readme, StringComparison.Ordinal);
+
         Assert.Contains("release-review.md", fullSpec, StringComparison.Ordinal);
         Assert.Contains("human-outputs", fullSpec, StringComparison.Ordinal);
+        Assert.Contains("visual-outputs", fullSpec, StringComparison.Ordinal);
         Assert.Contains("render-visual", fullSpec, StringComparison.Ordinal);
+
+        Assert.Contains("render-visual", readiness, StringComparison.Ordinal);
+        Assert.Contains("release-review.md", readiness, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -60,6 +67,7 @@ public sealed class PublicDocsHardeningTests
         Assert.Equal("Rulixa", document.RootElement.GetProperty("interface").GetProperty("displayName").GetString());
 
         var longDescription = document.RootElement.GetProperty("interface").GetProperty("longDescription").GetString();
+        Assert.NotNull(longDescription);
         Assert.Contains("render-human", longDescription, StringComparison.Ordinal);
         Assert.Contains("render-visual", longDescription, StringComparison.Ordinal);
     }

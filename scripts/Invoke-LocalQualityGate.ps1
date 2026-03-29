@@ -76,6 +76,7 @@ try {
     $kpiPath = Join-Path $qualityRoot "$runId\kpi.json"
     $releaseReviewPath = Join-Path $qualityRoot "$runId\release-review.md"
     $humanOutputDirectory = Join-Path $qualityRoot "$runId\human-outputs"
+    $visualOutputDirectory = Join-Path $qualityRoot "$runId\visual-outputs"
     $gate = Get-Content -Path $gatePath -Raw | ConvertFrom-Json
 
     Write-Host "Local quality gate completed."
@@ -88,6 +89,9 @@ try {
     }
     if (Test-Path $humanOutputDirectory) {
         Write-Host "HumanOutputs: $humanOutputDirectory"
+    }
+    if (Test-Path $visualOutputDirectory) {
+        Write-Host "VisualOutputs: $visualOutputDirectory"
     }
 
     if (-not $gate.passed) {
