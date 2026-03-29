@@ -11,7 +11,10 @@ public sealed record QualityArtifact(
     int UnknownGuidanceItemCount,
     int UnknownGuidanceFamilyCount,
     int RepresentativeChainCount,
-    int DegradedReasonCount);
+    int DegradedReasonCount,
+    int HandoffHitCount,
+    int HandoffMissCount,
+    int HandoffUnknownCount);
 
 public sealed record LocalQualityRunArtifact(
     string SchemaVersion,
@@ -23,6 +26,7 @@ public sealed record LocalQualityRunArtifact(
     LocalQualityObservationSummary SyntheticSummary,
     LocalQualityObservationSummary OptionalSmokeSummary,
     LocalUnknownGuidanceSummaryArtifact UnknownGuidanceSummary,
+    LocalHandoffSummaryArtifact HandoffSummary,
     long? FirstUsefulMapTimeMs,
     int UnknownGuidanceCaseCount,
     int UnknownGuidanceItemCount,
@@ -31,6 +35,7 @@ public sealed record LocalQualityRunArtifact(
     int DegradedReasonCount,
     int TotalDegradedDiagnosticCount,
     IReadOnlyList<HandoffWarningArtifact> HandoffWarnings,
+    PerformanceBaselineArtifact? PerformanceBaseline,
     IReadOnlyList<string> RelatedArtifacts);
 
 public sealed record QualityCaseArtifact(
@@ -54,7 +59,12 @@ public sealed record QualityCaseArtifact(
     int DegradedDiagnosticCount,
     int RepresentativeChainCount,
     int DegradedReasonCount,
-    IReadOnlyList<UnknownGuidanceArtifact> UnknownGuidance);
+    IReadOnlyList<UnknownGuidanceArtifact> UnknownGuidance,
+    string? HandoffOutcome = null,
+    IReadOnlyList<string>? HandoffExpectedFamilies = null,
+    IReadOnlyList<string>? HandoffObservedFamilies = null,
+    string? HandoffFirstCandidate = null,
+    string? HandoffReason = null);
 
 public sealed record UnknownGuidanceArtifact(
     string Code,
@@ -84,10 +94,30 @@ public sealed record LocalUnknownGuidanceSummaryArtifact(
     IReadOnlyList<string> Families,
     IReadOnlyList<string> FirstCandidates);
 
+public sealed record LocalHandoffSummaryArtifact(
+    int HitCount,
+    int MissCount,
+    int UnknownCount,
+    IReadOnlyList<string> ObservedFamilies,
+    IReadOnlyList<string> FirstCandidates);
+
 public sealed record HandoffWarningArtifact(
     string CaseId,
     string Category,
     string Message);
+
+public sealed record PerformanceBaselineArtifact(
+    MetricBaselineArtifact? FirstUsefulMapTimeMs,
+    MetricBaselineArtifact? RepresentativeChainCount,
+    MetricBaselineArtifact? UnknownGuidanceCaseCount,
+    MetricBaselineArtifact? DegradedReasonCount,
+    IReadOnlyList<string> RegressionWarnings);
+
+public sealed record MetricBaselineArtifact(
+    long Current,
+    long? Baseline,
+    long? Delta,
+    bool RegressionWarning);
 
 public sealed record QualityGateArtifact(
     bool Passed,

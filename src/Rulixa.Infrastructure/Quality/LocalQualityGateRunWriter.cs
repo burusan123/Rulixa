@@ -42,6 +42,10 @@ public sealed class LocalQualityGateRunWriter
 
         var gate = new QualityGateEvaluator().Evaluate(gateCases);
         var runArtifact = BuildRunArtifact(runId, timestamp, suites, flattenedCases, gate, relatedArtifacts ?? []);
+        var performanceBaseline = await new QualityPerformanceBaselineComparer()
+            .TryLoadAndCompareAsync(fullOutputRoot, runArtifact, cancellationToken)
+            .ConfigureAwait(false);
+        runArtifact = runArtifact with { PerformanceBaseline = performanceBaseline };
 
         var kpiPath = Path.Combine(runDirectory, "kpi.json");
         var gatePath = Path.Combine(runDirectory, "gate.json");
@@ -107,6 +111,12 @@ public sealed class LocalQualityGateRunWriter
                 GuidanceItemCount: observation.UnknownGuidanceItemCount,
                 Families: observation.Families,
                 FirstCandidates: observation.FirstCandidates),
+            HandoffSummary: new LocalHandoffSummaryArtifact(
+                HitCount: observation.HandoffHitCount,
+                MissCount: observation.HandoffMissCount,
+                UnknownCount: observation.HandoffUnknownCount,
+                ObservedFamilies: observation.HandoffFamilies,
+                FirstCandidates: observation.HandoffFirstCandidates),
             FirstUsefulMapTimeMs: observation.FirstUsefulMapTimeMs,
             UnknownGuidanceCaseCount: observation.UnknownGuidanceCaseCount,
             UnknownGuidanceItemCount: observation.UnknownGuidanceItemCount,
@@ -115,6 +125,7 @@ public sealed class LocalQualityGateRunWriter
             DegradedReasonCount: observation.DegradedReasonCount,
             TotalDegradedDiagnosticCount: cases.Sum(static item => item.DegradedDiagnosticCount),
             HandoffWarnings: handoffWarnings,
+            PerformanceBaseline: null,
             RelatedArtifacts: relatedArtifacts.OrderBy(static item => item, StringComparer.Ordinal).ToArray());
     }
 
@@ -183,14 +194,36 @@ public sealed class LocalQualityGateRunWriter
         builder.AppendLine("## Handoff Observations");
         builder.AppendLine();
         builder.AppendLine("- synthetic corpus is the handoff quality baseline. optional smoke remains observation-only.");
+        builder.AppendLine($"- hit: `{artifact.HandoffSummary.HitCount}`");
+        builder.AppendLine($"- miss: `{artifact.HandoffSummary.MissCount}`");
+        builder.AppendLine($"- unknown: `{artifact.HandoffSummary.UnknownCount}`");
         builder.AppendLine($"- representative_chains: `{artifact.RepresentativeChainCount}`");
         builder.AppendLine($"- first_useful_map_time_ms: `{artifact.FirstUsefulMapTimeMs?.ToString() ?? "none"}`");
-        builder.AppendLine($"- unknown_guidance_families: `{FormatInlineList(artifact.UnknownGuidanceSummary.Families)}`");
-        builder.AppendLine($"- next_candidates: `{FormatInlineList(artifact.UnknownGuidanceSummary.FirstCandidates)}`");
+        builder.AppendLine($"- observed_families: `{FormatInlineList(artifact.HandoffSummary.ObservedFamilies)}`");
+        builder.AppendLine($"- next_candidates: `{FormatInlineList(artifact.HandoffSummary.FirstCandidates)}`");
         builder.AppendLine($"- handoff_warnings: `{artifact.HandoffWarnings.Count}`");
         foreach (var warning in artifact.HandoffWarnings)
         {
             builder.AppendLine($"  `{warning.CaseId}` [{warning.Category}] {warning.Message}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Performance Baseline");
+        builder.AppendLine();
+        if (artifact.PerformanceBaseline is null)
+        {
+            builder.AppendLine("- baseline: `none`");
+        }
+        else
+        {
+            AppendBaselineMetric(builder, "first_useful_map_time_ms", artifact.PerformanceBaseline.FirstUsefulMapTimeMs);
+            AppendBaselineMetric(builder, "representative_chain_count", artifact.PerformanceBaseline.RepresentativeChainCount);
+            AppendBaselineMetric(builder, "unknown_guidance_case_count", artifact.PerformanceBaseline.UnknownGuidanceCaseCount);
+            AppendBaselineMetric(builder, "degraded_reason_count", artifact.PerformanceBaseline.DegradedReasonCount);
+            builder.AppendLine(
+                artifact.PerformanceBaseline.RegressionWarnings.Count > 0
+                    ? $"- regression_warnings: `{string.Join("`, `", artifact.PerformanceBaseline.RegressionWarnings)}`"
+                    : "- regression_warnings: none");
         }
 
         builder.AppendLine();
@@ -253,6 +286,19 @@ public sealed class LocalQualityGateRunWriter
 
     private static string FormatInlineList(IReadOnlyCollection<string> values) =>
         values.Count == 0 ? "none" : string.Join("`, `", values);
+
+    private static void AppendBaselineMetric(StringBuilder builder, string name, MetricBaselineArtifact? metric)
+    {
+        if (metric is null)
+        {
+            builder.AppendLine($"- {name}: `none`");
+            return;
+        }
+
+        var deltaText = metric.Delta?.ToString() ?? "none";
+        builder.AppendLine(
+            $"- {name}: current=`{metric.Current}` baseline=`{metric.Baseline?.ToString() ?? "none"}` delta=`{deltaText}` regression_warning=`{metric.RegressionWarning}`");
+    }
 
     private static void ReplaceLatestDirectory(string latestDirectory, params string[] sourceFiles)
     {

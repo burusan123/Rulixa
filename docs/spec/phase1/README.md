@@ -5,7 +5,7 @@
 Context Pack はその中で AI 変更開始に使う重要な成果物ですが、製品全体の主役ではありません。  
 Phase 1 は、その全体構想の最初の具体攻略対象として `Windows` 上の `WPF + .NET 8` を扱い、`scan -> resolve-entry -> pack` を安定化する段階です。
 
-上位方針は [polaris.md](/D:/C#/Rulixa/docs/polaris.md) と [project_full_spec.md](/D:/C#/Rulixa/docs/project_full_spec.md) を正本とし、この配下は Phase 1 の具体仕様を扱います。
+上位方針は [polaris.md](../../polaris.md) と [project_full_spec.md](../../project_full_spec.md) を正本とし、この配下は Phase 1 の具体仕様を扱います。
 
 ## 現在の実装範囲
 

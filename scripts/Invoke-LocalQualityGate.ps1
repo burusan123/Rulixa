@@ -51,7 +51,7 @@ try {
         '.\tests\Rulixa.Application.Tests\Rulixa.Application.Tests.csproj',
         '--no-build',
         '--filter',
-        'FullyQualifiedName~CompareEvidenceBundleTests|FullyQualifiedName~LocalQualityGateRunWriterTests')
+        'FullyQualifiedName~CompareEvidenceBundleTests|FullyQualifiedName~LocalQualityGateRunWriterTests|FullyQualifiedName~QualityHandoffOutcomeEvaluatorTests|FullyQualifiedName~PublicDocsHardeningTests')
     Invoke-DotNet -Arguments @(
         'test',
         '.\tests\Rulixa.Plugin.WpfNet8.Tests\Rulixa.Plugin.WpfNet8.Tests.csproj',

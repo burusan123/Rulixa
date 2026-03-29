@@ -37,7 +37,10 @@ public sealed class QualityArtifactWriter
             UnknownGuidanceItemCount: observation.UnknownGuidanceItemCount,
             UnknownGuidanceFamilyCount: observation.UnknownGuidanceFamilyCount,
             RepresentativeChainCount: observation.RepresentativeChainCount,
-            DegradedReasonCount: observation.DegradedReasonCount);
+            DegradedReasonCount: observation.DegradedReasonCount,
+            HandoffHitCount: observation.HandoffHitCount,
+            HandoffMissCount: observation.HandoffMissCount,
+            HandoffUnknownCount: observation.HandoffUnknownCount);
         var json = JsonSerializer.Serialize(artifact, JsonOptions);
 
         var fullOutputRoot = Path.GetFullPath(outputRootDirectory);

@@ -38,12 +38,14 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Contains("## Synthetic Corpus", summary, StringComparison.Ordinal);
             Assert.Contains("## Optional Smoke", summary, StringComparison.Ordinal);
             Assert.Contains("## Handoff Observations", summary, StringComparison.Ordinal);
+            Assert.Contains("## Performance Baseline", summary, StringComparison.Ordinal);
             Assert.Contains("## Unknown Guidance Details", summary, StringComparison.Ordinal);
             Assert.Contains("## Degraded Diagnostics", summary, StringComparison.Ordinal);
             Assert.Contains("smoke-env-disabled", summary, StringComparison.Ordinal);
             Assert.Contains("synthetic corpus is the handoff quality baseline", summary, StringComparison.Ordinal);
             Assert.Contains("TemplateHeavyResources.SettingsWindow", summary, StringComparison.Ordinal);
             Assert.Contains("handoff_warnings: `0`", summary, StringComparison.Ordinal);
+            Assert.Contains("baseline: `none`", summary, StringComparison.Ordinal);
 
             var gate = JsonSerializer.Deserialize<QualityGateArtifact>(await File.ReadAllTextAsync(result.GatePath), new JsonSerializerOptions
             {
@@ -67,6 +69,10 @@ public sealed class LocalQualityGateRunWriterTests
             Assert.Equal(2, runArtifact.RepresentativeChainCount);
             Assert.Equal(25, runArtifact.FirstUsefulMapTimeMs);
             Assert.Empty(runArtifact.HandoffWarnings);
+            Assert.Equal(1, runArtifact.HandoffSummary.HitCount);
+            Assert.Equal(0, runArtifact.HandoffSummary.MissCount);
+            Assert.Equal(1, runArtifact.HandoffSummary.UnknownCount);
+            Assert.Null(runArtifact.PerformanceBaseline);
         }
         finally
         {
@@ -107,7 +113,49 @@ public sealed class LocalQualityGateRunWriterTests
         }
     }
 
-    private static IReadOnlyList<LocalQualitySuiteInput> CreateSuites(bool includeFailedSmoke)
+    [Fact]
+    public async Task WriteAsync_WhenPreviousLatestExists_EmitsPerformanceBaselineComparison()
+    {
+        var outputRoot = Path.Combine(Path.GetTempPath(), $"rulixa-local-quality-baseline-{Guid.NewGuid():N}");
+
+        try
+        {
+            var writer = new LocalQualityGateRunWriter();
+            await writer.WriteAsync(
+                outputRoot,
+                "20260329T1200000000000Z",
+                CreateSuites(includeFailedSmoke: false),
+                generatedAtUtc: new DateTimeOffset(2026, 03, 29, 12, 0, 0, TimeSpan.Zero));
+
+            var degradedSuites = CreateSuites(includeFailedSmoke: false, slowerSynthetic: true);
+            var result = await writer.WriteAsync(
+                outputRoot,
+                "20260329T1300000000000Z",
+                degradedSuites,
+                generatedAtUtc: new DateTimeOffset(2026, 03, 29, 13, 0, 0, TimeSpan.Zero));
+
+            var summary = await File.ReadAllTextAsync(result.SummaryPath);
+            var runArtifact = JsonSerializer.Deserialize<LocalQualityRunArtifact>(await File.ReadAllTextAsync(result.KpiPath), new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            Assert.NotNull(runArtifact);
+            Assert.NotNull(runArtifact!.PerformanceBaseline);
+            Assert.Contains("regression_warnings: `first_useful_map_time_ms`, `representative_chain_count`, `degraded_reason_count`", summary, StringComparison.Ordinal);
+            Assert.True(runArtifact.PerformanceBaseline!.RegressionWarnings.Count > 0);
+            Assert.True(runArtifact.PerformanceBaseline.FirstUsefulMapTimeMs!.RegressionWarning);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
+    }
+
+    private static IReadOnlyList<LocalQualitySuiteInput> CreateSuites(bool includeFailedSmoke, bool slowerSynthetic = false)
     {
         var syntheticCases = new[]
         {
@@ -125,14 +173,19 @@ public sealed class LocalQualityGateRunWriterTests
                 HasUnknownGuidance: false,
                 FalseConfidenceDetected: false,
                 Deterministic: true,
-                DurationMilliseconds: 25,
-                FirstUsefulMapTimeMs: 25,
+                DurationMilliseconds: slowerSynthetic ? 40 : 25,
+                FirstUsefulMapTimeMs: slowerSynthetic ? 40 : 25,
                 FailureReason: null,
                 SkipReason: null,
                 DegradedDiagnosticCount: 0,
-                RepresentativeChainCount: 1,
+                RepresentativeChainCount: slowerSynthetic ? 0 : 1,
                 DegradedReasonCount: 0,
-                UnknownGuidance: []),
+                UnknownGuidance: [],
+                HandoffOutcome: "hit",
+                HandoffExpectedFamilies: ["Settings"],
+                HandoffObservedFamilies: ["Settings", "Report/Export"],
+                HandoffFirstCandidate: null,
+                HandoffReason: "matched:Settings"),
             new QualityCaseArtifact(
                 CaseId: "synthetic-weak-signal",
                 CorpusName: "TemplateHeavyResources",
@@ -147,13 +200,13 @@ public sealed class LocalQualityGateRunWriterTests
                 HasUnknownGuidance: true,
                 FalseConfidenceDetected: false,
                 Deterministic: true,
-                DurationMilliseconds: 32,
-                FirstUsefulMapTimeMs: 32,
+                DurationMilliseconds: slowerSynthetic ? 48 : 32,
+                FirstUsefulMapTimeMs: slowerSynthetic ? 48 : 32,
                 FailureReason: null,
                 SkipReason: null,
-                DegradedDiagnosticCount: 2,
+                DegradedDiagnosticCount: slowerSynthetic ? 3 : 2,
                 RepresentativeChainCount: 1,
-                DegradedReasonCount: 2,
+                DegradedReasonCount: slowerSynthetic ? 3 : 2,
                 UnknownGuidance:
                 [
                     new UnknownGuidanceArtifact(
@@ -161,7 +214,12 @@ public sealed class LocalQualityGateRunWriterTests
                         Family: "Settings",
                         CandidateCount: 2,
                         FirstCandidate: "TemplateHeavyResources.SettingsWindow")
-                ])
+                ],
+                HandoffOutcome: "unknown",
+                HandoffExpectedFamilies: [],
+                HandoffObservedFamilies: ["Settings"],
+                HandoffFirstCandidate: "TemplateHeavyResources.SettingsWindow",
+                HandoffReason: "guidance-only")
         };
 
         var smokeStatus = includeFailedSmoke ? "failed" : "skipped";

@@ -95,6 +95,21 @@ public sealed class AcceptanceMatrixTests
         AssertUniqueUnknowns(pack);
     }
 
+    [Fact]
+    public async Task BuildPack_ForWeakSignalRoot_ReturnsGuidedUnknownWithoutOverPromotingPersistence()
+    {
+        var (_, pack) = await BuildPackAsync(
+            TemplateHeavyResourcesRoot,
+            new Entry(EntryKind.File, "ShellWindow.xaml"),
+            "legacy system");
+
+        Assert.NotEmpty(pack.Unknowns);
+        Assert.DoesNotContain(pack.Indexes, static index =>
+            (index.Title == "Persistence" || index.Title == "Architecture Tests")
+            && index.Lines.Count > 0);
+        AssertUniqueUnknowns(pack);
+    }
+
     public static IEnumerable<object[]> RootCases()
     {
         yield return

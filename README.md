@@ -67,11 +67,12 @@ dotnet run --project src\Rulixa.Cli -- compare-evidence `
 
 ## ドキュメント
 
-- [全体仕様](/D:/C%23/Rulixa/docs/project_full_spec.md)
-- [Product Readiness](/D:/C%23/Rulixa/docs/product-readiness.md)
-- [Phase 1](/D:/C%23/Rulixa/docs/spec/phase1/README.md)
-- [Phase 2](/D:/C%23/Rulixa/docs/spec/phase2/README.md)
-- [Phase 3](/D:/C%23/Rulixa/docs/spec/phase3/README.md)
-- [Phase 4](/D:/C%23/Rulixa/docs/spec/phase4/README.md)
-- [Phase 5](/D:/C%23/Rulixa/docs/spec/phase5/README.md)
-- [Phase 6](/D:/C%23/Rulixa/docs/spec/phase6/README.md)
+- [全体仕様](docs/project_full_spec.md)
+- [Product Readiness](docs/product-readiness.md)
+- [Phase 1](docs/spec/phase1/README.md)
+- [Phase 2](docs/spec/phase2/README.md)
+- [Phase 3](docs/spec/phase3/README.md)
+- [Phase 4](docs/spec/phase4/README.md)
+- [Phase 5](docs/spec/phase5/README.md)
+- [Phase 6](docs/spec/phase6/README.md)
+- [Phase 7](docs/spec/phase7/README.md)

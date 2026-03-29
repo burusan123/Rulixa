@@ -46,6 +46,10 @@ public sealed class QualityArtifactTests
             Assert.True(artifact.UnknownGuidanceFamilyCount > 0);
             Assert.True(artifact.DegradedReasonCount > 0);
             Assert.NotNull(artifact.FirstUsefulMapTimeMs);
+            Assert.True(artifact.HandoffHitCount > 0);
+            Assert.True(artifact.HandoffUnknownCount > 0);
+            Assert.True(artifact.HandoffMissCount >= 0);
+            Assert.Contains(artifact.Cases, static item => item.HandoffOutcome is "hit" or "unknown");
             Assert.True(File.Exists(filePath));
             Assert.NotNull(artifact.QualityGate);
         }

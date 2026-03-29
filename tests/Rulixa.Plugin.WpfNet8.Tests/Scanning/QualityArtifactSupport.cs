@@ -23,6 +23,18 @@ internal static class QualityArtifactSupport
     internal static IReadOnlyList<QualityCaseDefinition> CreateSyntheticCaseDefinitions() =>
     [
         new(
+            CaseId: "dialog-heavy-root",
+            CorpusName: "DialogHeavyRoot",
+            WorkspaceType: "synthetic-legacy",
+            WorkspaceRoot: LegacyDialogHeavyRoot,
+            Entry: new Entry(EntryKind.File, "ShellWindow.xaml"),
+            Goal: "legacy system",
+            Tags: ["root-case", "deterministic"],
+            RequiredFamilies: ["Settings", "Report/Export"],
+            RequireCenterState: true,
+            ExpectUnknownGuidance: false,
+            DisallowedRepresentativeSections: []),
+        new(
             CaseId: "legacy-dialog-root",
             CorpusName: "LegacyDialogHeavy",
             WorkspaceType: "synthetic-legacy",
@@ -45,6 +57,18 @@ internal static class QualityArtifactSupport
             RequiredFamilies: [],
             RequireCenterState: false,
             ExpectUnknownGuidance: false,
+            DisallowedRepresentativeSections: []),
+        new(
+            CaseId: "service-locator-root",
+            CorpusName: "ServiceLocatorRoot",
+            WorkspaceType: "synthetic-legacy",
+            WorkspaceRoot: LegacyServiceLocatorRoot,
+            Entry: new Entry(EntryKind.File, "ShellWindow.xaml"),
+            Goal: "legacy system",
+            Tags: ["root-case", "deterministic"],
+            RequiredFamilies: ["Drafting", "Report/Export"],
+            RequireCenterState: true,
+            ExpectUnknownGuidance: true,
             DisallowedRepresentativeSections: []),
         new(
             CaseId: "legacy-service-locator-root",
@@ -70,6 +94,18 @@ internal static class QualityArtifactSupport
             RequireCenterState: true,
             ExpectUnknownGuidance: false,
             DisallowedRepresentativeSections: []),
+        new(
+            CaseId: "weak-signal-root",
+            CorpusName: "WeakSignalRoot",
+            WorkspaceType: "synthetic-legacy",
+            WorkspaceRoot: TemplateHeavyResourcesRoot,
+            Entry: new Entry(EntryKind.File, "ShellWindow.xaml"),
+            Goal: "legacy system",
+            Tags: ["root-case", "weak-signal"],
+            RequiredFamilies: [],
+            RequireCenterState: false,
+            ExpectUnknownGuidance: true,
+            DisallowedRepresentativeSections: ["Persistence", "Architecture Tests"]),
         new(
             CaseId: "template-heavy-root",
             CorpusName: "TemplateHeavyResources",
@@ -168,7 +204,12 @@ internal static class QualityArtifactSupport
                 DegradedDiagnosticCount: 0,
                 RepresentativeChainCount: 0,
                 DegradedReasonCount: 0,
-                UnknownGuidance: []);
+                UnknownGuidance: [],
+                HandoffOutcome: "unknown",
+                HandoffExpectedFamilies: definition.RequiredFamilies,
+                HandoffObservedFamilies: [],
+                HandoffFirstCandidate: null,
+                HandoffReason: skipReason);
         }
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -188,6 +229,17 @@ internal static class QualityArtifactSupport
             var degradedDiagnosticCount = firstRun.ScanResult.Diagnostics.Count(static diagnostic => diagnostic.Severity != DiagnosticSeverity.Error);
             var representativeChainCount = CountRepresentativeChains(firstRun.Pack);
             var degradedReasonCount = CountDegradedReasons(firstRun.ScanResult, firstRun.Pack);
+            var unknownGuidance = firstRun.Pack.Unknowns.Select(ToUnknownGuidance).ToArray();
+            var observedFamilies = InferObservedFamilies(firstRun.Pack, unknownGuidance);
+            var handoff = new QualityHandoffOutcomeEvaluator().Evaluate(
+                definition.RequiredFamilies,
+                observedFamilies,
+                unknownGuidance,
+                representativeChainCount,
+                falseConfidenceDetected,
+                status: "passed",
+                failureReason: null,
+                degradedDiagnosticCount);
 
             return new QualityCaseArtifact(
                 CaseId: definition.CaseId,
@@ -210,11 +262,25 @@ internal static class QualityArtifactSupport
                 DegradedDiagnosticCount: degradedDiagnosticCount,
                 RepresentativeChainCount: representativeChainCount,
                 DegradedReasonCount: degradedReasonCount,
-                UnknownGuidance: firstRun.Pack.Unknowns.Select(ToUnknownGuidance).ToArray());
+                UnknownGuidance: unknownGuidance,
+                HandoffOutcome: handoff.Outcome,
+                HandoffExpectedFamilies: handoff.ExpectedFamilies,
+                HandoffObservedFamilies: handoff.ObservedFamilies,
+                HandoffFirstCandidate: handoff.FirstCandidate,
+                HandoffReason: handoff.Reason);
         }
         catch (Exception exception)
         {
             stopwatch.Stop();
+            var handoff = new QualityHandoffOutcomeEvaluator().Evaluate(
+                definition.RequiredFamilies,
+                [],
+                [],
+                representativeChainCount: 0,
+                falseConfidenceDetected: false,
+                status: "failed",
+                failureReason: exception.Message,
+                degradedDiagnosticCount: 0);
             return new QualityCaseArtifact(
                 CaseId: definition.CaseId,
                 CorpusName: definition.CorpusName,
@@ -236,7 +302,12 @@ internal static class QualityArtifactSupport
                 DegradedDiagnosticCount: 0,
                 RepresentativeChainCount: 0,
                 DegradedReasonCount: 0,
-                UnknownGuidance: []);
+                UnknownGuidance: [],
+                HandoffOutcome: handoff.Outcome,
+                HandoffExpectedFamilies: handoff.ExpectedFamilies,
+                HandoffObservedFamilies: handoff.ObservedFamilies,
+                HandoffFirstCandidate: handoff.FirstCandidate,
+                HandoffReason: handoff.Reason);
         }
     }
 
@@ -456,6 +527,40 @@ internal static class QualityArtifactSupport
     private static int CountDegradedReasons(WorkspaceScanResult scanResult, ContextPack pack) =>
         scanResult.Diagnostics.Count(static diagnostic => diagnostic.Severity != DiagnosticSeverity.Error)
         + pack.Unknowns.Count;
+
+    private static IReadOnlyList<string> InferObservedFamilies(
+        ContextPack pack,
+        IReadOnlyList<UnknownGuidanceArtifact> unknownGuidance)
+    {
+        var sourceTexts = pack.Contracts.Select(static contract => contract.Summary)
+            .Concat(pack.Contracts.Select(static contract => contract.Title))
+            .Concat(pack.Indexes.Select(static index => index.Title))
+            .Concat(pack.Indexes.SelectMany(static index => index.Lines))
+            .Concat(unknownGuidance.Select(static guidance => guidance.Family))
+            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .ToArray();
+
+        var families = new HashSet<string>(StringComparer.Ordinal);
+        AddIfMatched(families, sourceTexts, "Drafting", "Drafting");
+        AddIfMatched(families, sourceTexts, "Algorithm", "Algorithm");
+        AddIfMatched(families, sourceTexts, "Analyzer", "Analyzer");
+        AddIfMatched(families, sourceTexts, "Persistence", "Persistence");
+        AddIfMatched(families, sourceTexts, "Settings", "Settings");
+        AddIfMatched(families, sourceTexts, "Report/Export", "Report", "Export");
+        AddIfMatched(families, sourceTexts, "3D", "3D", "ThreeD");
+        AddIfMatched(families, sourceTexts, "Architecture", "Architecture");
+        AddIfMatched(families, sourceTexts, "Shell", "Shell");
+
+        return families.OrderBy(static item => item, StringComparer.Ordinal).ToArray();
+    }
+
+    private static void AddIfMatched(ISet<string> families, IEnumerable<string> sourceTexts, string familyName, params string[] tokens)
+    {
+        if (sourceTexts.Any(text => tokens.Any(token => text.Contains(token, StringComparison.OrdinalIgnoreCase))))
+        {
+            families.Add(familyName);
+        }
+    }
 }
 
 internal sealed record QualityCaseDefinition(

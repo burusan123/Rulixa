@@ -20,6 +20,21 @@ internal sealed class QualityObservationCalculator
             .OrderBy(static item => item, StringComparer.Ordinal)
             .Take(5)
             .ToArray();
+        var observedFamilies = cases
+            .SelectMany(static item => item.HandoffObservedFamilies ?? [])
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static item => item, StringComparer.Ordinal)
+            .ToArray();
+        var handoffFirstCandidates = cases
+            .Select(static item => item.HandoffFirstCandidate)
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static item => item, StringComparer.Ordinal)
+            .Take(5)
+            .ToArray();
+        var hitCount = cases.Count(static item => string.Equals(item.HandoffOutcome, "hit", StringComparison.OrdinalIgnoreCase));
+        var missCount = cases.Count(static item => string.Equals(item.HandoffOutcome, "miss", StringComparison.OrdinalIgnoreCase));
+        var unknownCount = cases.Count(static item => string.Equals(item.HandoffOutcome, "unknown", StringComparison.OrdinalIgnoreCase));
 
         var firstUsefulMapTimeMs = cases
             .Where(static item => item.PackSuccess == true && item.FirstUsefulMapTimeMs is not null)
@@ -35,7 +50,12 @@ internal sealed class QualityObservationCalculator
             RepresentativeChainCount: cases.Sum(static item => item.RepresentativeChainCount),
             DegradedReasonCount: cases.Sum(static item => item.DegradedReasonCount),
             Families: guidanceFamilies,
-            FirstCandidates: firstCandidates);
+            FirstCandidates: firstCandidates,
+            HandoffHitCount: hitCount,
+            HandoffMissCount: missCount,
+            HandoffUnknownCount: unknownCount,
+            HandoffFamilies: observedFamilies,
+            HandoffFirstCandidates: handoffFirstCandidates);
     }
 }
 
@@ -47,4 +67,9 @@ internal sealed record QualityObservationSummary(
     int RepresentativeChainCount,
     int DegradedReasonCount,
     IReadOnlyList<string> Families,
-    IReadOnlyList<string> FirstCandidates);
+    IReadOnlyList<string> FirstCandidates,
+    int HandoffHitCount,
+    int HandoffMissCount,
+    int HandoffUnknownCount,
+    IReadOnlyList<string> HandoffFamilies,
+    IReadOnlyList<string> HandoffFirstCandidates);
