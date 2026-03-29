@@ -1,39 +1,43 @@
-﻿# KPI And Quality Gates
+# KPI And Quality Gates
 
 ## Core KPI
 
-| KPI | 螳夂ｾｩ | 逶ｮ逧・|
+| KPI | 定義 | 目的 |
 |---|---|---|
-| `pack_success_rate` | top-level failure 縺ｪ縺励↓ pack 繧定ｿ斐＠縺溷牡蜷・| 蝓ｺ譛ｬ蜩∬ｳｪ |
-| `partial_pack_rate` | degraded 縺縺梧怏逕ｨ縺ｪ map 繧定ｿ斐＠縺溷牡蜷・| graceful degradation |
-| `crash_free_rate` | 萓句､門●豁｢縺帙★邨ゆｺ・＠縺溷牡蜷・| release gate |
-| `first_useful_map_time` | 譛蛻昴・譛臥畑縺ｪ map 縺ｾ縺ｧ縺ｮ譎る俣 | 菴馴ｨ灘刀雉ｪ |
-| `unknown_guidance_hit_rate` | unknown candidate 縺九ｉ豁｣縺励＞谺｡謗｢邏｢縺ｫ郢九′縺｣縺溷牡蜷・| handoff quality |
-| `false_confidence_rate` | 蛻・°縺｣縺溘・繧翫ｒ縺励◆ pack 縺ｮ蜑ｲ蜷・| 菫｡鬆ｼ諤ｧ |
-| `deterministic_rate` | 蜷御ｸ蜈･蜉帙〒蜷御ｸ蜃ｺ蜉帙↓縺ｪ繧句牡蜷・| 蜀咲樟諤ｧ |
+| `pack_success_rate` | top-level failure なしに pack を返した割合 | 基本品質 |
+| `partial_pack_rate` | degraded だが有用な map を返した割合 | graceful degradation |
+| `crash_free_rate` | 例外停止せず終了した割合 | release gate |
+| `first_useful_map_time` | 最初の有用な map までの時間 | 体験品質 |
+| `unknown_guidance_hit_rate` | unknown candidate から正しい次探索に繋がった割合 | handoff quality |
+| `false_confidence_rate` | 分かったふりをした pack の割合 | 信頼性 |
+| `deterministic_rate` | 同一入力で同一出力になる割合 | 再現性 |
 
 ## Quality Gates
 
-### 髢狗匱荳ｭ
+### 開発中
 
-- 譁ｰ縺励＞ compatibility 蟇ｾ蠢懊・ regression fixture 繧剃ｼｴ縺・- `dotnet test .\Rulixa.sln` 縺碁壹ｋ
-- 蟇ｾ雎｡ workspace 縺ｮ optional smoke 縺碁壹ｋ
+- 新しい compatibility 対応は regression fixture を伴う
+- `dotnet test .\Rulixa.sln` が通る
+- 対象 workspace の optional smoke が通る
 
-### Phase 5 螳御ｺ・愛螳・
-- `RealWorkspace` 縺ｨ `LegacyRealWorkspace` 縺ｮ荳｡譁ｹ縺ｧ crash-free
-- synthetic corpus 縺ｮ荳ｻ隕√ヱ繧ｿ繝ｼ繝ｳ縺ｧ partial pack 莉･荳翫ｒ霑斐☆
-- false confidence 縺ｮ譁ｰ隕乗が蛹悶′縺ｪ縺・- compare-evidence 縺ｧ謾ｹ蝟・せ縺瑚ｪｬ譏主庄閭ｽ
+### Phase 5 完了判定
 
-## 貂ｬ螳夐°逕ｨ
+- `RealWorkspace` と `LegacyRealWorkspace` の両方で crash-free
+- synthetic corpus の主要パターンで partial pack 以上を返す
+- false confidence の新規悪化がない
+- compare-evidence で改善点が説明可能
 
-- success / crash-free / deterministic 縺ｯ CI 蜷代￠
-- partial / unknown guidance / false confidence 縺ｯ manual acceptance 縺ｨ golden review 蜷代￠
-- first useful map time 縺ｯ benchmark 縺ｧ霑ｽ霍｡縺吶ｋ
+## 測定運用
 
-## 謾ｹ蝟・愛螳壹・蝓ｺ貅・
-- 莉ｶ謨ｰ蠅怜刈縺ｯ謾ｹ蝟・擅莉ｶ縺ｫ縺励↑縺・- representative chain 縺梧・遒ｺ縺ｫ縺ｪ繧九％縺ｨ
-- unknown candidate 縺悟ｦ･蠖薙↓縺ｪ繧九％縺ｨ
-- degraded reason 縺瑚ｪｬ譏主庄閭ｽ縺ｫ縺ｪ繧九％縺ｨ
+- success / crash-free / deterministic は CI 向け
+- partial / unknown guidance / false confidence は manual acceptance と golden review 向け
+- first useful map time は benchmark で追跡する
 
-繧呈隼蝟・→縺ｿ縺ｪ縺吶・
+## 改善判定の基準
 
+- 件数増加は改善条件にしない
+- representative chain が明確になること
+- unknown candidate が妥当になること
+- degraded reason が説明可能になること
+
+を改善とみなす。

@@ -1,53 +1,58 @@
-﻿# Compatibility Targets
+# Compatibility Targets
 
-## 蟇ｾ蠢懷ｯｾ雎｡
+## 対応対象
 
-Phase 4 縺ｧ縺ｯ縲∵ｬ｡縺ｮ繧医≧縺ｪ迴ｾ螳溘・ WPF 讒区・繧剃ｸ谺｡蟇ｾ雎｡縺ｫ縺吶ｋ縲・
-### 襍ｷ蜍輔ヱ繧ｿ繝ｼ繝ｳ
+Phase 4 では、次のような現実の WPF 構成を一次対象にする。
 
-- `App.xaml` 縺ｮ `StartupUri` 縺ｧ MainWindow 繧帝幕縺・- `App.xaml.cs` 縺九ｉ `new MainWindow()` 縺吶ｋ
-- `App.xaml.cs` 縺九ｉ service locator 縺ｧ Window 繧貞叙蠕励☆繧・- Window code-behind 縺ｧ `DataContext = new XxxViewModel()` 繧定ｨｭ螳壹☆繧・
-### View / ViewModel 隗｣豎ｺ
+### 起動パターン
 
-- `DataContext` 縺ｮ逶ｴ謗･莉｣蜈･
-- code-behind 蜀・`new`
-- factory 邨檎罰逕滓・
-- static resolver / locator 邨檎罰隗｣豎ｺ
-- partial class 縺ｫ蛻・牡縺輔ｌ縺・ViewModel
+- `App.xaml` の `StartupUri` で MainWindow を開く
+- `App.xaml.cs` から `new MainWindow()` する
+- `App.xaml.cs` から service locator で Window を取得する
+- Window code-behind で `DataContext = new XxxViewModel()` を設定する
 
-### 逕ｻ髱｢驕ｷ遘ｻ
+### View / ViewModel 解決
+
+- `DataContext` の直接代入
+- code-behind 内 `new`
+- factory 経由生成
+- static resolver / locator 経由解決
+- partial class に分割された ViewModel
+
+### 画面遷移
 
 - dialog service
 - `new Window().Show()` / `ShowDialog()`
-- event handler 襍ｷ轤ｹ縺ｮ驕ｷ遘ｻ
-- command 縺ｧ縺ｪ縺・button click
+- event handler 起点の遷移
+- command でない button click
 
-### XAML 讒区・
+### XAML 構成
 
 - merged ResourceDictionary
 - custom local namespace alias
-- duplicate alias 繧・尠譏ｧ alias
-- 蜿､縺・嶌縺肴婿縺ｮ attached property
-- code-behind 蜑肴署縺ｮ逕ｻ髱｢讒区・
+- duplicate alias や曖昧 alias
+- 古い書き方の attached property
+- code-behind 前提の画面構成
 
-## 蟇ｾ蠢懊Ξ繝吶Ν
+## 対応レベル
 
 ### Green
 
-- root / viewmodel / workflow / persistence 縺ｾ縺ｧ螳牙ｮ壽歓蜃ｺ縺ｧ縺阪ｋ
-- system pack 縺梧・遶九☆繧・
+- root / viewmodel / workflow / persistence まで安定抽出できる
+- system pack が成立する
+
 ### Amber
 
-- root 縺ｨ荳ｻ隕・signal 縺ｯ謚ｽ蜃ｺ縺ｧ縺阪ｋ
-- workflow / persistence 縺ｮ荳驛ｨ縺ｯ diagnostics 莉倥″ partial pack
+- root と主要 signal は抽出できる
+- workflow / persistence の一部は diagnostics 付き partial pack
 
 ### Red
 
-- pack 縺ｯ霑斐ｋ縺後《ignal 縺ｯ髯仙ｮ夂噪
-- diagnostics 縺ｨ蜈ｨ譁・､懃ｴ｢ handoff 縺御ｸｻ蠖ｹ縺ｫ縺ｪ繧・
-## Product-grade 譚｡莉ｶ
+- pack は返るが、signal は限定的
+- diagnostics と全文検索 handoff が主役になる
 
-- Red 縺ｧ繧・crash 縺励↑縺・- Amber 縺ｧ繧よｬ｡縺ｮ謗｢邏｢蛟呵｣懊′ deterministic
-- Green / Amber / Red 縺ｮ蛻､螳壼渕貅悶′繝・せ繝医〒蝗ｺ螳壹＆繧後ｋ
+## Product-grade 条件
 
-
+- Red でも crash しない
+- Amber でも次の探索候補が deterministic
+- Green / Amber / Red の判定基準がテストで固定される

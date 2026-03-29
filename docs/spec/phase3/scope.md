@@ -1,19 +1,27 @@
-﻿# Scope
+# Scope
 
 ## In Scope
 
-- root ViewModel 襍ｷ轤ｹ縺ｮ system-level pack
-- workflow / persistence / hub object / external asset / architecture test 縺ｮ system 髮・ｴ・- 荳ｻ隕・dialog / window / sibling ViewModel / sub-workspace 縺ｸ縺ｮ諡｡蠑ｵ
-- 譌｢蟄・`pack` shape 縺ｮ蜉邂礼噪蠑ｷ蛹・- system-level unknown guidance 縺ｮ髮・ｴ・- `RealWorkspace` 繧・acceptance 鬘梧攝縺ｫ縺励◆ optional smoke
+- root ViewModel 起点の system-level pack
+- workflow / persistence / hub object / external asset / architecture test の system 集約
+- 主要 dialog / window / sibling ViewModel / sub-workspace への拡張
+- 既存 `pack` shape の加算的強化
+- system-level unknown guidance の集約
+- `RealWorkspace` を acceptance 題材にした optional smoke
 
 ## Out of Scope
 
-- 譁ｰ隕・plugin 謚ｽ雎｡縺ｮ蟆主・
-- WPF 莉･螟悶・譁ｰ隕・plugin 蟇ｾ蠢・- 3 hop 莉･荳翫・荳闊ｬ謗｢邏｢
-- 蜈ｨ譁・､懃ｴ｢莉｣譖ｿ繧堤岼謖・☆ recall 譛螟ｧ蛹・- CLI / `ContextPack` / evidence manifest 縺ｮ遐ｴ螢顔噪螟画峩
-- `pack --mode map|drilldown` 縺ｮ豁｣蠑丞ｮ溯｣・- 荳闊ｬ逧・↑ helper / lambda 豺ｱ謗倥ｊ蠑ｷ蛹悶・蜈ｨ髱｢蟇ｾ蠢・
-## 繧ｹ繧ｳ繝ｼ繝怜｢・阜
+- 新規 plugin 抽象の導入
+- WPF 以外の新規 plugin 対応
+- 3 hop 以上の一般探索
+- 全文検索代替を目指す recall 最大化
+- CLI / `ContextPack` / evidence manifest の破壊的変更
+- `pack --mode map|drilldown` の正式実装
+- 一般的な helper / lambda 深掘り強化の全面対応
 
-Phase 3 縺ｯ `System Pack` 繧呈・遶九＆縺帙ｋ縺溘ａ縺ｫ蠢・ｦ√↑遽・峇縺縺代ｒ霑ｽ蜉縺吶ｋ縲・縺昴・縺溘ａ縲”elper / lambda 縺ｮ霑ｽ霍｡謾ｹ蝟・・ system expansion 縺ｫ蠢・ｦ√↑蝣ｴ蜷医・縺ｿ蟇ｾ雎｡縺ｨ縺励∝腰荳 entry 縺ｮ豺ｱ謗倥ｊ謾ｹ蝟・ｒ荳ｻ逶ｮ逧・↓縺ｯ縺励↑縺・・
-縺ｾ縺溘《ystem pack 縺ｯ譁ｰ縺励＞蜈ｬ髢九さ繝槭Φ繝峨〒縺ｯ縺ｪ縺上∵里蟄・`pack` 縺・root entry 縺ｫ蟇ｾ縺励※ system-level 縺ｫ謖ｯ繧玖・縺・僑蠑ｵ縺ｨ縺励※螳夂ｾｩ縺吶ｋ縲・
+## スコープ境界
 
+Phase 3 は `System Pack` を成立させるために必要な範囲だけを追加する。
+そのため、helper / lambda の追跡改善は system expansion に必要な場合のみ対象とし、単一 entry の深掘り改善を主目的にはしない。
+
+また、system pack は新しい公開コマンドではなく、既存 `pack` が root entry に対して system-level に振る舞う拡張として定義する。

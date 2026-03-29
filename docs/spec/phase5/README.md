@@ -1,25 +1,32 @@
-﻿# Phase 5
+# Phase 5
 
-Phase 5 縺ｯ `Product Hardening` 繧剃ｸｻ鬘後↓縺吶ｋ縲・ 
-Phase 1 縺九ｉ Phase 4 縺ｾ縺ｧ縺ｧ縲～Rulixa` 縺ｯ `scan -> resolve-entry -> pack` 縺ｮ蝓ｺ逶､縲”igh-signal pack縲《ystem pack縲〕egacy WPF compatibility 縺ｾ縺ｧ蛻ｰ驕斐＠縺溘よｬ｡縺ｫ蠢・ｦ√↑縺ｮ縺ｯ縲後＆繧峨↓雉｢縺上☆繧九％縺ｨ縲阪ｈ繧翫・*繧医ｊ螟壹￥縺ｮ迴ｾ螳溽噪縺ｪ workspace 縺ｧ縲∝ｮ牙ｮ壹＠縺ｦ縲∬ｪｬ譏主庄閭ｽ縺ｫ縲∵怏逕ｨ縺ｪ pack 繧定ｿ斐○繧九％縺ｨ**縺ｧ縺ゅｋ縲・
-Phase 5 縺ｮ迢吶＞縺ｯ 4 縺､縺ｫ邨槭ｋ縲・
-- compatibility coverage 繧貞ｺ・￡繧・- acceptance corpus 繧貞｢励ｄ縺・- KPI 縺ｨ quality gate 繧貞ｮ夂ｾｩ縺励※貂ｬ繧・- diagnostics / unknown guidance / handoff quality 繧定｣ｽ蜩∝刀雉ｪ縺ｨ縺励※蝗ｺ繧√ｋ
+Phase 5 は `Product Hardening` を主題にする。  
+Phase 1 から Phase 4 までで、`Rulixa` は `scan -> resolve-entry -> pack` の基盤、high-signal pack、system pack、legacy WPF compatibility まで到達した。次に必要なのは「さらに賢くすること」より、**より多くの現実的な workspace で、安定して、説明可能に、有用な pack を返せること**である。
 
-## 隱ｭ縺ｿ鬆・1. [scope.md](scope.md)
+Phase 5 の狙いは 4 つに絞る。
+
+- compatibility coverage を広げる
+- acceptance corpus を増やす
+- KPI と quality gate を定義して測る
+- diagnostics / unknown guidance / handoff quality を製品品質として固める
+
+## 読み順
+1. [scope.md](scope.md)
 2. [architecture.md](architecture.md)
 3. [compatibility_and_corpus.md](compatibility_and_corpus.md)
 4. [kpi_and_quality_gates.md](kpi_and_quality_gates.md)
 5. [diagnostics_and_handoff.md](diagnostics_and_handoff.md)
 6. [implementation_plan.md](implementation_plan.md)
 
-## Phase 4 縺ｨ縺ｮ驕輔＞
+## Phase 4 との違い
 
-- Phase 4 縺ｯ `legacy WPF 縺ｧ繧・crash-free 縺ｫ縺吶ｋ` 縺薙→縺御ｸｭ蠢・□縺｣縺・- Phase 5 縺ｯ `蟶りｲｩ繝ｬ繝吶Ν縺ｧ螳牙ｮ夂ｨｼ蜒阪・貂ｬ螳壹・繧ｵ繝昴・繝医〒縺阪ｋ迥ｶ諷九↓縺吶ｋ` 縺薙→縺御ｸｭ蠢・↓縺ｪ繧・- 縺昴・縺溘ａ縲∽ｸｻ謌ｦ蝣ｴ縺ｯ譁ｰ縺励＞ section 繧・mode 縺ｧ縺ｯ縺ｪ縺上…ompatibility縲゜PI縲…orpus縲‥iagnostics 縺ｧ縺ゅｋ
+- Phase 4 は `legacy WPF でも crash-free にする` ことが中心だった
+- Phase 5 は `市販レベルで安定稼働・測定・サポートできる状態にする` ことが中心になる
+- そのため、主戦場は新しい section や mode ではなく、compatibility、KPI、corpus、diagnostics である
 
-## 螳御ｺ・擅莉ｶ
+## 完了条件
 
-- modern / legacy 縺ｮ隍・焚繝代ち繝ｼ繝ｳ縺ｧ crash-free 縺ｫ pack 縺瑚ｿ斐ｋ
-- partial pack 繧貞性繧√◆ success rate 縺悟ｮ夐㍼謚頑升縺輔ｌ縺ｦ縺・ｋ
-- false confidence 繧呈椛縺医◆ diagnostics / unknown guidance 縺瑚ｿ斐ｋ
-- `Rulixa -> 蜈ｨ譁・､懃ｴ｢` handoff 縺御ｸ雋ｫ縺励◆蜩∬ｳｪ縺ｧ謌千ｫ九☆繧・
-
+- modern / legacy の複数パターンで crash-free に pack が返る
+- partial pack を含めた success rate が定量把握されている
+- false confidence を抑えた diagnostics / unknown guidance が返る
+- `Rulixa -> 全文検索` handoff が一貫した品質で成立する

@@ -1,76 +1,86 @@
-﻿# WPF + .NET 8 謚ｽ蜃ｺ蟇ｾ雎｡
+# WPF + .NET 8 抽出対象
 
-## 逶ｮ逧・
-Phase 1 縺ｧ縺ｯ `WPF + .NET 8` 繧｢繝励Μ繧ｱ繝ｼ繧ｷ繝ｧ繝ｳ縺九ｉ縲、I 縺悟､画峩髢句ｧ九↓蠢・ｦ√↑譛蟆城剞縺ｮ莠句ｮ溘□縺代ｒ謚ｽ蜃ｺ縺励∪縺吶・縺薙・譁・嶌縺ｧ縺ｯ `RealWorkspace` 縺ｧ螳滄圀縺ｫ萓｡蛟､縺碁ｫ倥°縺｣縺滓歓蜃ｺ蟇ｾ雎｡繧呈紛逅・＠縺ｾ縺吶・
-## 1. 繝帙せ繝医→襍ｷ蜍慕ｵ瑚ｷｯ
+## 目的
 
-譛蛻昴↓謚ｽ蜃ｺ縺吶∋縺榊ｯｾ雎｡:
+Phase 1 では `WPF + .NET 8` アプリケーションから、AI が変更開始に必要な最小限の事実だけを抽出します。
+この文書では `RealWorkspace` で実際に価値が高かった抽出対象を整理します。
+
+## 1. ホストと起動経路
+
+最初に抽出すべき対象:
 
 - `App.xaml`
 - `App.xaml.cs`
 - `MainWindow.xaml`
 - `MainWindow.xaml.cs`
-- DI 逋ｻ骭ｲ繝輔ぃ繧､繝ｫ
+- DI 登録ファイル
 
-謚ｽ蜃ｺ縺吶ｋ莠句ｮ・
+抽出する事実:
 
-- `OnStartup` 縺ｮ蟄伜惠
-- `ServiceCollection` / `ServiceProvider` 縺ｮ讒区・
-- `MainWindow` 縺ｮ隗｣豎ｺ譁ｹ豕・- `MainWindow.DataContext` 縺ｫ險ｭ螳壹＆繧後ｋ繝ｫ繝ｼ繝・ViewModel
+- `OnStartup` の存在
+- `ServiceCollection` / `ServiceProvider` の構成
+- `MainWindow` の解決方法
+- `MainWindow.DataContext` に設定されるルート ViewModel
 
 ## 2. DI
 
-蟇ｾ雎｡:
+対象:
 
 - `ServiceRegistration.cs`
-- `AddSingleton` / `AddScoped` / `AddTransient` / `AddFactory` 繧貞性繧繝輔ぃ繧､繝ｫ
+- `AddSingleton` / `AddScoped` / `AddTransient` / `AddFactory` を含むファイル
 
-謚ｽ蜃ｺ縺吶ｋ莠句ｮ・
+抽出する事実:
 
-- 逋ｻ骭ｲ繝輔ぃ繧､繝ｫ
-- 繝ｩ繧､繝輔ち繧､繝
+- 登録ファイル
+- ライフタイム
 - `Interface -> Implementation`
-- `ViewModel -> 豕ｨ蜈･繧ｵ繝ｼ繝薙せ`
+- `ViewModel -> 注入サービス`
 
-## 3. View 縺ｨ ViewModel 縺ｮ蟇ｾ蠢・
-蟇ｾ雎｡:
+## 3. View と ViewModel の対応
+
+対象:
 
 - `Views/**/*.xaml`
 - `Views/**/*.xaml.cs`
 - `ViewModels/**/*.cs`
 
-謚ｽ蜃ｺ縺吶ｋ莠句ｮ・
+抽出する事実:
 
 - `x:Class`
 - `DataContext = ...`
 - `DataTemplate DataType`
-- View 縺ｨ ViewModel 縺ｮ蟇ｾ蠢・
-菫｡鬆ｼ蠎ｦ:
+- View と ViewModel の対応
+
+信頼度:
 
 - `High`
-  譏守､ｺ逧・↑ `DataContext` 險ｭ螳壹√∪縺溘・ `DataTemplate DataType`
+  明示的な `DataContext` 設定、または `DataTemplate DataType`
 - `Medium`
-  code-behind 縺ｨ XAML 縺ｮ蟇ｾ蠢・- `Low`
-  蜻ｽ蜷崎ｦ冗ｴ・□縺代↓繧医ｋ謗ｨ螳・
-## 4. 繝翫ン繧ｲ繝ｼ繧ｷ繝ｧ繝ｳ
+  code-behind と XAML の対応
+- `Low`
+  命名規約だけによる推定
 
-Phase 1 縺ｮ荳ｻ謌ｦ蝣ｴ縺ｧ縺吶ＡShellView.xaml` 縺ｮ binding 縺縺代〒縺ｯ縺ｪ縺上～ShellViewModel` 蛛ｴ縺ｮ譖ｴ譁ｰ轤ｹ縺ｾ縺ｧ謚ｽ蜃ｺ縺励∪縺吶・
-蟇ｾ雎｡:
+## 4. ナビゲーション
+
+Phase 1 の主戦場です。`ShellView.xaml` の binding だけではなく、`ShellViewModel` 側の更新点まで抽出します。
+
+対象:
 
 - `ShellView.xaml`
 - `ShellViewModel.cs`
 - `NavItemViewModel.cs`
 
-謚ｽ蜃ｺ縺吶ｋ莠句ｮ・
+抽出する事実:
 
 - `ItemsSource`
 - `SelectedItem`
 - `Content`
-- `SelectedItem` 縺ｮ譖ｴ譁ｰ蝨ｰ轤ｹ
-- `CurrentPage` 縺ｮ譖ｴ譁ｰ蝨ｰ轤ｹ
-- 莉｣蜈･繧貞性繧繝｡繧ｽ繝・ラ蜷・- 陦檎分蜿ｷ
+- `SelectedItem` の更新地点
+- `CurrentPage` の更新地点
+- 代入を含むメソッド名
+- 行番号
 
-Pack 縺ｫ谿九＠縺溘＞蟆守ｷ・
+Pack に残したい導線:
 
 - `Items -> SelectedItem -> CurrentPage`
 - `SelectedItem = match`
@@ -78,68 +88,72 @@ Pack 縺ｫ谿九＠縺溘＞蟆守ｷ・
 
 ## 5. Command
 
-蟇ｾ雎｡:
+対象:
 
-- `ICommand` 蜈ｬ髢九・繝ｭ繝代ユ繧｣
+- `ICommand` 公開プロパティ
 - `DelegateCommand` / `DelegateCommand<T>`
-- XAML 縺ｮ `Command="{Binding ...}"`
+- XAML の `Command="{Binding ...}"`
 
-謚ｽ蜃ｺ縺吶ｋ莠句ｮ・
+抽出する事実:
 
-- 繧ｳ繝槭Φ繝牙錐
-- 螳溯｡後Γ繧ｽ繝・ラ
+- コマンド名
+- 実行メソッド
 - `CanExecute`
-- 繝舌う繝ｳ繝峨＆繧後ｋ View
+- バインドされる View
 
 ## 6. Dialog / SubWindow
 
-蟇ｾ雎｡:
+対象:
 
-- `Services/**/*.cs` 縺ｮ `ShowDialog()` / `Show()`
+- `Services/**/*.cs` の `ShowDialog()` / `Show()`
 - `new XxxWindow(...)`
 - `window.DataContext = ...`
 
-謚ｽ蜃ｺ縺吶ｋ莠句ｮ・
+抽出する事実:
 
-- 蜻ｼ縺ｳ蜃ｺ縺怜・繧ｵ繝ｼ繝薙せ
-- 襍ｷ蜍輔＆繧後ｋ Window
-- 蟇ｾ蠢懊☆繧・DialogViewModel
+- 呼び出し元サービス
+- 起動される Window
+- 対応する DialogViewModel
 
-## 7. 險ｭ螳壹→繝励Ο繧ｸ繧ｧ繧ｯ繝・
-蟇ｾ雎｡:
+## 7. 設定とプロジェクト
+
+対象:
 
 - `*.csproj`
 - `Directory.Build.props`
 - `appsettings.*`
 - `Properties/Settings.*`
 
-謚ｽ蜃ｺ縺吶ｋ莠句ｮ・
+抽出する事実:
 
 - `TargetFramework`
 - `UseWPF`
-- 荳ｻ隕√↑險ｭ螳壹た繝ｼ繧ｹ
+- 主要な設定ソース
 
-## 8. Pack 縺ｫ蜆ｪ蜈医＠縺ｦ蜈･繧後ｋ繝輔ぃ繧､繝ｫ
+## 8. Pack に優先して入れるファイル
 
-### XAML 襍ｷ轤ｹ
+### XAML 起点
 
-1. 蟇ｾ雎｡ XAML
-2. 蟇ｾ蠢懊☆繧・code-behind
-3. 蟇ｾ蠢懊☆繧・ViewModel
-4. 襍ｷ蜍慕ｵ瑚ｷｯ
-5. DI 逋ｻ骭ｲ
+1. 対象 XAML
+2. 対応する code-behind
+3. 対応する ViewModel
+4. 起動経路
+5. DI 登録
 
-### ViewModel 襍ｷ轤ｹ
+### ViewModel 起点
 
-1. 蟇ｾ雎｡ ViewModel
-2. 蟇ｾ蠢・View
-3. 蟇ｾ蠢・code-behind
-4. `ICommand` 縺ｨ螳溯｡後Γ繧ｽ繝・ラ
-5. `SelectedItem` / `CurrentPage` 縺ｮ譖ｴ譁ｰ轤ｹ
-6. 襍ｷ蜍慕ｵ瑚ｷｯ
-7. DI 逋ｻ骭ｲ
+1. 対象 ViewModel
+2. 対応 View
+3. 対応 code-behind
+4. `ICommand` と実行メソッド
+5. `SelectedItem` / `CurrentPage` の更新点
+6. 起動経路
+7. DI 登録
 
-## 9. Phase 1 縺ｧ謇ｱ繧上↑縺・ｂ縺ｮ
+## 9. Phase 1 で扱わないもの
 
-- 螳悟・縺ｪ繝・・繧ｿ繝輔Ο繝ｼ隗｣譫・- AttachedProperty / Behavior 縺ｮ螳悟・隗｣譫・- VisualState 縺ｮ螳悟・隗｣譫・- 3rd party control 蝗ｺ譛峨・隧ｳ邏ｰ隗｣譫・- 螳溯｡梧凾 DI 繧ｳ繝ｳ繝・リ迥ｶ諷九・螳悟・隗｣譫・
-
+- 完全なデータフロー解析
+- AttachedProperty / Behavior の完全解析
+- VisualState の完全解析
+- 3rd party control 固有の詳細解析
+- 実行時 DI コンテナ状態の完全解析

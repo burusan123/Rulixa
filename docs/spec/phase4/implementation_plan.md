@@ -1,10 +1,12 @@
-﻿# Implementation Plan
+# Implementation Plan
 
-## 螳溯｣・・
-### 1. XAML 豁｣隕丞喧
+## 実装順
 
-- duplicate alias 繧・local namespace 縺ｮ謠ｺ繧後ｒ蜷ｸ蜿弱☆繧・- ResourceDictionary / merged dictionaries 繧・partial support 縺ｫ縺吶ｋ
-- parse error 繧・classify 縺励※ diagnostics 縺ｫ騾√ｋ
+### 1. XAML 正規化
+
+- duplicate alias や local namespace の揺れを吸収する
+- ResourceDictionary / merged dictionaries を partial support にする
+- parse error を classify して diagnostics に送る
 
 ### 2. legacy root resolution
 
@@ -12,51 +14,54 @@
 - code-behind `new MainWindow()`
 - `DataContext = new XxxViewModel()`
 - service locator / static resolver
-  縺九ｉ root candidate 繧呈鏡縺・
+  から root candidate を拾う
+
 ### 3. fallback route resolution
 
-- constructor DI 莉･螟悶↓
+- constructor DI 以外に
   - direct `new`
   - forwarding helper
   - event handler
   - locator resolved service
-  繧・limited support 縺吶ｋ
+  を limited support する
 
 ### 4. partial pack assembly
 
-- extraction 縺ｮ縺ｩ縺薙°縺・degraded 縺励※繧・pack 繧定ｿ斐☆
-- degraded reason 繧・diagnostics 縺ｫ縺ｾ縺ｨ繧√ｋ
+- extraction のどこかが degraded しても pack を返す
+- degraded reason を diagnostics にまとめる
 
 ### 5. acceptance matrix
 
 - `RealWorkspace`
 - `LegacyRealWorkspace`
 - synthetic legacy fixtures
-  縺ｧ smoke / regression 繧呈ｧ狗ｯ峨☆繧・
+  で smoke / regression を構築する
+
 ### 6. compare-evidence / supportability
 
-- pack failure 縺ｧ縺ｯ縺ｪ縺・degraded pack 縺ｫ縺ｪ縺｣縺溘％縺ｨ縺・diff 縺ｧ隕九∴繧九ｈ縺・↓縺吶ｋ
-- diagnostics 縺ｮ謾ｹ蝟・′ evidence 縺ｧ豈碑ｼ・〒縺阪ｋ繧医≧縺ｫ縺吶ｋ
+- pack failure ではなく degraded pack になったことが diff で見えるようにする
+- diagnostics の改善が evidence で比較できるようにする
 
 ## Acceptance
 
 ### modern
 
-- `<modern-real-workspace>` 縺ｧ縺ｯ譌｢蟄倥・ system pack 蜩∬ｳｪ繧定誠縺ｨ縺輔↑縺・
+- `<modern-real-workspace>` では既存の system pack 品質を落とさない
+
 ### legacy
 
-- `<legacy-real-workspace>` 縺ｧ pack 螳溯｡後′ crash 縺励↑縺・- root candidate 縺倶ｸｭ蠢・憾諷九°荳ｻ隕・workflow 蛟呵｣懊・縺・★繧後°縺瑚ｿ斐ｋ
-- diagnostics 縺ｧ degraded reason 縺ｨ next candidates 縺瑚ｿ斐ｋ
+- `<legacy-real-workspace>` で pack 実行が crash しない
+- root candidate か中心状態か主要 workflow 候補のいずれかが返る
+- diagnostics で degraded reason と next candidates が返る
 
 ### product-quality
 
-- unsupported construct 繧貞性繧 workspace 縺ｧ繧り誠縺｡縺ｪ縺・- diagnostics 縺・deterministic
-- regression 縺ｧ modern / legacy 縺ｮ荳｡譁ｹ繧貞ｮ医ｋ
+- unsupported construct を含む workspace でも落ちない
+- diagnostics が deterministic
+- regression で modern / legacy の両方を守る
 
 ## Backlog
 
-- `map / drilldown` 縺ｮ mode 蛻・屬
-- legacy route 縺ｮ deeper drilldown
-- WPF 莉･螟悶∈縺ｮ莠呈鋤諤ｧ諡｡蠑ｵ
-
-
+- `map / drilldown` の mode 分離
+- legacy route の deeper drilldown
+- WPF 以外への互換性拡張
