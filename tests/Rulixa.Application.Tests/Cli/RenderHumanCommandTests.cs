@@ -45,6 +45,22 @@ public sealed class RenderHumanCommandTests
             Assert.Equal(0, exitCode);
             Assert.Contains($"# {title}", markdown, StringComparison.Ordinal);
             Assert.Contains($"- mode: `{mode}`", markdown, StringComparison.Ordinal);
+
+            switch (mode)
+            {
+                case "review":
+                    Assert.Contains("## 概要", markdown, StringComparison.Ordinal);
+                    Assert.Contains("## Unknown / Risk", markdown, StringComparison.Ordinal);
+                    break;
+                case "audit":
+                    Assert.Contains("## Root Entry", markdown, StringComparison.Ordinal);
+                    Assert.Contains("## Degraded Diagnostics", markdown, StringComparison.Ordinal);
+                    break;
+                case "knowledge":
+                    Assert.Contains("## Subsystem Map", markdown, StringComparison.Ordinal);
+                    Assert.Contains("## Known Unknowns", markdown, StringComparison.Ordinal);
+                    break;
+            }
         }
         finally
         {

@@ -79,11 +79,12 @@ dotnet run --project src\Rulixa.Cli -- compare-evidence `
 - `kpi.json`
 - `summary.md`
 - `release-review.md`
-- `human-outputs/review-brief.md`
-- `human-outputs/audit-snapshot.md`
-- `human-outputs/design-knowledge-snapshot.md`
+- `human-outputs/`
+  - `review-brief-<synthetic-root-case>.md`
+  - `audit-snapshot-<synthetic-root-case>.md`
+  - `design-knowledge-snapshot-<synthetic-root-case>.md`
 
-release review では `summary.md` を一次確認に使い、必要に応じて `release-review.md` と `human-outputs/` を読む運用を想定しています。
+release review では `summary.md` を一次資料に使い、必要に応じて `release-review.md` と synthetic root cases 用の `human-outputs/` を読む運用を想定しています。observed corpus の human outputs は optional smoke 実行時のみ観測対象として加算されます。
 
 ## リポジトリ構成
 

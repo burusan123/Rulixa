@@ -39,6 +39,7 @@ public sealed class PublicDocsHardeningTests
 
         Assert.Contains("release-review.md", readme, StringComparison.Ordinal);
         Assert.Contains("human-outputs", readme, StringComparison.Ordinal);
+        Assert.Contains("summary.md", readme, StringComparison.Ordinal);
         Assert.Contains("release-review.md", fullSpec, StringComparison.Ordinal);
         Assert.Contains("human-outputs", fullSpec, StringComparison.Ordinal);
     }

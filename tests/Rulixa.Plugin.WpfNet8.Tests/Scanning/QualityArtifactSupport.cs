@@ -395,11 +395,54 @@ internal static class QualityArtifactSupport
             Path: fullOutputPath);
     }
 
+    internal static async Task<IReadOnlyList<HumanOutputArtifactReference>> WriteAutomaticHumanOutputsAsync(
+        IReadOnlyList<QualityCaseDefinition> definitions,
+        IReadOnlyList<QualityCaseArtifact> caseArtifacts,
+        string outputDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        ArgumentNullException.ThrowIfNull(caseArtifacts);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+
+        Directory.CreateDirectory(outputDirectory);
+        var results = new List<HumanOutputArtifactReference>();
+
+        foreach (var definition in definitions.Where(IsRootCase))
+        {
+            var caseArtifact = caseArtifacts.FirstOrDefault(item => string.Equals(item.CaseId, definition.CaseId, StringComparison.Ordinal));
+            if (caseArtifact is null || !ShouldGenerateHumanOutput(definition, caseArtifact))
+            {
+                continue;
+            }
+
+            var mode = GetPreferredHumanOutputMode(definition);
+            var fileName = BuildHumanOutputFileName(definition, mode);
+            var outputPath = Path.Combine(outputDirectory, fileName);
+            results.Add(await WriteHumanOutputAsync(definition, mode, outputPath, cancellationToken: cancellationToken).ConfigureAwait(false));
+        }
+
+        return results;
+    }
+
     internal static string GetFixtureRoot(string fixtureName) =>
         Path.GetFullPath(Path.Combine(RepositoryRoot, "tests", "Rulixa.Plugin.WpfNet8.Tests", "Fixtures", fixtureName));
 
     internal static bool IsRootCase(QualityCaseDefinition definition) =>
         definition.Tags.Contains("root-case", StringComparer.OrdinalIgnoreCase);
+
+    internal static HumanOutputMode GetPreferredHumanOutputMode(QualityCaseDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+
+        return definition.CorpusCategory switch
+        {
+            "modern-sibling-root" or "modern-di-root" => HumanOutputMode.Review,
+            "service-locator-root" or "settings-report-heavy-root" or "legacy-codebehind-root" => HumanOutputMode.Audit,
+            "dialog-heavy-root" or "weak-signal-root" or "template-heavy-root" => HumanOutputMode.Knowledge,
+            _ => HumanOutputMode.Review
+        };
+    }
 
     internal static string GetRepositoryRoot() =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
@@ -521,6 +564,36 @@ internal static class QualityArtifactSupport
         }
 
         return null;
+    }
+
+    private static bool ShouldGenerateHumanOutput(
+        QualityCaseDefinition definition,
+        QualityCaseArtifact caseArtifact)
+    {
+        if (!IsRootCase(definition))
+        {
+            return false;
+        }
+
+        if (!definition.Tags.Contains("optional-smoke", StringComparer.OrdinalIgnoreCase))
+        {
+            return string.Equals(caseArtifact.Status, "passed", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Equals(caseArtifact.Status, "passed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildHumanOutputFileName(QualityCaseDefinition definition, HumanOutputMode mode)
+    {
+        var prefix = mode switch
+        {
+            HumanOutputMode.Review => "review-brief",
+            HumanOutputMode.Audit => "audit-snapshot",
+            HumanOutputMode.Knowledge => "design-knowledge-snapshot",
+            _ => mode.ToString().ToLowerInvariant()
+        };
+
+        return $"{prefix}-{definition.CaseId}.md";
     }
 
     private static UnknownGuidanceArtifact ToUnknownGuidance(Diagnostic diagnostic)

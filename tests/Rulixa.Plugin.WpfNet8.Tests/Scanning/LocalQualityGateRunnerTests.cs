@@ -19,39 +19,23 @@ public sealed class LocalQualityGateRunnerTests
 
         try
         {
-            var syntheticCases = await QualityArtifactSupport.ExecuteDefinitionsAsync(
-                QualityArtifactSupport.CreateSyntheticCaseDefinitions());
-            var optionalSmokeCases = await QualityArtifactSupport.ExecuteDefinitionsAsync(
-                QualityArtifactSupport.CreateOptionalSmokeCaseDefinitions());
+            var syntheticDefinitions = QualityArtifactSupport.CreateSyntheticCaseDefinitions();
+            var optionalSmokeDefinitions = QualityArtifactSupport.CreateOptionalSmokeCaseDefinitions();
+            var syntheticCases = await QualityArtifactSupport.ExecuteDefinitionsAsync(syntheticDefinitions);
+            var optionalSmokeCases = await QualityArtifactSupport.ExecuteDefinitionsAsync(optionalSmokeDefinitions);
             var runDirectory = Path.Combine(outputRoot, runId);
             var humanOutputDirectory = Path.Combine(runDirectory, "human-outputs");
             Directory.CreateDirectory(humanOutputDirectory);
 
-            var reviewDefinition = Assert.Single(
-                QualityArtifactSupport.CreateSyntheticCaseDefinitions(),
-                static item => item.CaseId == "modern-sibling-root");
-            var auditDefinition = Assert.Single(
-                QualityArtifactSupport.CreateSyntheticCaseDefinitions(),
-                static item => item.CaseId == "service-locator-root");
-            var knowledgeDefinition = Assert.Single(
-                QualityArtifactSupport.CreateSyntheticCaseDefinitions(),
-                static item => item.CaseId == "dialog-heavy-root");
-
-            var humanOutputs = new[]
-            {
-                await QualityArtifactSupport.WriteHumanOutputAsync(
-                    reviewDefinition,
-                    Rulixa.Application.HumanOutputs.HumanOutputMode.Review,
-                    Path.Combine(humanOutputDirectory, "review-brief.md")),
-                await QualityArtifactSupport.WriteHumanOutputAsync(
-                    auditDefinition,
-                    Rulixa.Application.HumanOutputs.HumanOutputMode.Audit,
-                    Path.Combine(humanOutputDirectory, "audit-snapshot.md")),
-                await QualityArtifactSupport.WriteHumanOutputAsync(
-                    knowledgeDefinition,
-                    Rulixa.Application.HumanOutputs.HumanOutputMode.Knowledge,
-                    Path.Combine(humanOutputDirectory, "design-knowledge-snapshot.md"))
-            };
+            var syntheticHumanOutputs = await QualityArtifactSupport.WriteAutomaticHumanOutputsAsync(
+                syntheticDefinitions,
+                syntheticCases,
+                humanOutputDirectory);
+            var observedHumanOutputs = await QualityArtifactSupport.WriteAutomaticHumanOutputsAsync(
+                optionalSmokeDefinitions,
+                optionalSmokeCases,
+                humanOutputDirectory);
+            var humanOutputs = syntheticHumanOutputs.Concat(observedHumanOutputs).ToArray();
 
             var releaseReviewPath = Path.Combine(runDirectory, "release-review.md");
 
@@ -93,7 +77,15 @@ public sealed class LocalQualityGateRunnerTests
             Assert.True(File.Exists(result.SummaryPath));
             Assert.True(File.Exists(releaseReviewPath));
             Assert.True(File.Exists(Path.Combine(result.LatestDirectory, "release-review.md")));
-            Assert.True(File.Exists(Path.Combine(result.LatestDirectory, "human-outputs", "review-brief.md")));
+            Assert.True(File.Exists(Path.Combine(result.LatestDirectory, "human-outputs", "review-brief-modern-sibling-root.md")));
+            Assert.True(File.Exists(Path.Combine(result.LatestDirectory, "human-outputs", "audit-snapshot-service-locator-root.md")));
+            Assert.True(File.Exists(Path.Combine(result.LatestDirectory, "human-outputs", "design-knowledge-snapshot-dialog-heavy-root.md")));
+            var expectedHumanOutputCount =
+                syntheticDefinitions.Count(static item => QualityArtifactSupport.IsRootCase(item))
+                + optionalSmokeCases.Count(static item =>
+                    string.Equals(item.Status, "passed", StringComparison.OrdinalIgnoreCase)
+                    && item.Tags.Contains("root-case", StringComparer.OrdinalIgnoreCase));
+            Assert.Equal(expectedHumanOutputCount, humanOutputs.Length);
 
             var summary = await File.ReadAllTextAsync(result.SummaryPath);
             var releaseReview = await File.ReadAllTextAsync(releaseReviewPath);
@@ -107,12 +99,14 @@ public sealed class LocalQualityGateRunnerTests
             Assert.Contains("## Unknown Guidance Details", summary, StringComparison.Ordinal);
             Assert.Contains("## Degraded Diagnostics", summary, StringComparison.Ordinal);
             Assert.Contains("tests\\Rulixa.Application.Tests\\Cli\\CompareEvidenceBundleTests.cs", summary, StringComparison.Ordinal);
-            Assert.Contains("review-brief.md", summary, StringComparison.Ordinal);
+            Assert.Contains("review-brief-modern-sibling-root.md", summary, StringComparison.Ordinal);
+            Assert.Contains("audit-snapshot-service-locator-root.md", summary, StringComparison.Ordinal);
             Assert.Contains("release-review.md", summary, StringComparison.Ordinal);
             Assert.Contains("# Release Review", releaseReview, StringComparison.Ordinal);
             Assert.Contains("## Human Outputs", releaseReview, StringComparison.Ordinal);
             Assert.Contains("## Handoff Follow-ups", releaseReview, StringComparison.Ordinal);
-            Assert.Contains("review-brief.md", releaseReview, StringComparison.Ordinal);
+            Assert.Contains("review-brief-modern-sibling-root.md", releaseReview, StringComparison.Ordinal);
+            Assert.Contains("design-knowledge-snapshot-template-heavy-root.md", releaseReview, StringComparison.Ordinal);
 
             var latestSummaryPath = Path.Combine(result.LatestDirectory, "summary.md");
             Assert.True(File.Exists(latestSummaryPath));
