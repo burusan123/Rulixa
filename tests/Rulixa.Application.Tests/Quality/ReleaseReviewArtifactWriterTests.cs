@@ -127,8 +127,10 @@ public sealed class ReleaseReviewArtifactWriterTests
             Assert.Contains("# Release Review", markdown, StringComparison.Ordinal);
             Assert.Contains("## Gate", markdown, StringComparison.Ordinal);
             Assert.Contains("## Handoff", markdown, StringComparison.Ordinal);
+            Assert.Contains("## Handoff Follow-ups", markdown, StringComparison.Ordinal);
             Assert.Contains("## Observed Corpus", markdown, StringComparison.Ordinal);
             Assert.Contains("smoke-env-disabled", markdown, StringComparison.Ordinal);
+            Assert.Contains("human outputs: `none (observation-only)`", markdown, StringComparison.Ordinal);
             Assert.Contains("## Performance", markdown, StringComparison.Ordinal);
             Assert.Contains("## Human Outputs", markdown, StringComparison.Ordinal);
             Assert.Contains("review-brief.md", markdown, StringComparison.Ordinal);

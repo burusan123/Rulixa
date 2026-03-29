@@ -111,6 +111,7 @@ public sealed class LocalQualityGateRunnerTests
             Assert.Contains("release-review.md", summary, StringComparison.Ordinal);
             Assert.Contains("# Release Review", releaseReview, StringComparison.Ordinal);
             Assert.Contains("## Human Outputs", releaseReview, StringComparison.Ordinal);
+            Assert.Contains("## Handoff Follow-ups", releaseReview, StringComparison.Ordinal);
             Assert.Contains("review-brief.md", releaseReview, StringComparison.Ordinal);
 
             var latestSummaryPath = Path.Combine(result.LatestDirectory, "summary.md");

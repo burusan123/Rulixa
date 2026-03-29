@@ -33,6 +33,14 @@ public sealed class PublicDocsHardeningTests
         Assert.Contains("## 入力", skill, StringComparison.Ordinal);
         Assert.Contains("## 基本コマンド", skill, StringComparison.Ordinal);
         Assert.Contains("## 効果的な使い方", skill, StringComparison.Ordinal);
+
+        var readme = File.ReadAllText(Path.Combine(RepositoryRoot, "README.md"));
+        var fullSpec = File.ReadAllText(Path.Combine(RepositoryRoot, "docs", "project_full_spec.md"));
+
+        Assert.Contains("release-review.md", readme, StringComparison.Ordinal);
+        Assert.Contains("human-outputs", readme, StringComparison.Ordinal);
+        Assert.Contains("release-review.md", fullSpec, StringComparison.Ordinal);
+        Assert.Contains("human-outputs", fullSpec, StringComparison.Ordinal);
     }
 
     [Fact]

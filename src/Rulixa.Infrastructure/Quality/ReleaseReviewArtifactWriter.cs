@@ -21,6 +21,8 @@ public sealed class ReleaseReviewArtifactWriter
     internal static string BuildMarkdown(LocalQualityRunArtifact artifact)
     {
         var builder = new StringBuilder();
+        var humanOutputLookup = BuildHumanOutputLookup(artifact.HumanOutputs);
+
         builder.AppendLine("# Release Review");
         builder.AppendLine();
         builder.AppendLine($"- run id: `{artifact.RunId}`");
@@ -51,6 +53,22 @@ public sealed class ReleaseReviewArtifactWriter
                 : "- warnings: none");
         builder.AppendLine();
 
+        builder.AppendLine("## Handoff Follow-ups");
+        builder.AppendLine();
+        if (artifact.MissOrUnknownCases.Count == 0)
+        {
+            builder.AppendLine("- none");
+        }
+        else
+        {
+            foreach (var item in artifact.MissOrUnknownCases)
+            {
+                builder.AppendLine(
+                    $"- `{item.Scope}` / `{item.CorpusCategory}` / `{item.CaseId}` outcome=`{item.Outcome}` first_candidate=`{item.FirstCandidate ?? "none"}` reason=`{item.Reason ?? "none"}`");
+            }
+        }
+        builder.AppendLine();
+
         builder.AppendLine("## Observed Corpus");
         builder.AppendLine();
         foreach (var caseArtifact in artifact.Cases
@@ -59,6 +77,15 @@ public sealed class ReleaseReviewArtifactWriter
                      .ThenBy(static item => item.CaseId, StringComparer.Ordinal))
         {
             builder.AppendLine($"- `{caseArtifact.CorpusCategory}` / `{caseArtifact.CaseId}`: `{caseArtifact.Status}`");
+            if (humanOutputLookup.TryGetValue(caseArtifact.CaseId, out var modes))
+            {
+                builder.AppendLine($"  human outputs: `{string.Join("`, `", modes)}`");
+            }
+            else
+            {
+                builder.AppendLine("  human outputs: `none (observation-only)`");
+            }
+
             if (!string.IsNullOrWhiteSpace(caseArtifact.SkipReason))
             {
                 builder.AppendLine($"  skip reason: `{caseArtifact.SkipReason}`");
@@ -127,6 +154,19 @@ public sealed class ReleaseReviewArtifactWriter
 
         return builder.ToString();
     }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildHumanOutputLookup(
+        IReadOnlyList<HumanOutputArtifactReference> humanOutputs) =>
+        humanOutputs
+            .GroupBy(static item => item.CaseId, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                static group => (IReadOnlyList<string>)group
+                    .Select(static item => item.Mode)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(static item => item, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
 
     private static void AppendPerformanceMetric(StringBuilder builder, string name, MetricBaselineArtifact? metric)
     {

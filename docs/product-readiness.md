@@ -11,6 +11,7 @@
 - local quality gate と GitHub Actions の required gate がある
 - handoff / corpus / performance の advisory 指標がある
 - `render-human` で `review` / `audit` / `knowledge` の Markdown を出せる
+- local quality gate で `release-review.md` と `human-outputs/` まで揃えられる
 
 ## KPI
 
@@ -55,6 +56,7 @@
 
 - [ ] evidence bundle を監査の根拠として保存できる
 - [ ] `summary.md` / `gate.json` / `kpi.json` が release review に使える
+- [ ] `release-review.md` と `human-outputs/` を release review の一次資料として使える
 - [ ] optional smoke を observation-only として運用できる
 - [ ] `render-human --mode audit` を監査ドラフトとして使える
 - [ ] `render-human --mode knowledge` を設計知の叩き台として使える

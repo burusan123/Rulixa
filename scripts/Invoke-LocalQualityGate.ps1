@@ -74,6 +74,8 @@ try {
     $summaryPath = Join-Path $qualityRoot "$runId\summary.md"
     $gatePath = Join-Path $qualityRoot "$runId\gate.json"
     $kpiPath = Join-Path $qualityRoot "$runId\kpi.json"
+    $releaseReviewPath = Join-Path $qualityRoot "$runId\release-review.md"
+    $humanOutputDirectory = Join-Path $qualityRoot "$runId\human-outputs"
     $gate = Get-Content -Path $gatePath -Raw | ConvertFrom-Json
 
     Write-Host "Local quality gate completed."
@@ -81,6 +83,12 @@ try {
     Write-Host "Summary: $summaryPath"
     Write-Host "Gate: $gatePath"
     Write-Host "KPI: $kpiPath"
+    if (Test-Path $releaseReviewPath) {
+        Write-Host "ReleaseReview: $releaseReviewPath"
+    }
+    if (Test-Path $humanOutputDirectory) {
+        Write-Host "HumanOutputs: $humanOutputDirectory"
+    }
 
     if (-not $gate.passed) {
         throw "quality gate failed: $($gate.failedChecks -join ', ')"

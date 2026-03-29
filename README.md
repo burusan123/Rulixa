@@ -10,6 +10,7 @@
 - `unknowns` と next candidates で次に読む候補を案内する
 - evidence bundle と quality artifact で比較・監査を支える
 - `render-human` で人間向けの review / audit / knowledge 文書を出す
+- local quality gate から `release-review.md` と `human-outputs/` をまとめて出す
 - Codex plugin から `pack` skill を利用できる
 
 ## 主なコマンド
@@ -69,6 +70,20 @@ dotnet run --project src\Rulixa.Cli -- compare-evidence `
   root entry、observed facts、evidence source、degraded diagnostics、未確定事項をまとめます。
 - `knowledge`
   subsystem map、dependency seams、architectural constraints、known unknowns、将来変更時の注目点をまとめます。
+
+## local quality gate の成果物
+
+`powershell -ExecutionPolicy Bypass -File .\scripts\Invoke-LocalQualityGate.ps1` を実行すると、`artifacts/local-quality/latest/` に次が揃います。
+
+- `gate.json`
+- `kpi.json`
+- `summary.md`
+- `release-review.md`
+- `human-outputs/review-brief.md`
+- `human-outputs/audit-snapshot.md`
+- `human-outputs/design-knowledge-snapshot.md`
+
+release review では `summary.md` を一次確認に使い、必要に応じて `release-review.md` と `human-outputs/` を読む運用を想定しています。
 
 ## リポジトリ構成
 

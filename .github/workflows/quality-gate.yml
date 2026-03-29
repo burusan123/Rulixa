@@ -35,7 +35,14 @@ jobs:
 
       - name: Publish summary
         shell: pwsh
-        run: Get-Content .\artifacts\local-quality\latest\summary.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+        run: |
+          Get-Content .\artifacts\local-quality\latest\summary.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          if (Test-Path .\artifacts\local-quality\latest\release-review.md) {
+            "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "## Release Review Artifact" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            Get-Content .\artifacts\local-quality\latest\release-review.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
 
       - name: Upload quality artifacts
         uses: actions/upload-artifact@v6
@@ -64,7 +71,14 @@ jobs:
 
       - name: Publish summary
         shell: pwsh
-        run: Get-Content .\artifacts\local-quality\latest\summary.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+        run: |
+          Get-Content .\artifacts\local-quality\latest\summary.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          if (Test-Path .\artifacts\local-quality\latest\release-review.md) {
+            "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "## Release Review Artifact" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            Get-Content .\artifacts\local-quality\latest\release-review.md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
 
       - name: Upload quality artifacts
         uses: actions/upload-artifact@v6
