@@ -1,7 +1,7 @@
 {
   "name": "rulixa",
   "version": "0.1.0",
-  "description": "Generate Phase 1 context packs for WPF and .NET workspaces through Rulixa.Cli.",
+  "description": "Rulixa.Cli を使って WPF / .NET ワークスペースの高密度なコンテキストパックを生成します。",
   "author": {
     "name": "Rulixa"
   },
@@ -16,8 +16,8 @@
   "apps": "./.app.json",
   "interface": {
     "displayName": "Rulixa",
-    "shortDescription": "Run the Phase 1 pack flow through Rulixa.Cli.",
-    "longDescription": "This plugin exposes the current Phase 1 flow for WPF + .NET 8 workspaces. The primary path is the pack command with entry=file or entry=symbol, while scan and resolve-entry remain support commands on the CLI.",
+    "shortDescription": "Rulixa.Cli で高密度な system map を生成します。",
+    "longDescription": "まず pack を使って root ViewModel や主要画面から system map を作り、全体像を短時間で把握してください。実装レベルの検証や深掘りが必要なときだけ全文検索に進むのが効果的です。entry=file と entry=symbol の両方を使えます。scan と resolve-entry は補助用の CLI コマンドです。",
     "developerName": "Rulixa",
     "category": "Coding",
     "capabilities": [
@@ -26,9 +26,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Build a Phase 1 context pack for ShellViewModel.",
-      "Resolve a file entry for ShellView.xaml and then run pack.",
-      "Run the Rulixa.Cli pack command and summarize the output."
+      "ShellViewModel の system pack を作成し、主要サブシステムを要約してください。",
+      "ShellView.xaml を file entry として解決し、pack を実行して workflow と persistence map を説明してください。",
+      "まず Rulixa.Cli の pack を実行し、その後に全文検索で検証すべき点を指摘してください。"
     ],
     "brandColor": "#0F766E"
   }

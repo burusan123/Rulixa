@@ -1,49 +1,59 @@
 ---
 name: pack
-description: Generate a Context Pack with `Rulixa.Cli` for a WPF + .NET workspace using `entry=file` or `entry=symbol`.
+description: `Rulixa.Cli` を使って、WPF / .NET ワークスペースの Context Pack を `entry=file` または `entry=symbol` で生成します。
 ---
 
 # Rulixa Pack
 
-Use this skill when the user wants to generate a Context Pack from a local workspace with `Rulixa.Cli`.
+ローカルワークスペースから `Rulixa.Cli` で Context Pack を生成したいときに使います。
 
-## Purpose
+## このスキルの目的
 
-- Prefer `pack` as the main user flow.
-- Support both `entry=file` and `entry=symbol`.
-- Treat `scan` and `resolve-entry` as secondary support commands.
+- 主導線は `pack` にする。
+- `entry=file` と `entry=symbol` の両方を扱う。
+- `scan` と `resolve-entry` は補助コマンドとして扱う。
+- まず system map を作り、実装レベルの検証が必要なときだけ全文検索に進む。
 
-## Inputs to confirm
+## 事前に確認する入力
 
-Collect these inputs before running the command:
+コマンド実行前に次を確認する。
 
 - `workspace`
-  Target workspace path to analyze.
+  解析対象ワークスペースのパス。
 - `entry`
-  Use `symbol:` when the target ViewModel or type name is known.
-  Use `file:` when the user points to a XAML or code file directly.
+  対象の ViewModel や型名が分かっているなら `symbol:` を使う。
+  ユーザーが XAML やコードファイルを直接指定しているなら `file:` を使う。
 - `goal`
-  The user intent to include in the generated Context Pack.
-- Optional budget overrides
+  生成する Context Pack に含める目的。
+- 任意の budget override
   `--max-files`
   `--max-total-lines`
   `--max-snippets-per-file`
 
-If the user does not ask for a custom budget, use the CLI defaults.
+ユーザーが budget を指定しないなら CLI の既定値を使う。
 
-## Recommended flow
+## 効果的な使い方
 
-1. If the target is a known ViewModel, prefer `entry=symbol`.
-2. If the user points at a XAML file, use `entry=file`.
-3. Build the `pack` command first.
-4. Use `resolve-entry` only when the entry is ambiguous.
-5. Use `scan` only when the user needs raw IR output.
+1. まず `pack` を使って system map を作る。
+2. 対象が既知の ViewModel なら `entry=symbol` を優先する。
+3. ユーザーが XAML を指しているなら `entry=file` を使う。
+4. `resolve-entry` は entry が曖昧なときだけ使う。
+5. `scan` は raw IR やスキャン結果そのものが必要なときだけ使う。
 
-## Commands
+### 使い分けの原則
 
-Run from the `Rulixa` repo root.
+- `Rulixa` は「最小コンテキストで全体地図を得る」ときに強い。
+- 全文検索は「実装の根拠を確認する」「深掘りする」ときに強い。
+- 迷ったら次の順で進める。
+  1. `pack`
+  2. pack の `unknowns` と代表チェーンを確認
+  3. 必要な箇所だけ全文検索で検証
 
-### Main command
+## コマンド
+
+`Rulixa` リポジトリのルートから実行する。
+
+### メインコマンド
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
@@ -52,25 +62,25 @@ dotnet run --project src\Rulixa.Cli -- pack `
   --goal "<goal>"
 ```
 
-### Example: symbol entry
+### 例: symbol entry
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace D:\C#\AssessMeister `
   --entry symbol:AssessMeister.Presentation.Wpf.ViewModels.ShellViewModel `
-  --goal "Shell 画面に新しいページを追加したい"
+  --goal "AssessMeister の全体構造を理解する"
 ```
 
-### Example: file entry
+### 例: file entry
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- pack `
   --workspace D:\C#\AssessMeister `
   --entry file:src/AssessMeister.Presentation.Wpf/Views/ShellView.xaml `
-  --goal "Shell 画面に新しいページを追加したい"
+  --goal "Shell 画面の workflow と persistence map を理解する"
 ```
 
-### Support: resolve-entry
+### 補助: resolve-entry
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- resolve-entry `
@@ -78,15 +88,23 @@ dotnet run --project src\Rulixa.Cli -- resolve-entry `
   --entry <entry>
 ```
 
-### Support: scan
+### 補助: scan
 
 ```powershell
 dotnet run --project src\Rulixa.Cli -- scan `
   --workspace <target-workspace>
 ```
 
-## Output expectations
+## 出力の見方
 
-- The main output is Markdown.
-- The pack should include the goal, resolved entry, contracts, index, selected files, and unknowns.
-- For `ShellViewModel` flows, the preferred result is a compact pack focused on Shell-related files rather than all `DataTemplate` pages.
+- 主出力は Markdown。
+- pack には少なくとも `goal`、`resolved entry`、`contracts`、`index`、`selected files`、`unknowns` が含まれる。
+- `ShellViewModel` のような root entry では、個別ページを列挙するよりも system map が先に読めることを重視する。
+- `unknowns` は失敗ではなく「次に全文検索で確認すべき候補」として扱う。
+
+## 期待する進め方
+
+- `ShellViewModel` や root ViewModel を起点にすると、`Shell / Drafting / Settings / 3D / Report` のような system map を得やすい。
+- `DraftingWindowViewModel` のような局所 entry を起点にすると、workflow、hub object、persistence の関係を短く把握しやすい。
+- pack の時点で十分に説明できるなら、そのまま要約する。
+- algorithm 実装や永続化の詳細まで必要なら、pack に出た候補を起点に全文検索へ進む。
